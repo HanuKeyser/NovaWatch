@@ -1,0 +1,2831 @@
+/* NovaWatch app styles - component CSS. Design tokens (colors, the
+   light/dark palette) live in tokens.css, loaded before this file. */
+
+/* =========================================================
+   RESET & APPLE GLASS VARIABLES
+========================================================= */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+}
+
+*::-webkit-scrollbar {
+    display: none !important;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
+    background: var(--bg-mesh);
+    background-attachment: fixed;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    padding-bottom: 100px;
+    -webkit-font-smoothing: antialiased;
+}
+
+button, input {
+    font: inherit;
+}
+
+button {
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+}
+
+/* =========================================================
+   SVG ICONS
+========================================================= */
+.icon {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.icon-small {
+    width: 17px;
+    height: 17px;
+}
+
+.icon-large {
+    width: 32px;
+    height: 32px;
+}
+
+/* =========================================================
+   APP CONTAINER
+========================================================= */
+/* Hidden by default, same as #authScreen - controlled via JS.
+   #authScreen already had this, but .app didn't, so on every fresh page
+   load (any full navigation to index.html, not just in-app tab switches)
+   the main app UI rendered first - visible by default with whatever stale
+   or empty content was on screen - and only got hidden once
+   onAuthStateChanged resolved and either swapped in the auth screen or
+   confirmed a signed-in session. That gap is exactly the flash reported:
+   main app shows, then it swaps to sign-in. Neither screen shows now
+   until proceedToApp() or the logged-out branch in onAuthStateChanged
+   explicitly reveals the right one. */
+.app {
+    display: none;
+    width: 100%;
+    max-width: 600px;
+    min-height: 100vh;
+    margin: 0 auto;
+}
+
+/* =========================================================
+   PAGES
+========================================================= */
+.page {
+    display: none;
+    padding: 36px 18px 20px;
+}
+
+.page.active {
+    display: block;
+}
+
+.tab-content-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+}
+
+/* =========================================================
+   SECTIONS & FOOTERS
+========================================================= */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 14px;
+}
+
+.section-title {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+}
+
+.tab-nav-footer {
+    margin-top: 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--glass-border-subtle);
+    display: flex;
+    justify-content: center;
+}
+
+.footer-browse-button {
+    width: 100%;
+    min-height: 52px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border-radius: var(--radius-sm);
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    color: var(--blue);
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.footer-browse-button:active {
+    transform: scale(0.98);
+}
+
+.category-block {
+    margin-bottom: 28px;
+}
+
+.category-title {
+    font-size: 14.5px;
+    font-weight: 750;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.category-title::before {
+    content: '';
+    width: 4px;
+    height: 14px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--blue-light), var(--blue));
+    flex-shrink: 0;
+}
+
+.category-count {
+    font-size: 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+}
+
+/* =========================================================
+   STATS (Frosted Glass Cards)
+========================================================= */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.stat {
+    padding: 16px 10px;
+    text-align: center;
+    /* Was --surface-2 (36% white) on a --surface (58% white) card, so the
+       square barely separated from the card it sits in. A brighter, more
+       opaque fill plus a firmer border and its own small shadow makes each
+       stat read as a distinct tile instead of blending into the card. */
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.85);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.stat-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--blue);
+    margin-bottom: 2px;
+}
+
+.stat-value {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-weight: 650;
+}
+
+/* =========================================================
+   VIEWING ANALYTICS (Modern Polished UI)
+========================================================= */
+.analytics-section {
+    /* No margin-bottom here: this section is a direct child of
+       .tab-content-wrapper, which already applies a consistent 26px gap
+       between all its top-level sections - an extra margin here on top of
+       that flex gap was creating a bigger gap under this section than the
+       one below every other section on Home. */
+}
+
+.analytics-card {
+    padding: 20px;
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--glass-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.analytics-main {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(0, 102, 204, 0.12);
+}
+
+.analytics-icon-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--blue-light), var(--blue));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    flex-shrink: 0;
+}
+
+.analytics-card .stat-value.highlight {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--blue);
+    margin-top: 2px;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+}
+
+/* =========================================================
+   HORIZONTAL ROW & CARDS
+========================================================= */
+.horizontal-row {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+
+.card {
+    flex: 0 0 126px;
+    width: 126px;
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.card:active {
+    transform: scale(0.96);
+}
+
+.poster {
+    position: relative;
+    width: 126px;
+    height: 184px;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    border: none;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.25s ease;
+}
+
+.card:active .poster {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Long-pressing a poster is how the "Change Poster" picker opens (see
+   startPosterPress below), but on a phone that same gesture is also what
+   the browser uses to pop up its own "Save/Copy Image" menu on any <img>.
+   Left unchecked, that native menu fights with (and usually wins over)
+   our own picker. Disabling the callout/selection/drag behavior on every
+   poster-style thumbnail stops the OS menu from appearing at all, so a
+   long-press only ever triggers the app's own handling. */
+.poster,
+.poster img,
+.search-card-poster,
+.continue-poster,
+.upcoming-poster img,
+.poster-picker-item img {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+}
+
+.poster-placeholder {
+    width: 100%;
+    height: 100%;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: linear-gradient(135deg, rgba(0,102,204,0.14), rgba(0,102,204,0.05));
+    color: var(--blue);
+}
+
+.poster-placeholder .icon {
+    width: 30px;
+    height: 30px;
+    opacity: 0.8;
+}
+
+.new-episode-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 3;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--danger);
+    color: white;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.card-title {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-align: left;
+}
+
+/* =========================================================
+   3 COLUMN GRID (LIBRARY & TABS)
+========================================================= */
+.library-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px 12px;
+}
+
+.library-grid .card {
+    width: 100%;
+    min-width: 0;
+}
+
+.library-grid .poster {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 0.685;
+}
+
+/* =========================================================
+   CHANGE POSTER / BACKDROP PICKER
+========================================================= */
+.poster-picker-title {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin-bottom: 16px;
+}
+
+.poster-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding-bottom: 8px;
+}
+
+.poster-picker-grid.backdrop-mode {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.poster-picker-item {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--surface-2);
+    border: 2px solid transparent;
+    box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s ease, border-color 0.2s ease;
+}
+
+.poster-picker-item:active {
+    transform: scale(0.96);
+}
+
+.poster-picker-item.selected {
+    border-color: var(--flat-blue);
+}
+
+.poster-picker-item.selected::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 136, 255, 0.15);
+}
+
+.poster-picker-item img {
+    width: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.poster-picker-grid:not(.backdrop-mode) .poster-picker-item img {
+    aspect-ratio: 0.685;
+}
+
+.poster-picker-grid.backdrop-mode .poster-picker-item img {
+    aspect-ratio: 1.78;
+}
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+.empty-state {
+    padding: 44px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    grid-column: 1 / -1;
+    background: var(--surface);
+    backdrop-filter: blur(30px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.empty-state svg {
+    margin-bottom: 12px;
+    color: var(--text-muted);
+}
+
+.empty-state h3 {
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.empty-state p {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.empty-state-cta {
+    margin-top: 16px;
+    height: 40px;
+    padding: 0 22px;
+    border-radius: 999px;
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.empty-state-cta:active {
+    transform: scale(0.96);
+}
+
+/* =========================================================
+   LIBRARY CONTROLS & SEARCH
+========================================================= */
+.library-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.search-box {
+    position: relative;
+    width: 100%;
+}
+
+.search-box input {
+    width: 100%;
+    height: 50px;
+    padding: 0 46px 0 48px;
+    outline: none;
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    border: 1px solid var(--glass-chrome-border);
+    border-radius: 999px;
+    color: var(--text);
+    font-size: 14px;
+    box-shadow: var(--glass-chrome-shadow);
+    transition: all 0.2s ease;
+}
+
+.search-box input:focus {
+    border-color: var(--blue);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15), var(--glass-shadow-sm);
+}
+
+.search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--blue);
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+}
+
+.search-clear-btn:hover {
+    color: var(--blue-dark);
+    background: var(--surface-2);
+}
+
+.search-box.has-text .search-clear-btn {
+    display: flex;
+}
+
+/* =========================================================
+   SEARCH & DISCOVER VIEW
+========================================================= */
+.search-type-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface);
+    backdrop-filter: blur(30px);
+    padding: 5px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    margin-bottom: 16px;
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.search-type-btn {
+    height: 40px;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease;
+}
+
+.search-type-btn:active {
+    transform: scale(0.96);
+}
+
+.search-type-btn.active {
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    color: var(--text);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+/* Scoped to the auth screen only, so the Sign In / Join tabs pick up the
+   same flat-blue treatment as Sign In, Join, Sign Out, and Trailer,
+   without changing the shared .search-type-btn.active style used
+   elsewhere (Discover's TV Shows/Movies toggle). */
+#authScreen .search-type-btn.active {
+    background: var(--glass-sheen), var(--flat-blue);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.search-type-toggle.three-way {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* Modern filled-pill segmented control, used on Discover/Library/Upcoming.
+   Deliberately separate from .search-type-toggle/.search-type-btn so the
+   Sign In / Join tabs on the auth screen stay pixel-identical. */
+.segmented-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--surface-2);
+    padding: 5px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border-subtle);
+    margin-bottom: 16px;
+}
+
+.segmented-toggle.three-way {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.segmented-btn {
+    height: 40px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease;
+}
+
+.segmented-btn:active {
+    transform: scale(0.96);
+}
+
+.segmented-btn.active {
+    /* Sheen layered over the color fill so the active pill reads as
+       tinted glass rather than a flat colored chip. */
+    background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
+    color: white;
+    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.library-subview {
+    margin-top: 4px;
+}
+
+.search-results-grid {
+    display: flex;
+    flex-direction: column;
+    margin-top: 16px;
+}
+
+.search-card {
+    display: flex;
+    gap: 14px;
+    padding: 14px 6px;
+    align-items: flex-start;
+    border-radius: var(--radius-md);
+    border-bottom: 1px solid var(--glass-border-subtle);
+    transition: background 0.2s ease, transform 0.15s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.search-card:last-child {
+    border-bottom: none;
+}
+
+.search-card:active {
+    transform: scale(0.98);
+    background: var(--surface-2);
+}
+
+.search-card-poster {
+    flex: 0 0 80px;
+    width: 80px;
+    height: 116px;
+    border-radius: 16px;
+    object-fit: cover;
+    background: var(--surface-2);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.search-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 2px;
+}
+
+.search-card-title {
+    font-size: 15.5px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 40px;
+}
+
+.search-card-meta {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.search-card-overview {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.search-add-btn {
+    position: absolute;
+    top: 14px;
+    right: 6px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    flex-shrink: 0;
+}
+
+.search-add-btn:active {
+    transform: scale(0.9);
+}
+
+.search-add-btn.added {
+    background: var(--surface-2);
+    color: var(--success);
+    border: 1px solid rgba(52, 199, 89, 0.3);
+    box-shadow: none;
+    cursor: default;
+}
+
+.spinner-container {
+    display: flex;
+    justify-content: center;
+    padding: 40px 0;
+}
+
+.spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(0, 0, 0, 0.08);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* =========================================================
+   SKELETON LOADERS
+   Shown instead of the bare spinner above wherever loading content has a
+   predictable shape (a list of search-card-style rows, or a grid of
+   poster tiles) - placeholders sized to match the real layout mean the
+   page doesn't jump when content arrives, and it's obvious at a glance
+   *what kind* of thing is loading rather than just "wait".
+========================================================= */
+@keyframes skeletonShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.6) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+    border-radius: var(--radius-sm);
+}
+
+/* Row skeleton - mirrors the .search-card / .episode layout: a thumbnail
+   rectangle plus a few text-shaped bars, repeated to fill the list. */
+.skeleton-row {
+    display: flex;
+    gap: 14px;
+    padding: 14px 6px;
+    align-items: flex-start;
+}
+
+.skeleton-row-thumb {
+    flex: 0 0 80px;
+    width: 80px;
+    height: 116px;
+    border-radius: 16px;
+}
+
+.skeleton-row-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding-top: 6px;
+}
+
+.skeleton-line {
+    height: 11px;
+}
+
+/* Grid skeleton - mirrors the poster picker's 3-column layout. */
+.skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.skeleton-grid-item {
+    aspect-ratio: 2 / 3;
+    border-radius: var(--radius-md);
+}
+
+/* =========================================================
+   UPCOMING CARDS
+========================================================= */
+.upcoming-card {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    padding: 14px 6px;
+    align-items: flex-start;
+    border-radius: var(--radius-md);
+    border-bottom: 1px solid var(--glass-border-subtle);
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.upcoming-group:last-child .upcoming-card:last-child {
+    border-bottom: none;
+}
+
+.upcoming-card:active {
+    transform: scale(0.98);
+    background: var(--surface-2);
+}
+
+.upcoming-poster {
+    flex: 0 0 66px;
+    width: 66px;
+    height: 94px;
+    overflow: hidden;
+    border-radius: 14px;
+    background: var(--surface-2);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.upcoming-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.upcoming-poster-placeholder {
+    width: 100%;
+    height: 100%;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.upcoming-info {
+    flex: 1;
+    min-width: 0;
+    padding-right: 34px;
+    padding-top: 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.upcoming-title {
+    font-size: 14.5px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upcoming-date {
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin-top: 2px;
+}
+
+.upcoming-countdown {
+    color: var(--blue);
+    font-weight: 750;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.upcoming-group-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin: 0 0 12px;
+}
+
+.upcoming-group + .upcoming-group .upcoming-group-title {
+    margin-top: 24px;
+}
+
+/* =========================================================
+   CONTINUE WATCHING (HOME) — swipeable "up next" rows, styled
+   to match the Discover/search result list cards, but surfacing
+   the next episode's own info instead of the show's synopsis.
+========================================================= */
+.continue-group + .continue-group {
+    margin-top: 22px;
+}
+
+.continue-group-title {
+    font-size: 14.5px;
+    font-weight: 750;
+    color: var(--text);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.continue-group-title::before {
+    content: '';
+    width: 4px;
+    height: 14px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--blue-light), var(--blue));
+    flex-shrink: 0;
+}
+
+.continue-card-wrap {
+    position: relative;
+    /* Matches the same 28px corner radius as the hero card, analytics
+       card, and nav bar around it - the rest of the Home tab's top-level
+       surfaces - instead of the smaller poster-scale radius. */
+    border-radius: var(--radius-2xl);
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.continue-card-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    /* Swiping right to mark watched slides the card right, uncovering
+       this panel on the LEFT - so the label sits at the left edge (flex-
+       start) for that direction. The left-swipe (remove/stop) panel is
+       revealed on the right instead, so JS flips this to flex-end for
+       that direction - see updateBgForDirection(). */
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 26px;
+    background: var(--glass-sheen), var(--green-gradient);
+    color: white;
+    font-size: 12.5px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    opacity: 0;
+    pointer-events: none;
+    /* Same bright top-edge highlight every other filled glass button in
+       the app gets, so this reads as the same family of control just in
+       a different color for each action. */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.continue-card-bg svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.continue-card {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    padding: 14px;
+    align-items: flex-start;
+    /* Liquid-Glass-style treatment: a diagonal sheen layered over a
+       translucent fill (lower opacity so the blurred backdrop reads
+       through clearly), heavy blur+saturation, and a bright top-edge
+       highlight so the glass reads as a lit, curved surface rather than a
+       flat off-white panel. */
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.46);
+    backdrop-filter: blur(44px) saturate(240%);
+    -webkit-backdrop-filter: blur(44px) saturate(240%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    touch-action: pan-y;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: box-shadow 0.2s ease;
+}
+
+.continue-card.dragging {
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.16);
+}
+
+.continue-poster {
+    flex: 0 0 80px;
+    width: 80px;
+    height: 116px;
+    border-radius: 16px;
+    object-fit: cover;
+    background: var(--surface-2);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+}
+
+.continue-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 2px;
+    padding-right: 40px;
+}
+
+.continue-title {
+    font-size: 15.5px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.continue-meta-line {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.continue-episode-name {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.continue-overview {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.continue-check-btn {
+    position: absolute;
+    top: 14px;
+    right: 6px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--glass-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--glass-shadow-sm);
+    flex-shrink: 0;
+    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.continue-check-btn:active {
+    transform: scale(0.9);
+}
+
+.continue-check-btn:hover {
+    color: var(--success);
+    border-color: rgba(52, 199, 89, 0.35);
+}
+
+/* =========================================================
+   BOTTOM NAV (Floating Pill)
+========================================================= */
+.bottom-nav {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 100;
+    width: calc(100% - 36px);
+    max-width: 420px;
+    height: 70px;
+    padding: 7px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    /* Sheen gradient layered over the base fill so the pill reads as one
+       curved piece of glass catching light, rather than a flat tinted
+       panel - the strongest "chrome" treatment in the app, since this is
+       the one surface that's always floating above everything else. */
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    border: 1px solid var(--glass-chrome-border);
+    /* Matches the same corner radius used by the rest of the app's
+       top-level surfaces (hero card, modal sheets, analytics card)
+       instead of a fully-rounded pill, so the nav bar reads as part of
+       the same rounded-rectangle family rather than a one-off shape. */
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--glass-chrome-shadow);
+}
+
+/* Single floating "liquid glass" capsule that glides beneath whichever tab
+   is active (JS positions it via transform/width), rather than each button
+   painting its own background — this is what makes it read as one fluid
+   piece of glass moving, like iOS's tab bar, instead of a color swap. */
+.nav-indicator {
+    position: absolute;
+    top: 7px;
+    left: 0;
+    height: calc(100% - 14px);
+    width: 0;
+    /* Nested to match the bar's new rounded-rectangle shape (7px inset
+       from a 28px outer radius reads as concentric around --radius-lg). */
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), width 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.nav-button {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    border-radius: 999px;
+    transition: color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.2s ease;
+}
+
+.nav-button:active {
+    transform: scale(0.94);
+}
+
+.nav-button .icon {
+    width: 21px;
+    height: 21px;
+    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.nav-button.active {
+    color: var(--blue);
+}
+
+.nav-button.active .icon {
+    transform: translateY(-1px) scale(1.05);
+}
+
+/* =========================================================
+   MODAL & BACKDROP (Frosted Glass Sheet)
+========================================================= */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: none;
+    align-items: stretch;
+    background: rgba(0, 0, 0, 0.26);
+    backdrop-filter: blur(26px);
+    -webkit-backdrop-filter: blur(26px);
+}
+
+/* Content-sized variant for modals whose content doesn't need (and
+   shouldn't force) a full-screen takeover - an episode with a short
+   description, a movie with a short description, the avatar grid, the
+   achievements list. Centered card instead of edge-to-edge, height
+   determined by content up to a cap, scrollable within itself if content
+   ever exceeds that cap - same glass-card treatment as .confirm-card
+   rather than the flat full-bleed fill .modal-sheet normally gets. */
+.modal.modal-compact {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.modal-sheet.modal-sheet-compact {
+    width: 100%;
+    max-width: 460px;
+    height: auto;
+    max-height: 85vh;
+    border-radius: var(--radius-2xl);
+    background: var(--glass-sheen), rgba(248, 250, 252, 0.86);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.modal-sheet-compact .modal-backdrop-header {
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+}
+
+html[data-theme="dark"] .modal-sheet-compact {
+    background: var(--glass-sheen), rgba(28, 28, 30, 0.92);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.modal.open {
+    display: flex;
+}
+
+/* These two are always opened FROM the Settings sheet, which is also a
+   plain .modal (z-index 200) - without this, stacking among same-z-index
+   fixed elements falls back to DOM order, and both happen to sit earlier
+   in the markup than #settingsModal, so they'd render invisibly behind
+   it instead of on top. */
+#avatarPickerModal,
+#achievementsModal {
+    z-index: 250;
+}
+
+.modal-sheet {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
+    overflow-y: auto;
+    /* Soft top-lit sheen (light "entering" from the top edge) layered over
+       the base fill, instead of a flat tint - same glass surface as
+       before, just now filling the whole screen edge-to-edge rather than
+       being a bottom-anchored card, so no rounded corners or drop shadow
+       (nothing for either to read against once it's full-bleed). */
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), rgba(248, 250, 252, 0.68);
+    backdrop-filter: blur(70px) saturate(230%);
+    -webkit-backdrop-filter: blur(70px) saturate(230%);
+    border-radius: 0;
+    border: none;
+    position: relative;
+}
+
+/* Same-origin sub-pages (NovaWrapped, etc.) loaded inside a full-screen
+   iframe instead of a top-level navigation - see #pageOverlayModal. The
+   iframe owns its own scrolling, so the wrapping .modal-sheet is set to
+   overflow: hidden inline where this is used, to avoid a double
+   scrollbar. */
+.page-overlay-frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    background: transparent;
+}
+
+.modal-backdrop-header {
+    width: 100%;
+    height: 240px;
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+    padding: 20px;
+}
+
+.modal-backdrop-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(248,250,252,0.05) 0%, rgba(248,250,252,0.96) 100%);
+}
+
+.modal-header-nav {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+}
+
+.close-button {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--surface);
+    color: var(--text);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.close-button:active {
+    transform: scale(0.9);
+}
+
+.season-rewatch-button {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--surface);
+    color: var(--blue);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.season-rewatch-button:active {
+    transform: scale(0.9);
+}
+
+/* "Done" action sitting next to the circular close button in a modal
+   header - used by the poster/backdrop picker so a poster and a backdrop
+   can both be picked (across tabs) before anything is saved and the sheet
+   closes, instead of every tap saving+closing immediately. */
+.header-done-btn {
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    font-size: 13.5px;
+    font-weight: 700;
+    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.header-done-btn:active {
+    transform: scale(0.94);
+}
+
+.modal-hero-title-container {
+    position: relative;
+    z-index: 2;
+}
+
+.modal-content {
+    padding: 22px;
+}
+
+/* =========================================================
+   CONFIRMATION DIALOG (e.g. Delete Account)
+   A compact centered "alert" style dialog, distinct from the bottom-sheet
+   .modal used for show/episode details - matches the same glass language
+   (sheen, chrome shadow, radius scale) but reads as a focused decision
+   point rather than a browsing surface.
+========================================================= */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 24px;
+}
+
+.confirm-overlay.open {
+    display: flex;
+}
+
+.confirm-card {
+    width: 100%;
+    max-width: 340px;
+    padding: 28px 24px 24px;
+    text-align: center;
+    background: var(--glass-sheen), rgba(248, 250, 252, 0.86);
+    backdrop-filter: blur(50px) saturate(220%);
+    -webkit-backdrop-filter: blur(50px) saturate(220%);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 1);
+    transform: scale(0.92);
+    opacity: 0;
+    transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.25s ease;
+    position: relative;
+}
+
+.confirm-overlay.open .confirm-card {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.confirm-icon-badge {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--red-gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 20px rgba(255, 59, 48, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.rewatch-icon-badge {
+    background: var(--glass-sheen), var(--blue-gradient);
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.appearance-icon-tile {
+    background: linear-gradient(135deg, #48484a, #1c1c1e);
+}
+
+.confirm-title {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    margin-bottom: 8px;
+}
+
+.confirm-message {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin-bottom: 22px;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.confirm-btn {
+    flex: 1;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.confirm-btn.cancel {
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.confirm-btn.cancel:active {
+    transform: scale(0.97);
+}
+
+.confirm-btn.danger {
+    background: var(--glass-sheen), var(--red-gradient);
+    color: white;
+    box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.confirm-btn.danger:active {
+    transform: scale(0.97);
+}
+
+.modal-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.7px;
+}
+
+.modal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin: 10px 0 16px;
+    align-items: center;
+}
+
+.modal-description {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* =========================================================
+   WATCH ON (STREAMING AVAILABILITY)
+========================================================= */
+.modal-watch-on {
+    margin: 4px 0 18px;
+    animation: watchOnFadeIn 0.25s ease;
+}
+
+@keyframes watchOnFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.watch-on-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.watch-on-title {
+    font-size: 12px;
+    font-weight: 750;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.watch-on-providers {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.watch-provider-chip {
+    flex: 0 0 auto;
+    width: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+}
+
+.watch-provider-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    background: var(--surface);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.watch-provider-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-secondary);
+    backdrop-filter: blur(20px);
+}
+
+.watch-provider-name {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 64px;
+}
+
+.cinema-chip .watch-provider-logo.cinema-icon {
+    background: linear-gradient(135deg, var(--blue-light), var(--blue));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3);
+}
+
+.cinema-chip .watch-provider-name {
+    color: var(--blue);
+    font-weight: 750;
+    white-space: normal;
+}
+
+.watch-on-attribution {
+    margin-top: 10px;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    display: inline-block;
+}
+
+.watch-on-attribution:hover {
+    text-decoration: underline;
+}
+
+.modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 22px 0;
+}
+
+.modal-actions-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+}
+
+.modal-actions.movie-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.modal-actions.movie-actions-grid .action-button {
+    width: 100%;
+}
+
+.action-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.action-button:active {
+    transform: scale(0.97);
+}
+
+.action-button.primary {
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    border: none;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+/* Same filled-glass treatment as the other action buttons (sheen +
+   flat blue + white text + inset highlight). Sign In, Join, and Sign Out
+   all share this exact same look - see --flat-blue. */
+.action-button.trailer {
+    background: var(--glass-sheen), var(--flat-blue);
+    color: white;
+    border: none;
+    box-shadow: 0 6px 16px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.action-button.warning {
+    background: var(--glass-sheen), var(--orange-gradient);
+    color: white;
+    border: none;
+    box-shadow: 0 6px 16px rgba(255, 149, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.action-button.danger {
+    background: var(--glass-sheen), var(--red-gradient);
+    color: white;
+    border: none;
+    box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.season-selector-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 26px 0 14px;
+}
+
+.season-selector {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    flex: 1;
+    min-width: 0;
+}
+
+.season-button {
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: var(--radius-sm);
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: var(--glass-shadow-sm);
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.season-button:active {
+    transform: scale(0.95);
+}
+
+.season-button.active {
+    background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
+    color: white;
+    border-color: var(--blue);
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.episode {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 10px;
+    margin: 0 -10px;
+    border-bottom: 1px solid var(--glass-border-subtle);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.episode:active {
+    opacity: 0.7;
+}
+
+.episode-up-next {
+    background: rgba(0, 102, 204, 0.06);
+    border-bottom-color: transparent;
+}
+
+.episode-up-next-badge {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--blue);
+    color: white;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    vertical-align: middle;
+}
+
+.episode-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.episode-still {
+    width: 116px;
+    height: 65px;
+    border-radius: var(--radius-xs);
+    object-fit: cover;
+    background: var(--surface-2);
+    flex-shrink: 0;
+}
+
+.episode-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    flex: 1;
+}
+
+.episode-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.episode-title {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.episode-overview {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.episode-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    margin-top: 4px;
+}
+
+.rewatch-count-tap {
+    color: var(--blue-light);
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: rgba(71, 146, 255, 0.4);
+    text-underline-offset: 2px;
+}
+
+.rewatch-count-tap:active {
+    opacity: 0.6;
+}
+
+/* =========================================================
+   HOME HERO
+========================================================= */
+.hero-card {
+    padding: 24px 24px 26px;
+    background: linear-gradient(150deg, rgba(255,255,255,0.92) 0%, rgba(224,238,255,0.8) 100%);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid rgba(0, 102, 204, 0.2);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.hero-profile {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Wraps the avatar so the status dot can be pinned to its corner without
+   disturbing the flex layout around it. */
+.avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Small "signed in" indicator, bottom-right of the avatar - a familiar
+   premium-app cue (Discord/Slack-style presence dot) that also just
+   quietly confirms the account is active. Hidden for the guest state via
+   the .show toggle in updateHomeUI(). */
+.avatar-status-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--green-gradient);
+    border: 2.5px solid #fdfdfe;
+    box-shadow: 0 2px 6px rgba(52, 199, 89, 0.55);
+    display: none;
+}
+
+.avatar-status-dot.show {
+    display: block;
+}
+
+/* Opens the Settings sheet - same filled-glass "primary action" recipe
+   as .hero-pill-btn/.analytics-icon-badge (sheen + blue-gradient + white
+   icon) rather than a plain translucent circle, so it reads as an
+   intentional on-brand control sitting on the hero card, not a generic
+   close/back button repurposed. */
+.settings-entry-btn {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.settings-entry-btn .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.settings-entry-btn:active {
+    transform: scale(0.9) rotate(30deg);
+}
+
+/* =========================================================
+   SETTINGS SHEET
+   A dedicated "page" now (see .modal-sheet full-screen change) rather
+   than a couple of rows crammed onto Home - profile header up top,
+   then grouped, icon-led rows so it reads like a real settings screen
+   instead of a flat list of controls.
+========================================================= */
+.settings-profile-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 20px 0 28px;
+}
+
+.settings-section {
+    margin-bottom: 24px;
+}
+
+.settings-section-title {
+    font-size: 15px;
+    letter-spacing: -0.2px;
+}
+
+.settings-card {
+    padding: 6px 18px;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+}
+
+.settings-row + .settings-row {
+    border-top: 1px solid var(--glass-border-subtle);
+}
+
+.settings-row-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-xs);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.settings-row-icon .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.settings-row-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-row-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.settings-row-sub {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    line-height: 1.4;
+}
+
+/* Sign Out / Delete Account as full-width tappable list rows (icon +
+   label + chevron), the familiar "Settings app" pattern, instead of two
+   side-by-side pill buttons squeezed into the hero card. */
+.settings-card-list {
+    padding: 4px 4px;
+}
+
+.settings-action-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    text-align: left;
+    background: transparent;
+    border-radius: var(--radius-md);
+}
+
+.settings-action-row:active {
+    background: var(--surface-2);
+}
+
+.settings-action-row + .settings-action-row {
+    border-top: 1px solid var(--glass-border-subtle);
+}
+
+.settings-action-row.danger .settings-row-title {
+    color: var(--danger);
+}
+
+.settings-row-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+/* Compact 2-way toggle for a settings row's trailing slot (currently just
+   Appearance/theme) - same active-pill gradient language as the full-size
+   .segmented-toggle/.segmented-btn used elsewhere, just sized to sit
+   inline next to row text instead of spanning full width. */
+.theme-toggle-mini {
+    flex-shrink: 0;
+    display: flex;
+    background: var(--surface-2);
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border-subtle);
+}
+
+.theme-toggle-mini-btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease;
+}
+
+.theme-toggle-mini-btn:active {
+    transform: scale(0.94);
+}
+
+.theme-toggle-mini-btn.active {
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    box-shadow: 0 4px 10px rgba(0, 102, 204, 0.3);
+}
+
+.hero-pill-btn {
+    flex-shrink: 0;
+    height: 40px;
+    min-width: 112px;
+    padding: 0 18px;
+    border-radius: 999px;
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.hero-pill-btn:active {
+    transform: scale(0.96);
+}
+
+/* The region control itself is just .hero-pill-btn with a max-width/ellipsis
+   so a long country name (e.g. "United Arab Emirates") can't blow out the
+   hero card's layout - the actual picker is a bottom sheet below, styled
+   like every other list-choice surface in the app (see .region-option-row),
+   not a native <select> whose open dropdown the app has no control over. */
+.hero-pill-btn.region-btn {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.region-options-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.region-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 4px;
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+}
+
+.region-option-row:last-child {
+    border-bottom: none;
+}
+
+.region-option-row:active {
+    background: var(--surface-2);
+}
+
+.region-option-check {
+    width: 20px;
+    height: 20px;
+    color: var(--flat-blue);
+    flex-shrink: 0;
+    visibility: hidden;
+}
+
+.region-option-row.selected .region-option-check {
+    visibility: visible;
+}
+
+/* Scoped to the region picker only - other .modal-sheet/.modal-content
+   instances (poster picker, etc.) keep their normal content-based
+   scrolling. This still fixes the sheet as a flex column with
+   #regionOptionsList as the only scrolling region, so the search box
+   stays pinned at a stable position instead of scrolling away with the
+   list as you type. */
+.region-picker-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.region-picker-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.region-picker-content .region-options-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.home-card {
+    padding: 22px;
+    background: var(--surface);
+    backdrop-filter: blur(35px) saturate(180%);
+    -webkit-backdrop-filter: blur(35px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--glass-shadow);
+}
+
+.home-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.avatar-edit-wrap {
+    position: relative;
+    flex-shrink: 0;
+    background: none;
+    padding: 0;
+    display: block;
+}
+
+.avatar-edit-wrap:active .large-avatar {
+    transform: scale(0.96);
+}
+
+.avatar-edit-badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--blue-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    border: 2px solid #F0F2F6;
+    box-shadow: 0 3px 8px rgba(0, 102, 204, 0.3);
+}
+
+html[data-theme="dark"] .avatar-edit-badge {
+    border-color: #000000;
+}
+
+.avatar-edit-badge .icon-small {
+    width: 11px;
+    height: 11px;
+}
+
+.avatar-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-top: 20px;
+}
+
+.avatar-picker-option {
+    aspect-ratio: 1;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    background: var(--surface-2);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: transform 0.15s ease;
+}
+
+.avatar-picker-option:active {
+    transform: scale(0.94);
+}
+
+.avatar-picker-option.selected::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: calc(var(--radius-lg) + 3px);
+    border: 3px solid var(--blue);
+}
+
+.large-avatar {
+    width: 62px;
+    height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    /* A third, lighter stop plus a soft inner shadow along the bottom
+       edge gives the fill some actual depth (light catching the top,
+       falling off toward the bottom) instead of a flat two-tone chip.
+       Only actually visible for the initials fallback now - real avatar
+       images cover it entirely (overflow: hidden clips to the rounded
+       corners either way). */
+    background: linear-gradient(150deg, #6babff 0%, var(--blue-light) 45%, var(--blue) 100%);
+    color: white;
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    /* Neutral shadow instead of the previous blue-tinted glow - that blue
+       glow was tuned to complement the initials' blue gradient, but reads
+       as a stray colored halo behind a real avatar photo, which is the
+       common case now. */
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.4);
+    flex-shrink: 0;
+}
+
+.home-greeting {
+    font-size: 11px;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--blue);
+}
+
+.home-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin-top: 1px;
+}
+
+.home-subtitle {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.google-auth-btn {
+    width: 100%;
+    height: 42px;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    color: #1f1f1f;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    transition: transform 0.15s ease;
+}
+
+.google-auth-btn:active {
+    transform: scale(0.98);
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 12px 0 10px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--glass-border-subtle);
+}
+
+.auth-divider span {
+    padding: 0 10px;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.auth-row {
+    display: flex;
+    gap: 10px;
+}
+
+.auth-row .auth-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.auth-mode-toggle {
+    margin: 14px 0 0;
+}
+
+.auth-input {
+    width: 100%;
+    height: 40px;
+    padding: 0 16px;
+    outline: none;
+    background: var(--surface-2);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.auth-input:focus {
+    border-color: var(--blue);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+}
+
+.auth-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 2px;
+}
+
+.auth-btn {
+    flex: 1;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--glass-sheen), var(--flat-blue);
+    color: white;
+    box-shadow: 0 6px 16px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.15s ease;
+}
+
+.auth-btn:active {
+    transform: scale(0.97);
+}
+
+.auth-btn.secondary {
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    color: var(--text-secondary);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.auth-forgot-link {
+    background: transparent;
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.auth-forgot-link:hover {
+    text-decoration: underline;
+}
+
+.auth-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.auth-footer-sep {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* =========================================================
+   DEDICATED AUTHENTICATION OVERLAY
+========================================================= */
+#authScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: var(--bg-mesh);
+    display: none; /* Hidden by default, controlled via JS */
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* Blur backdrop overlay */
+#authScreen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: -1;
+}
+
+/* Same treatment as #authScreen above - shares its layout rules rather
+   than the two drifting apart over time, since they're mutually exclusive
+   full-screen gates that never show at once. */
+#verifyScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: var(--bg-mesh);
+    display: none; /* Hidden by default, controlled via JS */
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#verifyScreen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: -1;
+}
+
+.auth-overlay-card {
+    width: 100%;
+    max-width: 400px;
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--surface);
+    backdrop-filter: blur(48px) saturate(210%);
+    -webkit-backdrop-filter: blur(48px) saturate(210%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    padding: 18px 22px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: authFadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes authFadeIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.auth-logo {
+    width: 38px;
+    height: 38px;
+    margin: 0 auto 2px;
+    object-fit: contain;
+}
+
+.auth-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.5px;
+}
+
+.auth-subtitle {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+    line-height: 1.3;
+}
+  
+/* Glass Toast */
+.toast {
+    position: fixed;
+    left: 50%;
+    /* Nav bar sits at bottom:22px with height:70px, so its top edge is at
+       92px - this keeps the toast a consistent, intentional 12px above
+       that edge instead of floating in the middle of the screen. */
+    bottom: 104px;
+    z-index: 500;
+    transform: translateX(-50%) translateY(14px) scale(0.92);
+    opacity: 0;
+    pointer-events: none;
+    padding: 13px 22px;
+    /* Matches the bottom nav's corner radius, since the two sit stacked
+       right above one another as the app's floating chrome layer. */
+    border-radius: var(--radius-2xl);
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    border: 1px solid var(--glass-chrome-border);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    line-height: 1.35;
+    transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+    width: calc(100% - 36px);
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    white-space: normal;
+    word-break: break-word;
+    box-shadow: var(--glass-chrome-shadow);
+}
+
+.toast.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* Offline banner - a slim, non-dismissible bar pinned to the very top of
+   the screen (the same overlay treatment iOS/Android use for their own
+   "No Internet" indicator) rather than a normal toast, since it needs to
+   stay up for as long as the connection is actually down, not fade after
+   a few seconds. */
+.offline-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 900;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 16px;
+    padding-top: calc(9px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(135deg, #ffb340, #ff9500);
+    color: white;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    text-align: center;
+    box-shadow: 0 4px 14px rgba(255, 149, 0, 0.35);
+}
+
+.offline-banner.show {
+    display: flex;
+}
+
+.toast-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.toast-icon svg {
+    width: 12px;
+    height: 12px;
+}
+
+.toast-icon.success {
+    background: linear-gradient(135deg, #34d472, #1fa851);
+    box-shadow: 0 3px 8px rgba(31, 168, 81, 0.4);
+}
+
+.toast-icon.error {
+    background: linear-gradient(135deg, #ff6961, #ff3b30);
+    box-shadow: 0 3px 8px rgba(255, 59, 48, 0.4);
+}
+
+#toastMessage {
+    flex: 1;
+    min-width: 0;
+}
+
+.toast-action {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    margin: -4px -2px;
+    color: var(--blue-light);
+    font-size: 13.5px;
+    font-weight: 800;
+    letter-spacing: -0.1px;
+    cursor: pointer;
+}
+
+.toast-action:active {
+    opacity: 0.6;
+}
+
+.auth-field {
+    width: 100%;
+}
+
+.auth-error {
+    display: none;
+    color: #ff3b30;
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 6px;
+    padding-left: 4px;
+}
+
+.auth-error.show {
+    display: block;
+}
+
+.auth-input.input-error {
+    border: 1px solid #ff3b30 !important;
+    box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.12);
+}
+/* =========================================================
+   DARK MODE
+   Overriding the same design tokens every component already reads from
+   (var(--surface), var(--text), etc.) covers the large majority of the
+   app automatically, since the whole system was built on top of these
+   variables rather than one-off colors. A handful of components layer in
+   an extra hardcoded light-mode fill alongside the tokens (mostly for a
+   specific visual effect - a hero gradient, a shimmer, a full-bleed sheet
+   background) - those get their own targeted override below so nothing
+   is left reading as a light card in dark mode.
+
+   Colors follow Apple's own dark-mode conventions where there's a direct
+   equivalent (System Blue/Green/Red/Orange all get their brighter dark-
+   mode variants) rather than just dimming the light-mode values, and
+   glass surfaces use a light tint at low opacity over the dark base
+   (rather than dark-on-dark) since that's what actually reads as "frosted
+   glass" once the backdrop behind it is dark instead of pale.
+========================================================= */
+
+/* Targeted fixes for components with a hardcoded light-mode fill layered
+   alongside the tokens above (see comment block header). */
+html[data-theme="dark"] .modal-sheet {
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 32%), rgba(18, 18, 20, 0.85);
+}
+
+html[data-theme="dark"] .modal-backdrop-overlay {
+    background: linear-gradient(180deg, rgba(18, 18, 20, 0.05) 0%, rgba(18, 18, 20, 0.96) 100%);
+}
+
+html[data-theme="dark"] .confirm-card {
+    background: var(--glass-sheen), rgba(28, 28, 30, 0.92);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme="dark"] .rewatch-icon-badge {
+    box-shadow: 0 8px 20px rgba(10, 132, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+html[data-theme="dark"] .hero-card {
+    background: linear-gradient(150deg, rgba(40, 44, 56, 0.85) 0%, rgba(20, 30, 48, 0.75) 100%);
+    border-color: rgba(10, 132, 255, 0.25);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme="dark"] .search-type-btn.active {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] #authScreen .search-type-btn.active {
+    box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .appearance-icon-tile {
+    background: linear-gradient(135deg, #d1d1d6, #8e8e93);
+}
+
+html[data-theme="dark"] .appearance-icon-tile .appearance-icon {
+    color: #1c1c1e;
+}
+
+html[data-theme="dark"] .auth-overlay-card {
+    background: rgba(28, 28, 30, 0.85);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .continue-card {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="dark"] .stat {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
+}
+
+html[data-theme="dark"] .search-box input:focus {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .nav-indicator {
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 1px rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.1) 50%, var(--surface-2) 75%);
+}
