@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#F0F2F6" id="metaThemeColor">
+<script>
+// Same shared localStorage key as the main app, so this page (opened
+// in-app via the full-screen page overlay) always matches whatever theme
+// is currently selected there, instead of always rendering light.
+(function () {
+    try {
+        var saved = localStorage.getItem('novawatch-theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) { /* localStorage unavailable - just default to light */ }
+})();
+</script>
+<title>Privacy Notice &amp; Terms of Service</title>
+<link rel="icon" type="image/png" href="https://www.novawatch.site/images/NovaWatch_Favicon_Icon.png">
+<link rel="stylesheet" href="../styles/tokens.css">
+<style>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg-mesh);
+    background-attachment: fixed;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px 80px;
+    -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+    width: 100%;
+    max-width: 620px;
+}
+
+.overlay-close-button {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 20;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--surface);
+    color: var(--text);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.overlay-close-button .icon {
+    width: 22px;
+    height: 22px;
+}
+
+.overlay-close-button:active {
+    transform: scale(0.9);
+}
+
+.hero {
+    padding: 26px 28px;
+    margin-bottom: 18px;
+    background: var(--glass-sheen), linear-gradient(135deg, rgba(255,255,255,0.78) 0%, rgba(224,238,255,0.62) 100%);
+    backdrop-filter: blur(46px) saturate(210%);
+    -webkit-backdrop-filter: blur(46px) saturate(210%);
+    border: 1px solid rgba(0, 102, 204, 0.2);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+h1 {
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+}
+
+.updated {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.card {
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-2xl);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    padding: 30px 28px;
+}
+
+section + section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--glass-border-subtle);
+}
+
+h2 {
+    font-size: 14.5px;
+    font-weight: 750;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+h2::before {
+    content: '';
+    width: 4px;
+    height: 14px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, var(--blue-light), var(--blue));
+    flex-shrink: 0;
+}
+
+p {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+a {
+    color: var(--blue);
+    text-decoration: none;
+    font-weight: 700;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+html[data-theme="dark"] .hero {
+    background: var(--glass-sheen), linear-gradient(135deg, rgba(40, 44, 56, 0.85) 0%, rgba(20, 30, 48, 0.75) 100%);
+    border-color: rgba(10, 132, 255, 0.3);
+}
+
+</style>
+</head>
+
+<body>
+<button class="overlay-close-button" onclick="closeThisOverlay()" aria-label="Close">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 6l12 12"/>
+        <path d="M18 6L6 18"/>
+    </svg>
+</button>
+<div class="wrap">
+    <div class="hero">
+        <h1>Privacy Notice</h1>
+        <div class="updated">Last updated: 1 September 2026</div>
+    </div>
+
+    <div class="card">
+        <section>
+            <p>This notice explains, in plain terms, how this app handles your information.</p>
+        </section>
+
+        <section>
+            <h2>What we collect</h2>
+            <p>When you create an account, we collect the information needed to set up and run that account, such as your email address and the sign-in details provided by your chosen sign-in method (for example, Google Sign-In). We also store the watchlist data you build inside the app: the movies and TV shows you add, your watch progress, and your preferences, so it's there the next time you sign in. This includes a streaming region setting, either detected automatically from your device or chosen by you, which is used only to show accurate "where to watch" information for your country.</p>
+        </section>
+
+        <section>
+            <h2>What we use it for</h2>
+            <p>We use your information for one purpose only: to create and operate your account and to provide the app's features to you (such as syncing your library across devices and sending release alerts you've opted into). We do not use your information for anything else: no advertising, no selling or sharing it with third parties for marketing, and no profiling beyond what's needed to run the app itself.</p>
+        </section>
+
+        <section>
+            <h2>Third-party services</h2>
+            <p>This app retrieves publicly available movie and TV metadata from The Movie Database (TMDB) to display titles, posters, and related information, and streaming-availability information from JustWatch to show where a title can be watched. Both are one-way lookups of show/movie data; neither is linked to your personal account information.</p>
+        </section>
+
+        <section>
+            <h2>Deleting your account</h2>
+            <p>You can permanently delete your account and all associated library data at any time from within the app, under your profile on the Home tab. No need to contact us. If you'd rather we do it for you, or you're unable to access the app, email <a href="mailto:delete@novawatch.site">delete@novawatch.site</a> and we'll take care of it.</p>
+        </section>
+
+        <section>
+            <h2>Questions</h2>
+            <p>If you have any questions about this notice or how your information is handled, email <a href="mailto:info@novawatch.site">info@novawatch.site</a>.</p>
+        </section>
+
+        <section>
+            <h2>Credits &amp; attribution</h2>
+            <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Movie and TV metadata, posters, and artwork are sourced from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">The Movie Database (TMDB)</a>. Streaming availability information is provided by JustWatch.</p>
+        </section>
+    </div>
+
+    <div class="hero" style="margin-top: 28px;">
+        <h1>Terms of Service</h1>
+        <div class="updated">Last updated: 1 September 2026</div>
+    </div>
+
+    <div class="card">
+        <section>
+            <p>These terms cover your use of this app. By creating an account or using the app, you agree to them.</p>
+        </section>
+
+        <section>
+            <h2>The service</h2>
+            <p>This app lets you track TV shows and movies you're watching, mark episodes and titles as watched, and get notified about new releases. Show and movie data (titles, posters, descriptions, air dates) comes from The Movie Database (TMDB); streaming availability comes from JustWatch. We don't control that data and can't guarantee it's always accurate, complete, or up to date.</p>
+        </section>
+
+        <section>
+            <h2>Your account</h2>
+            <p>You're responsible for the accuracy of the information you provide when creating an account, and for keeping your password confidential. You must be old enough to legally use this kind of service in your country to create an account. You can delete your account at any time; see the Privacy Notice above for how.</p>
+        </section>
+
+        <section>
+            <h2>Acceptable use</h2>
+            <p>Use the app the way it's intended: to track your own watching. Don't try to interfere with the app or its infrastructure, attempt to access another user's account or data, scrape or resell the data the app surfaces, or use the service for anything illegal.</p>
+        </section>
+
+        <section>
+            <h2>Availability &amp; changes</h2>
+            <p>We aim to keep the app running reliably, but we don't guarantee it will always be available, error-free, or uninterrupted; it depends in part on third-party services (TMDB, JustWatch, Firebase) that are outside our control. We may add, change, or remove features over time.</p>
+        </section>
+
+        <section>
+            <h2>No warranty</h2>
+            <p>The app is provided "as is," without warranties of any kind, express or implied. We don't warrant that release dates, watch-provider availability, or any other third-party data shown in the app will be accurate.</p>
+        </section>
+
+        <section>
+            <h2>Limitation of liability</h2>
+            <p>To the extent permitted by law, we aren't liable for any indirect, incidental, or consequential damages arising from your use of, or inability to use, the app.</p>
+        </section>
+
+        <section>
+            <h2>Changes to these terms</h2>
+            <p>We may update these terms from time to time. If we make material changes, we'll update the date at the top of this section. Continuing to use the app after a change means you accept the updated terms.</p>
+        </section>
+
+        <section>
+            <h2>Contact</h2>
+            <p>Questions about these terms? Email <a href="mailto:info@novawatch.site">info@novawatch.site</a>.</p>
+        </section>
+    </div>
+</div>
+<script>
+// This page is normally loaded inside the main app's full-screen iframe
+// overlay - closing it there means asking the parent (same-origin) to
+// close that overlay, not navigating away. If it's ever opened directly
+// (not embedded), window.parent === window, so this falls back to just
+// sending them to the main app instead.
+function closeThisOverlay() {
+    if (window.parent && window.parent !== window && typeof window.parent.closePageOverlay === 'function') {
+        window.parent.closePageOverlay();
+    } else {
+        window.location.href = 'https://www.novawatch.site/';
+    }
+}
+</script>
+</body>
+</html>
