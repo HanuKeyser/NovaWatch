@@ -38,7 +38,17 @@ try {
    APP STATE & CONFIG
 ========================================================= */
 const TMDB_API_KEY = "c8dc4239290060d91afd45c40d8182b7";
-const NOVAWATCH_APP_URL = "https://www.novawatch.site/";
+// Derived from the page's actual current origin rather than hardcoded, so
+// this can never silently mismatch whatever domain/subdomain variant the
+// site is really being served from (e.g. bare novawatch.site vs
+// www.novawatch.site - GitHub Pages' CNAME typically serves the bare
+// apex domain). A mismatch here isn't cosmetic: history.pushState() throws
+// a hard SecurityError if the URL you push doesn't share the document's
+// exact current origin, and that exception happens BEFORE the code that
+// actually shows the page overlay - so a wrong hardcoded domain here
+// silently broke the NovaWrapped/Privacy & Terms buttons entirely, with
+// no visible error unless you had the console open.
+const NOVAWATCH_APP_URL = window.location.origin + "/";
 
 // Remembers which top-level tab (Home / Discover / Library) the user was
 // last on, so reloading the app doesn't always dump them back on Home.
@@ -1400,7 +1410,17 @@ function goToWrapped() {
 function openPageOverlay(path) {
     const modal = document.getElementById("pageOverlayModal");
     document.getElementById("pageOverlayFrame").src = path;
-    history.pushState({ novawatchOverlay: path }, "", `${NOVAWATCH_APP_URL}${path}`);
+    // Guarded on its own: if this ever throws (e.g. some other origin
+    // edge case), the overlay should still open - a working page with a
+    // URL bar that didn't update is a far smaller problem than the whole
+    // button silently doing nothing, which is exactly what happened when
+    // this wasn't guarded and NOVAWATCH_APP_URL didn't match the actual
+    // origin (see its definition above).
+    try {
+        history.pushState({ novawatchOverlay: path }, "", `${NOVAWATCH_APP_URL}${path}`);
+    } catch (err) {
+        console.error("pushState failed while opening page overlay:", err);
+    }
     if (modal.classList.contains("open")) return;
     modal.classList.add("open");
     lockBodyScroll("pageOverlayModal");
