@@ -1,0 +1,157 @@
+/* NovaWatch shared design tokens - the "Liquid Glass" system's colors,
+   surfaces, shadows, and the light/dark palette switch. Shared by every
+   NovaWatch page (index.html, privacy-terms.html, novawrapped.html) so
+   they can never drift out of sync with each other again - that was the
+   actual root cause of several dark-mode bugs earlier (e.g.
+   privacy-terms.html referencing --glass-shadow-sm without ever having
+   defined it). Component-specific dark-mode overrides (the ones that
+   reference a specific class like .hero-card or .continue-card) stay in
+   each page's own stylesheet instead, since those components differ
+   page to page. */
+
+:root {
+    /* A flat color gives the glass nothing to actually refract - Liquid
+       Glass depends on there being tonal variation behind it to bend and
+       blur. This is a soft mesh of white/grey tones (no color) at
+       different depths over a pale grey base, so glass surfaces still
+       have real light and shadow to pick up without ever reading as
+       colorful. background-attachment: fixed keeps it still as the page
+       scrolls, so the refraction reads as consistent, not scrolling text. */
+    --bg-mesh:
+        radial-gradient(at 15% 12%, rgba(255, 255, 255, 0.9) 0px, transparent 48%),
+        radial-gradient(at 85% 8%, rgba(203, 210, 222, 0.55) 0px, transparent 50%),
+        radial-gradient(at 90% 75%, rgba(255, 255, 255, 0.7) 0px, transparent 50%),
+        radial-gradient(at 10% 88%, rgba(210, 216, 226, 0.5) 0px, transparent 50%),
+        radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.6) 0px, transparent 65%),
+        #F0F2F6;
+    --surface: rgba(255, 255, 255, 0.58);
+    --surface-2: rgba(255, 255, 255, 0.36);
+    --surface-3: rgba(255, 255, 255, 0.22);
+
+    --glass-border: rgba(255, 255, 255, 0.7);
+    --glass-border-subtle: rgba(255, 255, 255, 0.38);
+    --glass-shadow: 0 22px 46px rgba(0, 0, 0, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    --glass-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+    /* =====================================================
+       LIQUID GLASS "CHROME" SYSTEM
+       Modeled after Apple's Liquid Glass material: reserved for the
+       floating/functional layer (nav, sheets, toasts, pill controls,
+       circular buttons) rather than large content areas, so it reads as
+       one dynamic, reflective layer sitting *above* the content instead
+       of everything looking uniformly "glassy". Versus --surface, this
+       has heavier blur+saturation (more optical distortion of what's
+       behind it), a brighter top specular edge, and a two-layer elevation
+       shadow (a tight contact shadow + a soft ambient one) for real depth.
+       --glass-sheen is a diagonal highlight meant to be layered as an
+       extra background-image on top of a base fill, simulating light
+       glancing off the surface of the glass.
+    ===================================================== */
+    --glass-chrome-fill: rgba(255, 255, 255, 0.52);
+    --glass-chrome-blur: blur(60px) saturate(220%);
+    --glass-chrome-border: rgba(255, 255, 255, 0.92);
+    --glass-chrome-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 24px 48px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
+
+    --blue: #0066cc;      /* Apple System Blue */
+    --blue-light: #4792ff; 
+    --blue-dark: #004c99;
+    /* Canonical "primary" fill for every blue action button in the app
+       (Add to Library, Mark Watched, empty-state CTAs, active segmented
+       pills, etc) - a subtle two-tone gradient instead of a flat fill so
+       primary buttons read as tinted glass like everything else, not a
+       flat color chip sitting next to translucent ones. Always paired
+       with --glass-sheen on top for the same reason. */
+    --blue-gradient: linear-gradient(135deg, var(--blue-light), var(--blue));
+    /* A separate, flatter blue (no two-tone gradient) used specifically
+       for Trailer / Sign In / Join / Sign Out, so that group of buttons
+       shares one consistent look distinct from the --blue-gradient
+       "primary" family used elsewhere. */
+    --flat-blue: #0088ff;
+    /* Same "filled glass" recipe as blue, just in the other accent colors -
+       used anywhere a warning/danger/success action needs the same solid,
+       sheen-lit glass feel as a primary blue button. */
+    --orange-gradient: linear-gradient(135deg, #ffb15c, #ff9500);
+    --red-gradient: linear-gradient(135deg, #ff6961, #ff3b30);
+    --green-gradient: linear-gradient(135deg, #34d472, #1fa851);
+
+    --text: #1d1d1f;
+    --text-secondary: #424245;
+    --text-muted: #86868b;
+
+    --border: rgba(0, 0, 0, 0.08);
+
+    --success: #34c759;
+    --danger: #ff3b30;
+
+    --radius: 20px;
+
+    /* =====================================================
+       CORNER RADIUS SCALE
+       A consistent set of steps so same-role elements share the same
+       roundness instead of each picking a nearby-but-different value
+       (e.g. a button at 12px next to one at 14px). Pills/circles still
+       use 999px/50% - this scale is for the "how rounded is a rounded
+       rectangle" steps in between.
+    ===================================================== */
+    --radius-xs: 10px;   /* small chips: category-count, episode-still */
+    --radius-sm: 14px;   /* buttons, inputs, small pill controls */
+    --radius-md: 18px;   /* list rows / mid cards: search-card, upcoming-card, stat, episode row */
+    --radius-lg: 20px;   /* posters, continue-card, avatars, empty-state */
+    --radius-2xl: 28px;  /* top-level sheets/hero cards: hero-card, analytics-card, modal-sheet, auth card */
+}
+
+html {
+    background: #F0F2F6;
+    color-scheme: light;
+}
+
+html[data-theme="dark"] {
+    color-scheme: dark;
+    background: #000000;
+
+    --bg-mesh:
+        radial-gradient(at 15% 12%, rgba(50, 58, 78, 0.55) 0px, transparent 48%),
+        radial-gradient(at 85% 8%, rgba(28, 32, 44, 0.6) 0px, transparent 50%),
+        radial-gradient(at 90% 75%, rgba(42, 48, 66, 0.4) 0px, transparent 50%),
+        radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.5) 0px, transparent 50%),
+        radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.5) 0px, transparent 65%),
+        #000000;
+    --surface: rgba(255, 255, 255, 0.08);
+    --surface-2: rgba(255, 255, 255, 0.05);
+    --surface-3: rgba(255, 255, 255, 0.035);
+
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-border-subtle: rgba(255, 255, 255, 0.07);
+    --glass-shadow: 0 22px 46px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    --glass-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    --glass-chrome-fill: rgba(50, 50, 56, 0.68);
+    --glass-chrome-blur: blur(60px) saturate(180%);
+    --glass-chrome-border: rgba(255, 255, 255, 0.22);
+    --glass-chrome-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 54px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
+
+    --blue: #0a84ff;
+    --blue-light: #64a8ff;
+    --blue-dark: #0060c9;
+    --flat-blue: #0a84ff;
+
+    --orange-gradient: linear-gradient(135deg, #ffbf6b, #ff9f0a);
+    --red-gradient: linear-gradient(135deg, #ff6961, #ff453a);
+    --green-gradient: linear-gradient(135deg, #30d158, #26a648);
+
+    --text: #f5f5f7;
+    --text-secondary: #c7c7cc;
+    --text-muted: #8e8e93;
+
+    --border: rgba(255, 255, 255, 0.1);
+
+    --success: #30d158;
+    --danger: #ff453a;
+}
+
+html[data-theme="dark"] body {
+    background: var(--bg-mesh);
+    background-attachment: fixed;
+}
