@@ -2,14 +2,14 @@
 
 A mobile-first PWA for tracking TV shows and movies — search, add to a library, mark episodes/movies watched, log rewatches, and get release alerts. Built on Firebase (Auth + Firestore) and the TMDB API, with JustWatch-sourced "where to watch" availability.
 
-Live at `https://www.novyra.co.za/tv/`.
+Live at `https://www.novawatch.site/`.
 
 ---
 
 ## File structure
 
 ```
-/tv/
+/ (novawatch.site root)
 ├── index.html              The app itself (auth, Home/Discover/Library tabs, all modals)
 ├── manifest.json           PWA manifest (installability, icons)
 ├── service-worker.js       Offline app-shell caching + notification click handling
@@ -24,7 +24,7 @@ Live at `https://www.novyra.co.za/tv/`.
     └── index.html          Yearly recap page, releases Jan 1 2027 (was novawrapped.html)
 ```
 
-**Deployment note:** `privacy-terms/` and `nova-wrapped/` deploy one folder level *deeper* than `index.html`. Both link `styles/tokens.css` as `../styles/tokens.css` to account for that. If either page ever moves to a different depth, that relative path needs to move with it.
+**Deployment note:** `privacy-terms/` and `nova-wrapped/` deploy one folder level *deeper* than `index.html` (i.e. `novawatch.site/privacy-terms/` and `novawatch.site/nova-wrapped/`, vs `index.html` at the domain root). Both link `styles/tokens.css` as `../styles/tokens.css` to account for that. If either page - or the app itself - ever moves to a different depth, that relative path needs to move with it.
 
 ### Why the split
 
