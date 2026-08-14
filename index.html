@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#F0F2F6" id="metaThemeColor">
+<script>
+// Applied synchronously, before the stylesheet/body render, so a saved
+// dark-mode preference takes effect on first paint instead of flashing
+// light-then-dark. Falls back to the OS-level preference (prefers-color-scheme)
+// when the person hasn't chosen one in NovaWatch yet, rather than always
+// defaulting to light.
+(function () {
+    try {
+        var saved = localStorage.getItem('novawatch-theme');
+        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) { /* localStorage unavailable - just default to light */ }
+})();
+</script>
+<title>NovaWatch | Track What You Watch</title>
+
+<!-- Tab Icons & Custom App Icons -->
+<link rel="icon" type="image/png" href="https://www.novyra.co.za/NovaWatch_Logo.png">
+<link rel="apple-touch-icon" href="https://www.novyra.co.za/NovaWatch_App_Icon.png">
+<link rel="shortcut icon" href="https://www.novyra.co.za/NovaWatch_Logo.png">
+
+<!-- PWA manifest: makes the app installable to a home screen / app drawer -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="NovaWatch">
+
+<!-- Preconnect for faster API calls -->
+<link rel="preconnect" href="https://api.themoviedb.org">
+<link rel="preconnect" href="https://image.tmdb.org">
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+
+<!-- Firebase App & Services CDNs -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+</head>
+
+<body>
+
+<!-- DEDICATED AUTH OVERLAY -->
+<div id="authScreen">
+    <div class="auth-overlay-card">
+        <img src="https://www.novyra.co.za/NovaWatch_Logo.png" alt="NovaWatch Logo" class="auth-logo">
+        <h1 class="auth-title">Welcome to NovaWatch</h1>
+        <p class="auth-subtitle">Track what you watch & get release alerts.</p>
+
+        <div class="search-type-toggle auth-mode-toggle">
+            <button id="authTabSignIn" class="search-type-btn active" onclick="setAuthMode('signin')">Sign In</button>
+            <button id="authTabSignUp" class="search-type-btn" onclick="setAuthMode('signup')">Join</button>
+        </div>
+
+        <div class="auth-form">
+            <div class="auth-row">
+                <input type="text" id="authUsername" class="auth-input" placeholder="Username" style="display:none;" onkeydown="handleAuthKeydown(event)">
+                <input type="email" id="authEmail" class="auth-input" placeholder="Email address" onkeydown="handleAuthKeydown(event)">
+            </div>
+            <div class="auth-field">
+<input
+    type="password"
+    id="authPassword"
+    class="auth-input"
+    placeholder="Password"
+    oninput="clearPasswordError()"
+    onkeydown="handleAuthKeydown(event)"
+>
+<div id="authPasswordError" class="auth-error"></div>
+</div>
+            <div class="auth-actions">
+                <button id="authSignInBtn" class="auth-btn" onclick="handleSignIn()">Sign In</button>
+            </div>
+        </div>
+
+        <div class="auth-divider">
+            <span>OR</span>
+        </div>
+
+        <button class="google-auth-btn" onclick="handleGoogleSignIn()">
+            <svg width="18" height="18" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            Continue with Google
+        </button>
+
+        <div class="auth-footer-row">
+            <button class="auth-forgot-link" onclick="handleForgotPassword()">Forgot password?</button>
+        </div>
+    </div>
+</div>
+
+<!-- DEDICATED EMAIL VERIFICATION OVERLAY
+     Shown right after an email/password account is created (and on every
+     future sign-in until confirmed) so verification happens as part of
+     getting into the app, not as a banner discovered later once already
+     inside it. Google sign-in accounts skip this entirely since Google
+     has already verified that address. -->
+<div id="verifyScreen">
+    <div class="auth-overlay-card">
+        <img src="https://www.novyra.co.za/NovaWatch_Logo.png" alt="NovaWatch Logo" class="auth-logo">
+        <h1 class="auth-title">Verify your email</h1>
+        <p class="auth-subtitle">We've sent a confirmation link to <strong id="verifyEmailAddress">your email address</strong>. Open it on this device or any other, then come back and continue.</p>
+
+        <div class="auth-actions">
+            <button id="verifyContinueBtn" class="auth-btn" onclick="checkVerificationStatus()">I've Verified &mdash; Continue</button>
+        </div>
+        <div class="auth-actions">
+            <button id="resendVerifyBtn" class="auth-btn secondary" onclick="resendVerificationEmail()">Resend Email</button>
+        </div>
+
+        <div class="auth-footer-row">
+            <button class="auth-forgot-link" onclick="handleSignOut()">Wrong email? Sign out</button>
+        </div>
+    </div>
+</div>
+
+<div class="app">
+
+<!-- Persistent top banner - shown whenever the device has no network
+     connection, so a lost connection is obvious immediately instead of
+     only surfacing later as a failed search or a stuck spinner. -->
+<div id="offlineBanner" class="offline-banner">
+    <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="1" y1="1" x2="23" y2="23"/>
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+        <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+        <line x1="12" y1="20" x2="12.01" y2="20"/>
+    </svg>
+    You're offline - showing what's already saved
+</div>
+
+<!-- =====================================================
+     1. DISCOVER TAB
+================================================     -->
+<main id="discoverPage" class="page">
+    <div class="segmented-toggle">
+        <button id="searchTypeTV" class="segmented-btn active" onclick="setSearchType('tv')">TV Shows</button>
+        <button id="searchTypeMovie" class="segmented-btn" onclick="setSearchType('movie')">Movies</button>
+    </div>
+
+    <div class="search-box">
+        <svg class="icon search-icon" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="M20 20l-4-4"/>
+        </svg>
+        <input id="onlineSearchInput" type="search" placeholder="Search for TV Shows & Movies..." autocomplete="off">
+        <button class="search-clear-btn" type="button" onclick="clearSearch('onlineSearchInput')" aria-label="Clear search">
+            <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <div class="section-header">
+            <div id="searchResultsHeading" class="section-title" style="font-size: 16px; color: var(--text-secondary);">For You</div>
+        </div>
+        <div id="searchResultsList" class="search-results-grid"></div>
+    </div>
+</main>
+
+<!-- =====================================================
+     2. LIBRARY TAB (TV Shows + Movies + Upcoming, combined)
+================================================     -->
+<main id="libraryPage" class="page">
+    <div class="segmented-toggle three-way">
+        <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
+        <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
+        <button id="libraryTabUpcoming" class="segmented-btn" onclick="setLibraryView('upcoming')">Upcoming</button>
+    </div>
+
+    <!-- TV Shows sub-view -->
+    <div id="libraryViewTV" class="library-subview">
+        <div class="library-toolbar">
+            <div class="search-box">
+                <svg class="icon search-icon" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4-4"/>
+                </svg>
+                <input id="tvLibrarySearchInput" type="search" placeholder="Search TV shows library..." autocomplete="off">
+                <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
+                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="tvLibraryCategories"></div>
+    </div>
+
+    <!-- Movies sub-view -->
+    <div id="libraryViewMovies" class="library-subview" style="display: none;">
+        <div class="library-toolbar">
+            <div class="search-box">
+                <svg class="icon search-icon" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4-4"/>
+                </svg>
+                <input id="movieLibrarySearchInput" type="search" placeholder="Search movies library..." autocomplete="off">
+                <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
+                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="movieLibraryCategories"></div>
+    </div>
+
+    <!-- Upcoming sub-view -->
+    <div id="libraryViewUpcoming" class="library-subview" style="display: none;">
+        <div id="upcomingResultsList" class="search-results-grid"></div>
+    </div>
+</main>
+
+<!-- =====================================================
+     3. HOME TAB (DEFAULT LANDING)
+================================================     -->
+<main id="homePage" class="page active">
+    <div class="tab-content-wrapper">
+        
+        <!-- Hero Card - just identity + an entry point into Settings now;
+             account actions and preferences live in the Settings sheet
+             (see #settingsModal) instead of permanently taking up Home
+             space. -->
+        <div class="hero-card">
+            <div class="hero-top">
+                <div class="hero-profile">
+                    <div class="avatar-wrap">
+                        <div class="large-avatar" id="largeAvatar">G</div>
+                        <div class="avatar-status-dot" id="avatarStatusDot"></div>
+                    </div>
+                    <div>
+                        <div class="home-greeting" id="homeGreeting">Welcome</div>
+                        <div class="home-name" id="homeName">Guest</div>
+                        <div class="home-subtitle" id="homeEmailSubtitle">Guest Account</div>
+                    </div>
+                </div>
+                <button class="settings-entry-btn" onclick="openSettingsSheet()" aria-label="Settings">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Viewing Stats -->
+        <div class="analytics-section">
+            <div class="section-header">
+                <div class="section-title">Viewing Analytics</div>
+            </div>
+            <div class="analytics-card">
+                <div class="analytics-main">
+                    <div class="analytics-icon-badge">
+                        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div>
+                        <div class="stat-label" style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Total Watch Time</div>
+                        <div id="totalWatchTime" class="stat-value highlight">0 Days, 0 Hours, 0 Minutes</div>
+                    </div>
+                </div>
+                <div id="dashboardStats" class="stats"></div>
+            </div>
+        </div>
+
+        <!-- Continue Watching Section -->
+        <div>
+            <div class="section-header">
+                <div class="section-title">Continue Watching</div>
+            </div>
+
+            <div id="continueWatchingList"></div>
+        </div>
+    </div>
+</main>
+
+<!-- =====================================================
+     BOTTOM NAVIGATION
+================================================     -->
+<nav class="bottom-nav">
+    <div id="navIndicator" class="nav-indicator"></div>
+    <button id="navHome" class="nav-button active" onclick="showPage('home')">
+        <svg class="icon" viewBox="0 0 24 24">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+        </svg>
+        Home
+    </button>
+    <button id="navDiscover" class="nav-button" onclick="showPage('discover', null, true)">
+        <svg class="icon" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+        </svg>
+        Discover
+    </button>
+    <button id="navLibrary" class="nav-button" onclick="showPage('library')">
+        <svg class="icon" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/>
+            <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/>
+            <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/>
+            <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>
+        </svg>
+        Library
+    </button>
+</nav>
+</div>
+
+<!-- =====================================================
+     DETAILS MODAL
+================================================     -->
+<div id="detailsModal" class="modal" onclick="closeModalOutside(event)">
+    <div class="modal-sheet">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="shareCurrentItem()" aria-label="Share">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M12 16V4"/>
+                    <path d="M7 9l5-5 5 5"/>
+                    <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
+                </svg>
+            </button>
+            <button class="close-button" onclick="closeModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div id="modalBackdropHeader" class="modal-backdrop-header">
+            <div class="modal-backdrop-overlay"></div>
+            <div class="modal-hero-title-container">
+                <h2 id="modalTitle" class="modal-title"></h2>
+            </div>
+        </div>
+
+        <div class="modal-content">
+            <div id="modalMeta" class="modal-meta"></div>
+            <div id="modalWatchOn" class="modal-watch-on" style="display:none;">
+                <div class="watch-on-header">
+                    <span class="watch-on-title">Watch On</span>
+                </div>
+                <div id="modalWatchProviders" class="watch-on-providers"></div>
+                <a id="modalWatchAttribution" class="watch-on-attribution" href="#" target="_blank" rel="noopener" style="display:none;">Streaming data provided by JustWatch</a>
+            </div>
+            <p id="modalDescription" class="modal-description"></p>
+            <div id="modalActions" class="modal-actions"></div>
+            <div id="modalEpisodes"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     EPISODE DETAILS MODAL
+================================================     -->
+<div id="episodeDetailsModal" class="modal modal-compact" onclick="closeEpisodeModalOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="shareCurrentEpisode()" aria-label="Share">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M12 16V4"/>
+                    <path d="M7 9l5-5 5 5"/>
+                    <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
+                </svg>
+            </button>
+            <button class="close-button" onclick="closeEpisodeModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div id="episodeModalBackdrop" class="modal-backdrop-header" style="height: 200px;">
+            <div class="modal-backdrop-overlay"></div>
+            <div class="modal-hero-title-container">
+                <h2 id="episodeModalTitle" class="modal-title" style="font-size: 20px;"></h2>
+            </div>
+        </div>
+
+        <div class="modal-content">
+            <div id="episodeModalMeta" class="modal-meta"></div>
+            <p id="episodeModalDescription" class="modal-description"></p>
+            <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px;">
+                <button id="episodeWatchedToggleBtn" class="action-button primary" onclick="toggleCurrentEpisodeWatched()">
+                    Mark as Watched
+                </button>
+                <button id="episodeMarkUpToHereBtn" class="action-button" onclick="markWatchedUpToCurrentEpisode()" style="display: none;">
+                    Mark Watched Up to Here
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     REWATCH COUNT POPUP
+     A compact centered popup (same pattern as Delete Account) for
+     adding/removing a rewatch - either for a single episode (tapped from
+     an episode row or the Episode Details Modal) or for an entire season
+     (tapped from the season-rewatch button next to the season tabs).
+================================================     -->
+<div id="rewatchCountModal" class="confirm-overlay" onclick="closeRewatchPopupOutside(event)">
+    <div class="confirm-card">
+        <button class="close-button" style="position: absolute; top: 12px; right: 12px;" onclick="closeRewatchPopup()" aria-label="Close">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M6 6l12 12"/>
+                <path d="M18 6L6 18"/>
+            </svg>
+        </button>
+        <div class="confirm-icon-badge rewatch-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </div>
+        <div id="rewatchPopupTitle" class="confirm-title"></div>
+        <div id="rewatchPopupCount" style="font-size: 40px; font-weight: 800; color: var(--blue); line-height: 1.1;"></div>
+        <p class="confirm-message" style="margin-top: 2px;">Rewatches</p>
+        <div class="confirm-actions">
+            <button id="rewatchPopupRemoveBtn" class="confirm-btn cancel" onclick="removeRewatchFromPopup()">Remove Rewatch</button>
+            <button id="rewatchPopupAddBtn" class="confirm-btn" style="background: var(--glass-sheen), var(--blue-gradient); color: white; box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);" onclick="addRewatchFromPopup()">Add Rewatch</button>
+        </div>
+        <button id="rewatchPopupClearBtn" style="display:none; margin-top: 14px; width: 100%; background: none; border: none; padding: 4px; color: var(--danger); font-size: 13px; font-weight: 700;" onclick="clearSeasonRewatchesFromPopup()">Clear Season Rewatches</button>
+    </div>
+</div>
+
+<!-- =====================================================
+     AVATAR PICKER
+     Opened by tapping the avatar in the Settings sheet. A curated,
+     illustrated set rather than a photo upload - see the code comment on
+     AVATAR_OPTIONS for why (Firebase Storage, needed for uploads, isn't
+     on the free Spark plan).
+================================================     -->
+<div id="avatarPickerModal" class="modal modal-compact" onclick="closeAvatarPickerOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeAvatarPicker()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Choose an Avatar</h2>
+            <div id="avatarPickerGrid" class="avatar-picker-grid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     ACHIEVEMENTS
+     Opened from the Achievements row in Settings. Every achievement is
+     computed client-side from data already in state.library - see
+     computeAchievementStats() - rather than tracked as its own synced
+     record, so this costs nothing extra against Firestore's free quota.
+================================================     -->
+<div id="achievementsModal" class="modal modal-compact" onclick="closeAchievementsModalOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeAchievementsModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Achievements</h2>
+            <div id="achievementsList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     CHANGE POSTER / BACKDROP PICKER
+     Opened by long-pressing a poster in the Library grid.
+================================================     -->
+<div id="posterPickerModal" class="modal" onclick="closePosterPickerOutside(event)">
+    <div class="modal-sheet">
+        <div class="modal-header-nav">
+            <button class="header-done-btn" onclick="confirmPosterPickerChanges()">Done</button>
+            <button class="close-button" onclick="closePosterPicker()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="modal-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Change Poster</h2>
+            <div class="segmented-toggle">
+                <button id="posterPickerTabPoster" class="segmented-btn active" onclick="setPosterPickerTab('poster')">Poster</button>
+                <button id="posterPickerTabBackdrop" class="segmented-btn" onclick="setPosterPickerTab('backdrop')">Backdrop</button>
+            </div>
+            <div id="posterPickerGrid" class="poster-picker-grid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     SETTINGS SHEET
+     Account actions & preferences, reached by tapping the gear icon
+     on Home's hero card instead of permanently occupying Home space.
+================================================     -->
+<div id="settingsModal" class="modal" onclick="closeSettingsOutside(event)">
+    <div class="modal-sheet">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeSettingsSheet()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="modal-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Settings</h2>
+
+            <div class="settings-profile-row">
+                <button class="avatar-edit-wrap" onclick="openAvatarPicker()" aria-label="Change avatar">
+                    <div class="large-avatar" id="settingsAvatar">G</div>
+                    <div class="avatar-edit-badge">
+                        <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    </div>
+                </button>
+                <div>
+                    <div class="home-name" id="settingsName">Guest</div>
+                    <div class="home-subtitle" id="settingsEmailSubtitle">Guest Account</div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-header"><div class="section-title settings-section-title">Preferences</div></div>
+                <div class="analytics-card settings-card">
+                    <div class="settings-row">
+                        <div class="settings-row-icon appearance-icon-tile">
+                            <svg class="icon appearance-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Appearance</div>
+                            <div class="settings-row-sub">Light or dark mode.</div>
+                        </div>
+                        <div class="theme-toggle-mini" id="themeToggleMini">
+                            <button class="theme-toggle-mini-btn" id="themeToggleLightBtn" onclick="setTheme('light')">Light</button>
+                            <button class="theme-toggle-mini-btn" id="themeToggleDarkBtn" onclick="setTheme('dark')">Dark</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-icon" style="background: var(--green-gradient);">
+                            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Streaming region</div>
+                            <div class="settings-row-sub">Sets which country's "where to watch" info you see.</div>
+                        </div>
+                        <button class="hero-pill-btn region-btn" id="regionPillBtn" onclick="openRegionPicker()">Region</button>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-icon" style="background: var(--blue-gradient);">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Stay in the loop</div>
+                            <div class="settings-row-sub">Get alerts for new episodes & releases.</div>
+                        </div>
+                        <button class="hero-pill-btn" id="notificationBtn" onclick="requestNotificationPermission()">Enable</button>
+                    </div>
+
+                    <div class="settings-row" style="cursor: pointer;" onclick="openAchievementsModal()">
+                        <div class="settings-row-icon" style="background: var(--orange-gradient);">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Achievements</div>
+                            <div class="settings-row-sub" id="achievementsRowSub">0 unlocked</div>
+                        </div>
+                        <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-header"><div class="section-title settings-section-title">NovaWatch</div></div>
+                <div class="analytics-card settings-card">
+                    <div class="settings-row">
+                        <div class="settings-row-icon" style="background: #fff; padding: 6px;">
+                            <img src="https://www.novyra.co.za/NovaWatch_Logo.png" alt="NovaWatch" style="width: 100%; height: 100%; object-fit: contain; border-radius: inherit;">
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">NovaWrapped</div>
+                            <div class="settings-row-sub">Releases January 1, 2027.</div>
+                        </div>
+                        <button class="hero-pill-btn" onclick="goToWrapped()">Coming Soon</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-header"><div class="section-title settings-section-title">Account</div></div>
+                <div class="analytics-card settings-card settings-card-list">
+                    <button class="settings-action-row" onclick="handleSignOut()">
+                        <div class="settings-row-icon" style="background: var(--flat-blue);">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Sign Out</div>
+                        </div>
+                        <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    <button class="settings-action-row danger" onclick="handleDeleteAccount()">
+                        <div class="settings-row-icon" style="background: var(--red-gradient);">
+                            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Delete Account</div>
+                        </div>
+                        <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="section-header"><div class="section-title settings-section-title">About</div></div>
+                <div class="analytics-card settings-card settings-card-list">
+                    <button class="settings-action-row" onclick="openPageOverlay('privacy-terms/')">
+                        <div class="settings-row-icon" style="background: var(--flat-blue);">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Privacy &amp; Terms</div>
+                        </div>
+                        <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     STREAMING REGION PICKER
+================================================     -->
+<div id="regionPickerModal" class="modal" onclick="closeRegionPickerOutside(event)">
+    <div class="modal-sheet region-picker-sheet">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeRegionPicker()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="modal-content region-picker-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Streaming Region</h2>
+            <div class="search-box" style="margin-bottom: 16px;">
+                <svg class="icon search-icon" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4-4"/>
+                </svg>
+                <input id="regionSearchInput" type="search" placeholder="Search countries..." autocomplete="off">
+                <button class="search-clear-btn" type="button" onclick="clearSearch('regionSearchInput')" aria-label="Clear search">
+                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="regionOptionsList" class="region-options-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     PAGE OVERLAY (NovaWrapped, etc.)
+     Loads a same-origin sub-page inside an iframe instead of navigating
+     the whole tab away from the app - see openPageOverlay(). The address
+     bar still updates via pushState so the URL, sharing, and the browser
+     back button all behave correctly; the app itself never unmounts, so
+     nothing re-runs the sign-in flow or resets state when you come back.
+================================================     -->
+<div id="pageOverlayModal" class="modal">
+    <div class="modal-sheet" style="overflow: hidden;">
+        <iframe id="pageOverlayFrame" class="page-overlay-frame" title="NovaWatch"></iframe>
+    </div>
+</div>
+
+<!-- =====================================================
+     DELETE ACCOUNT CONFIRMATION
+================================================     -->
+<div id="deleteAccountModal" class="confirm-overlay" onclick="closeDeleteAccountModalOutside(event)">
+    <div class="confirm-card">
+        <div class="confirm-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+            </svg>
+        </div>
+        <div class="confirm-title">Delete Account?</div>
+        <p class="confirm-message">This permanently deletes your account and all of your library data. This cannot be undone.</p>
+        <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="closeDeleteAccountModal()">Cancel</button>
+            <button class="confirm-btn danger" id="confirmDeleteBtn" onclick="confirmDeleteAccount()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast">
+    <div id="toastIcon" class="toast-icon" style="display: none;"></div>
+    <span id="toastMessage"></span>
+    <button id="toastAction" class="toast-action" style="display:none;" onclick="handleToastAction(event)"></button>
+</div>
+
+<script src="scripts/app.js"></script>
+</body>
+</html>
