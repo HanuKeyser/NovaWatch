@@ -1387,20 +1387,286 @@ function closeSettingsOutside(event) {
     if (event.target.id === "settingsModal") closeSettingsSheet();
 }
 
-// NovaWrapped is its own page (its own Firebase session/Firestore reads,
-// its own release-date gate) but it's loaded inside an iframe overlay
-// rather than a top-level navigation - see openPageOverlay() below. That
-// way the app itself is never unmounted: coming back doesn't re-run the
-// sign-in flow, reset the active tab, or show any "welcome back" loading
-// state, because the app was never actually torn down.
+// NovaWrapped used to be its own separate page, kept apart specifically
+// so navigating to/from it never unmounted the app or re-ran the sign-in
+// flow. But it always needed the exact same signed-in session's Firestore
+// data as everything else here - being separate meant loading a whole
+// second copy of the Firebase SDK and re-initializing a second app
+// instance just to read data this page already has in state.library.
+// Migrated in as a plain modal instead: same "app never unmounts"
+// property, none of the duplicate loading, and it's no longer possible
+// for this to break the way the old iframe/pushState version did.
 //
-// NOTE for whoever builds out nova-wrapped/'s watch-time calculation:
-// rewatches (rewatchCount on movies/episodes) should NOT be counted
-// toward Wrapped's totals - only the original watch. This is the
-// opposite of the Home tab's Viewing Analytics, which deliberately DOES
-// count rewatches (see renderHomeTab's totalMinutes calculation).
-function goToWrapped() {
-    openPageOverlay("nova-wrapped/");
+// Rewatches (rewatchCount on movies/episodes) are NOT counted toward
+// Wrapped's totals here - only the original watch. This is the opposite
+// of the Home tab's Viewing Analytics, which deliberately DOES count
+// rewatches (see renderHomeTab's totalMinutes calculation) - don't
+// "fix" this into consistency, the difference is intentional.
+const NOVAWRAPPED_RELEASE_MS = Date.UTC(2027, 0, 1, 0, 0, 0, 0);
+const NOVAWRAPPED_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+const NOVAWRAPPED_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+let novaWrappedAccountCreatedAt = null;
+let currentNovaWrappedYear = null;
+
+function openNovaWrappedModal() {
+    const modal = document.getElementById("novaWrappedModal");
+    renderNovaWrappedEntry();
+    if (modal.classList.contains("open")) return;
+    modal.classList.add("open");
+    lockBodyScroll("novaWrappedModal");
+}
+
+function closeNovaWrappedModal() {
+    document.getElementById("novaWrappedModal").classList.remove("open");
+    unlockBodyScroll("novaWrappedModal");
+}
+
+function closeNovaWrappedModalOutside(event) {
+    if (event.target.id === "novaWrappedModal") closeNovaWrappedModal();
+}
+
+function renderNovaWrappedEntry() {
+    if (Date.now() < NOVAWRAPPED_RELEASE_MS) {
+        renderNovaWrappedComingSoon();
+        return;
+    }
+    novaWrappedAccountCreatedAt = (auth && auth.currentUser && auth.currentUser.metadata && auth.currentUser.metadata.creationTime)
+        ? new Date(auth.currentUser.metadata.creationTime)
+        : null;
+    renderNovaWrapped();
+}
+
+function renderNovaWrappedComingSoon() {
+    const msRemaining = NOVAWRAPPED_RELEASE_MS - Date.now();
+    const daysRemaining = Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
+
+    document.getElementById("novaWrappedRoot").innerHTML = `
+        <div class="coming-soon-card">
+            <div class="coming-soon-badge">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z"/></svg>
+            </div>
+            <div class="coming-soon-eyebrow">Coming Soon</div>
+            <div class="coming-soon-title">NovaWrapped</div>
+            <p class="coming-soon-sub">A look back at everything you watched - total time, your most-watched show, your busiest month, and more.</p>
+            <div class="coming-soon-date">
+                <div class="coming-soon-date-value">January 1, 2027</div>
+                <div class="coming-soon-date-label">00:00 UTC</div>
+            </div>
+            <div class="coming-soon-countdown">${daysRemaining} day${daysRemaining === 1 ? '' : 's'} to go</div>
+        </div>
+    `;
+}
+
+/* =========================================================
+   STATS COMPUTATION
+   Tracks Jan 1 - Dec 31 UTC for whichever year is selected. The first
+   7 days after account creation are excluded from whichever year they
+   fall in - new users tend to bulk-add a backlog of shows/movies
+   they'd already watched long before joining, and counting that as
+   real-time viewing would badly skew the recap.
+========================================================= */
+function getNovaWrappedYearBounds(year) {
+    return {
+        start: new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0)),
+        end: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
+    };
+}
+
+function getNovaWrappedEffectiveStart(year) {
+    const { start } = getNovaWrappedYearBounds(year);
+    if (!novaWrappedAccountCreatedAt) return start;
+    const graceEnd = new Date(novaWrappedAccountCreatedAt.getTime() + NOVAWRAPPED_GRACE_PERIOD_MS);
+    return graceEnd > start ? graceEnd : start;
+}
+
+function getNovaWrappedYearMinMax() {
+    const max = new Date().getUTCFullYear();
+    const min = novaWrappedAccountCreatedAt ? novaWrappedAccountCreatedAt.getUTCFullYear() : max;
+    return { min, max };
+}
+
+function computeNovaWrappedStats(year) {
+    const { end } = getNovaWrappedYearBounds(year);
+    const effectiveStart = getNovaWrappedEffectiveStart(year);
+
+    const inRange = (isoString) => {
+        if (!isoString) return false;
+        const d = new Date(isoString);
+        return d >= effectiveStart && d <= end;
+    };
+
+    let totalMinutes = 0;
+    let moviesCount = 0;
+    let episodesCount = 0;
+    const showEpisodeCounts = new Map();
+    const monthMinutes = new Array(12).fill(0);
+
+    state.library.forEach(item => {
+        if (item.type === 'movie') {
+            if (item.watched && inRange(item.lastWatchedAt)) {
+                const match = (item.runtime || "").match(/(\d+)/);
+                const mins = match ? parseInt(match[1], 10) : 120;
+                totalMinutes += mins;
+                moviesCount++;
+                monthMinutes[new Date(item.lastWatchedAt).getUTCMonth()] += mins;
+            }
+        } else if (item.episodes) {
+            item.episodes.forEach(ep => {
+                if (!ep.watched || !inRange(ep.watchedAt)) return;
+                const match = (ep.runtime || "").match(/(\d+)/);
+                const mins = match ? parseInt(match[1], 10) : 45;
+                totalMinutes += mins;
+                episodesCount++;
+                monthMinutes[new Date(ep.watchedAt).getUTCMonth()] += mins;
+
+                const existing = showEpisodeCounts.get(item.id);
+                if (existing) {
+                    existing.count++;
+                } else {
+                    showEpisodeCounts.set(item.id, { title: item.title, count: 1 });
+                }
+            });
+        }
+    });
+
+    let topShow = null;
+    showEpisodeCounts.forEach(show => {
+        if (!topShow || show.count > topShow.count) topShow = show;
+    });
+
+    let busiestMonth = null;
+    monthMinutes.forEach((mins, idx) => {
+        if (mins > 0 && (!busiestMonth || mins > busiestMonth.minutes)) {
+            busiestMonth = { label: NOVAWRAPPED_MONTH_NAMES[idx], minutes: mins };
+        }
+    });
+
+    return {
+        year,
+        totalMinutes,
+        days: Math.floor(totalMinutes / 1440),
+        hours: Math.floor((totalMinutes % 1440) / 60),
+        minutes: totalMinutes % 60,
+        moviesCount,
+        episodesCount,
+        showsCount: showEpisodeCounts.size,
+        topShow,
+        busiestMonth,
+        hasData: totalMinutes > 0
+    };
+}
+
+function renderNovaWrapped() {
+    const { min, max } = getNovaWrappedYearMinMax();
+    // Default to the most recently *completed* year (a proper "recap"),
+    // falling back to the current year if the account is younger than
+    // that - e.g. someone who joined partway through the current year.
+    currentNovaWrappedYear = (max - 1 >= min) ? max - 1 : max;
+
+    document.getElementById("novaWrappedRoot").innerHTML = `
+        <div class="wrapped-hero">
+            <div class="wrapped-hero-title">NovaWrapped</div>
+            <div class="wrapped-hero-sub">Everything you watched, one year at a time.</div>
+        </div>
+        <div class="wrapped-year-nav">
+            <button class="year-nav-btn" id="wrappedYearPrev" aria-label="Previous year">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="wrapped-year-label" id="wrappedYearLabel"></div>
+            <button class="year-nav-btn" id="wrappedYearNext" aria-label="Next year">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+        </div>
+        <div id="wrappedBody"></div>
+    `;
+
+    document.getElementById("wrappedYearPrev").addEventListener("click", () => changeNovaWrappedYear(-1));
+    document.getElementById("wrappedYearNext").addEventListener("click", () => changeNovaWrappedYear(1));
+
+    renderNovaWrappedYear();
+}
+
+function changeNovaWrappedYear(delta) {
+    const { min, max } = getNovaWrappedYearMinMax();
+    const next = currentNovaWrappedYear + delta;
+    if (next < min || next > max) return;
+    currentNovaWrappedYear = next;
+    renderNovaWrappedYear();
+}
+
+function renderNovaWrappedYear() {
+    const { min, max } = getNovaWrappedYearMinMax();
+    document.getElementById("wrappedYearLabel").textContent = currentNovaWrappedYear;
+    document.getElementById("wrappedYearPrev").disabled = currentNovaWrappedYear <= min;
+    document.getElementById("wrappedYearNext").disabled = currentNovaWrappedYear >= max;
+
+    const stats = computeNovaWrappedStats(currentNovaWrappedYear);
+    const body = document.getElementById("wrappedBody");
+
+    if (!stats.hasData) {
+        const isCurrentYear = currentNovaWrappedYear === new Date().getUTCFullYear();
+        body.innerHTML = `
+            <div class="state-card">
+                <div class="state-title">Nothing Tracked Yet</div>
+                <p class="state-sub" style="margin-bottom: 0;">No watch activity recorded for ${currentNovaWrappedYear}${isCurrentYear ? " so far" : ""}.</p>
+            </div>
+        `;
+        return;
+    }
+
+    body.innerHTML = `
+        <div class="analytics-card" style="margin-top: 0;">
+            <div class="analytics-main">
+                <div class="analytics-icon-badge">
+                    <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div>
+                    <div class="stat-label" style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Total Watch Time</div>
+                    <div class="stat-value highlight">${stats.days} days, ${stats.hours} hours, ${stats.minutes} minutes</div>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat">
+                    <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>
+                    <div class="stat-value">${stats.showsCount}</div>
+                    <div class="stat-label">TV Shows</div>
+                </div>
+                <div class="stat">
+                    <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                    <div class="stat-value">${stats.moviesCount}</div>
+                    <div class="stat-label">Movies</div>
+                </div>
+                <div class="stat">
+                    <svg class="icon stat-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <div class="stat-value">${stats.episodesCount}</div>
+                    <div class="stat-label">Episodes</div>
+                </div>
+            </div>
+        </div>
+
+        ${stats.topShow ? `
+        <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Most Watched Show</div></div>
+        <div class="analytics-card" style="margin-top: 0;">
+            <div class="analytics-main" style="border-bottom: none; padding-bottom: 0;">
+                <div>
+                    <div class="spotlight-title">${escapeHTML(stats.topShow.title)}</div>
+                    <div class="stat-label">${stats.topShow.count} episode${stats.topShow.count === 1 ? '' : 's'} watched</div>
+                </div>
+            </div>
+        </div>` : ''}
+
+        ${stats.busiestMonth ? `
+        <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Busiest Month</div></div>
+        <div class="analytics-card" style="margin-top: 0;">
+            <div class="analytics-main" style="border-bottom: none; padding-bottom: 0;">
+                <div>
+                    <div class="spotlight-title">${stats.busiestMonth.label}</div>
+                    <div class="stat-label">${Math.round(stats.busiestMonth.minutes / 60)} hours watched</div>
+                </div>
+            </div>
+        </div>` : ''}
+    `;
 }
 
 // Loads a same-origin sub-page inside the full-screen iframe overlay and
