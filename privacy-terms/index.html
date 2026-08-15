@@ -28,7 +28,14 @@ body {
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    padding: 40px 20px 80px;
+    /* Top padding cleared to sit below the fixed close button (20px +
+       its 38px height + a bit of breathing room), not just the button's
+       raw offset - the previous 40px here actually overlapped the top
+       ~18px of the hero card underneath the button. Both edges also
+       account for env(safe-area-inset-*) so this doesn't sit under a
+       notch/Dynamic Island or get crowded by the home-indicator bar on
+       devices that have them. */
+    padding: calc(78px + env(safe-area-inset-top, 0px)) 20px calc(80px + env(safe-area-inset-bottom, 0px));
     -webkit-font-smoothing: antialiased;
 }
 
@@ -39,8 +46,8 @@ body {
 
 .overlay-close-button {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: calc(20px + env(safe-area-inset-top, 0px));
+    right: calc(20px + env(safe-area-inset-right, 0px));
     z-index: 20;
     width: 38px;
     height: 38px;
