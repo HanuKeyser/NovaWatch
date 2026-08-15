@@ -99,38 +99,38 @@ h1 {
     letter-spacing: 0.5px;
 }
 
-.card {
-    background: var(--glass-sheen), var(--surface);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    border-radius: var(--radius-2xl);
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-    padding: 30px 28px;
-}
-
-section + section {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--glass-border-subtle);
-}
-
-h2 {
-    font-size: 14.5px;
-    font-weight: 750;
-    margin-bottom: 8px;
+/* These four match app.css's definitions exactly (copied, not linked -
+   app.css also carries global body/h1/a/etc. rules tuned for the full
+   app shell that would risk leaking onto this page's own layout). Keep
+   these in sync with app.css if either changes - same shared-drift risk
+   tokens.css solves for colors, just not automated for these few
+   component classes. */
+.section-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    margin: 0 0 14px;
 }
 
-h2::before {
-    content: '';
-    width: 4px;
-    height: 14px;
-    border-radius: 3px;
-    background: linear-gradient(180deg, var(--blue-light), var(--blue));
-    flex-shrink: 0;
+.section-title {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+}
+
+.settings-section-title {
+    font-size: 15px;
+    letter-spacing: -0.2px;
+}
+
+.analytics-card {
+    padding: 20px;
+    background: var(--glass-sheen), var(--surface);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--glass-shadow);
 }
 
 p {
@@ -170,91 +170,87 @@ html[data-theme="dark"] .hero {
         <div class="updated">Last updated: 1 September 2026</div>
     </div>
 
-    <div class="card">
-        <section>
-            <p>This notice explains, in plain terms, how this app handles your information.</p>
-        </section>
-
-        <section>
-            <h2>What we collect</h2>
-            <p>When you create an account, we collect the information needed to set up and run that account, such as your email address and the sign-in details provided by your chosen sign-in method (for example, Google Sign-In). We also store the watchlist data you build inside the app: the movies and TV shows you add, your watch progress, and your preferences, so it's there the next time you sign in. This includes a streaming region setting, either detected automatically from your device or chosen by you, which is used only to show accurate "where to watch" information for your country.</p>
-        </section>
-
-        <section>
-            <h2>What we use it for</h2>
-            <p>We use your information for one purpose only: to create and operate your account and to provide the app's features to you (such as syncing your library across devices and sending release alerts you've opted into). We do not use your information for anything else: no advertising, no selling or sharing it with third parties for marketing, and no profiling beyond what's needed to run the app itself.</p>
-        </section>
-
-        <section>
-            <h2>Third-party services</h2>
-            <p>This app retrieves publicly available movie and TV metadata from The Movie Database (TMDB) to display titles, posters, and related information, and streaming-availability information from JustWatch to show where a title can be watched. Both are one-way lookups of show/movie data; neither is linked to your personal account information.</p>
-        </section>
-
-        <section>
-            <h2>Deleting your account</h2>
-            <p>You can permanently delete your account and all associated library data at any time from within the app, under your profile on the Home tab. No need to contact us. If you'd rather we do it for you, or you're unable to access the app, email <a href="mailto:delete@novawatch.site">delete@novawatch.site</a> and we'll take care of it.</p>
-        </section>
-
-        <section>
-            <h2>Questions</h2>
-            <p>If you have any questions about this notice or how your information is handled, email <a href="mailto:info@novawatch.site">info@novawatch.site</a>.</p>
-        </section>
-
-        <section>
-            <h2>Credits &amp; attribution</h2>
-            <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Movie and TV metadata, posters, and artwork are sourced from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">The Movie Database (TMDB)</a>. Streaming availability information is provided by JustWatch.</p>
-        </section>
+    <div class="analytics-card">
+        <p>This notice explains, in plain terms, how this app handles your information.</p>
     </div>
 
-    <div class="hero" style="margin-top: 28px;">
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">What We Collect</div></div>
+    <div class="analytics-card">
+        <p>When you create an account, we collect the information needed to set up and run that account, such as your email address and the sign-in details provided by your chosen sign-in method (for example, Google Sign-In). We also store the watchlist data you build inside the app: the movies and TV shows you add, your watch progress, and your preferences, so it's there the next time you sign in. This includes a streaming region setting, either detected automatically from your device or chosen by you, which is used only to show accurate "where to watch" information for your country.</p>
+    </div>
+
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">What We Use It For</div></div>
+    <div class="analytics-card">
+        <p>We use your information for one purpose only: to create and operate your account and to provide the app's features to you (such as syncing your library across devices and sending release alerts you've opted into). We do not use your information for anything else: no advertising, no selling or sharing it with third parties for marketing, and no profiling beyond what's needed to run the app itself.</p>
+    </div>
+
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Third-Party Services</div></div>
+    <div class="analytics-card">
+        <p>This app retrieves publicly available movie and TV metadata from The Movie Database (TMDB) to display titles, posters, and related information, and streaming-availability information from JustWatch to show where a title can be watched. Both are one-way lookups of show/movie data; neither is linked to your personal account information.</p>
+    </div>
+
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Deleting Your Account</div></div>
+    <div class="analytics-card">
+        <p>You can permanently delete your account and all associated library data at any time from within the app, under your profile on the Home tab. No need to contact us. If you'd rather we do it for you, or you're unable to access the app, email <a href="mailto:delete@novawatch.site">delete@novawatch.site</a> and we'll take care of it.</p>
+    </div>
+
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Questions</div></div>
+    <div class="analytics-card">
+        <p>If you have any questions about this notice or how your information is handled, email <a href="mailto:info@novawatch.site">info@novawatch.site</a>.</p>
+    </div>
+
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Credits &amp; Attribution</div></div>
+    <div class="analytics-card">
+        <p>This product uses the TMDB API but is not endorsed or certified by TMDB. Movie and TV metadata, posters, and artwork are sourced from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">The Movie Database (TMDB)</a>. Streaming availability information is provided by JustWatch.</p>
+    </div>
+
+    <div class="hero" style="margin-top: 32px;">
         <h1>Terms of Service</h1>
         <div class="updated">Last updated: 1 September 2026</div>
     </div>
 
-    <div class="card">
-        <section>
-            <p>These terms cover your use of this app. By creating an account or using the app, you agree to them.</p>
-        </section>
+    <div class="analytics-card">
+        <p>These terms cover your use of this app. By creating an account or using the app, you agree to them.</p>
+    </div>
 
-        <section>
-            <h2>The service</h2>
-            <p>This app lets you track TV shows and movies you're watching, mark episodes and titles as watched, and get notified about new releases. Show and movie data (titles, posters, descriptions, air dates) comes from The Movie Database (TMDB); streaming availability comes from JustWatch. We don't control that data and can't guarantee it's always accurate, complete, or up to date.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">The Service</div></div>
+    <div class="analytics-card">
+        <p>This app lets you track TV shows and movies you're watching, mark episodes and titles as watched, and get notified about new releases. Show and movie data (titles, posters, descriptions, air dates) comes from The Movie Database (TMDB); streaming availability comes from JustWatch. We don't control that data and can't guarantee it's always accurate, complete, or up to date.</p>
+    </div>
 
-        <section>
-            <h2>Your account</h2>
-            <p>You're responsible for the accuracy of the information you provide when creating an account, and for keeping your password confidential. You must be old enough to legally use this kind of service in your country to create an account. You can delete your account at any time; see the Privacy Notice above for how.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Your Account</div></div>
+    <div class="analytics-card">
+        <p>You're responsible for the accuracy of the information you provide when creating an account, and for keeping your password confidential. You must be old enough to legally use this kind of service in your country to create an account. You can delete your account at any time; see the Privacy Notice above for how.</p>
+    </div>
 
-        <section>
-            <h2>Acceptable use</h2>
-            <p>Use the app the way it's intended: to track your own watching. Don't try to interfere with the app or its infrastructure, attempt to access another user's account or data, scrape or resell the data the app surfaces, or use the service for anything illegal.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Acceptable Use</div></div>
+    <div class="analytics-card">
+        <p>Use the app the way it's intended: to track your own watching. Don't try to interfere with the app or its infrastructure, attempt to access another user's account or data, scrape or resell the data the app surfaces, or use the service for anything illegal.</p>
+    </div>
 
-        <section>
-            <h2>Availability &amp; changes</h2>
-            <p>We aim to keep the app running reliably, but we don't guarantee it will always be available, error-free, or uninterrupted; it depends in part on third-party services (TMDB, JustWatch, Firebase) that are outside our control. We may add, change, or remove features over time.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Availability &amp; Changes</div></div>
+    <div class="analytics-card">
+        <p>We aim to keep the app running reliably, but we don't guarantee it will always be available, error-free, or uninterrupted; it depends in part on third-party services (TMDB, JustWatch, Firebase) that are outside our control. We may add, change, or remove features over time.</p>
+    </div>
 
-        <section>
-            <h2>No warranty</h2>
-            <p>The app is provided "as is," without warranties of any kind, express or implied. We don't warrant that release dates, watch-provider availability, or any other third-party data shown in the app will be accurate.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">No Warranty</div></div>
+    <div class="analytics-card">
+        <p>The app is provided "as is," without warranties of any kind, express or implied. We don't warrant that release dates, watch-provider availability, or any other third-party data shown in the app will be accurate.</p>
+    </div>
 
-        <section>
-            <h2>Limitation of liability</h2>
-            <p>To the extent permitted by law, we aren't liable for any indirect, incidental, or consequential damages arising from your use of, or inability to use, the app.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Limitation of Liability</div></div>
+    <div class="analytics-card">
+        <p>To the extent permitted by law, we aren't liable for any indirect, incidental, or consequential damages arising from your use of, or inability to use, the app.</p>
+    </div>
 
-        <section>
-            <h2>Changes to these terms</h2>
-            <p>We may update these terms from time to time. If we make material changes, we'll update the date at the top of this section. Continuing to use the app after a change means you accept the updated terms.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Changes to These Terms</div></div>
+    <div class="analytics-card">
+        <p>We may update these terms from time to time. If we make material changes, we'll update the date at the top of this section. Continuing to use the app after a change means you accept the updated terms.</p>
+    </div>
 
-        <section>
-            <h2>Contact</h2>
-            <p>Questions about these terms? Email <a href="mailto:info@novawatch.site">info@novawatch.site</a>.</p>
-        </section>
+    <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Contact</div></div>
+    <div class="analytics-card">
+        <p>Questions about these terms? Email <a href="mailto:info@novawatch.site">info@novawatch.site</a>.</p>
     </div>
 </div>
 <script>
