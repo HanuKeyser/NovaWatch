@@ -229,6 +229,193 @@ img {
     letter-spacing: -0.5px;
 }
 
+.stat-value.highlight {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--blue);
+    margin-top: 2px;
+    letter-spacing: -0.3px;
+}
+
+/* =========================================================
+   NOVAWRAPPED (migrated in from its own page - see the modal
+   #novaWrappedModal in index.html and its open/render functions in
+   app.js). Reuses .analytics-card/.stat/.section-title etc. above for
+   the actual stats display; these are the pieces specific to Wrapped
+   itself - the pre-release countdown card and the year-picker header.
+========================================================= */
+.coming-soon-card {
+    padding: 40px 28px;
+    text-align: center;
+    background: var(--glass-sheen), linear-gradient(135deg, rgba(255,255,255,0.82) 0%, rgba(224, 238, 255, 0.62) 100%);
+    backdrop-filter: blur(46px) saturate(210%);
+    -webkit-backdrop-filter: blur(46px) saturate(210%);
+    border: 1px solid rgba(0, 102, 204, 0.2);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.coming-soon-badge {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--blue-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 10px 26px rgba(0, 102, 204, 0.4), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.coming-soon-badge .icon {
+    width: 30px;
+    height: 30px;
+}
+
+.coming-soon-eyebrow {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--blue);
+}
+
+.coming-soon-title {
+    font-size: 27px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+    margin: 8px 0 10px;
+}
+
+.coming-soon-sub {
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 380px;
+    margin: 0 auto;
+}
+
+.coming-soon-date {
+    margin-top: 26px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 14px 26px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(0, 102, 204, 0.22);
+}
+
+.coming-soon-date-value {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+}
+
+.coming-soon-date-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.coming-soon-countdown {
+    margin-top: 16px;
+    font-size: 12.5px;
+    font-weight: 650;
+    color: var(--text-secondary);
+}
+
+.state-card {
+    padding: 36px 28px;
+    text-align: center;
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: var(--radius-2xl);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+}
+
+.state-title {
+    font-size: 19px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.state-sub {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 340px;
+    margin: 0 auto;
+}
+
+.wrapped-hero {
+    text-align: center;
+    padding: 8px 0 22px;
+}
+
+.wrapped-hero-title {
+    font-size: 25px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+}
+
+.wrapped-hero-sub {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.wrapped-year-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.year-nav-btn {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--surface);
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.year-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.year-nav-btn:not(:disabled):active {
+    transform: scale(0.9);
+}
+
+.wrapped-year-label {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    min-width: 64px;
+    text-align: center;
+}
+
+.spotlight-title {
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--blue);
+    letter-spacing: -0.3px;
+}
+
 .stat-label {
     color: var(--text-secondary);
     font-size: 10.5px;
@@ -2828,4 +3015,19 @@ html[data-theme="dark"] .nav-indicator {
 
 html[data-theme="dark"] .skeleton {
     background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.1) 50%, var(--surface-2) 75%);
+}
+
+html[data-theme="dark"] .coming-soon-card {
+    background: linear-gradient(150deg, rgba(40, 44, 56, 0.85) 0%, rgba(20, 30, 48, 0.75) 100%);
+    border-color: rgba(10, 132, 255, 0.25);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme="dark"] .coming-soon-date {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(10, 132, 255, 0.3);
+}
+
+html[data-theme="dark"] .state-card {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
 }
