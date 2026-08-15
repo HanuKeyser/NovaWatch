@@ -1499,13 +1499,14 @@ html[data-theme="dark"] .modal-sheet-compact {
     display: flex;
 }
 
-/* These two are always opened FROM the Settings sheet, which is also a
+/* These three are always opened FROM the Settings sheet, which is also a
    plain .modal (z-index 200) - without this, stacking among same-z-index
-   fixed elements falls back to DOM order, and both happen to sit earlier
-   in the markup than #settingsModal, so they'd render invisibly behind
-   it instead of on top. */
+   fixed elements falls back to DOM order, and all three happen to sit
+   earlier in the markup than #settingsModal, so they'd render invisibly
+   behind it instead of on top. */
 #avatarPickerModal,
-#achievementsModal {
+#achievementsModal,
+#novaWrappedModal {
     z-index: 250;
 }
 
