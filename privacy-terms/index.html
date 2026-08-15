@@ -20,6 +20,17 @@
 <link rel="icon" type="image/png" href="https://www.novawatch.site/images/NovaWatch_Favicon_Icon.png">
 <link rel="stylesheet" href="../styles/tokens.css">
 <style>
+/* This page never had a universal reset - the browser's default 8px
+   <body> margin was showing through as a visible border/gap around the
+   whole page, since nothing here or in tokens.css (which intentionally
+   only carries design tokens, not structural resets) ever zeroed it out. */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background: var(--bg-mesh);
