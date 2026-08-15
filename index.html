@@ -485,6 +485,31 @@
 </div>
 
 <!-- =====================================================
+     NOVAWRAPPED
+     Migrated in from its own separate page (nova-wrapped/index.html)
+     since it always needed the same signed-in session's Firestore data
+     as everything else - see openNovaWrappedModal() for why keeping it
+     separate wasn't buying anything. Deliberately a full modal, not
+     .modal-compact, since it's meant to feel like its own destination
+     within the app rather than a quick popup.
+================================================     -->
+<div id="novaWrappedModal" class="modal" onclick="closeNovaWrappedModalOutside(event)">
+    <div class="modal-sheet">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeNovaWrappedModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content" style="padding-top: 60px;">
+            <div id="novaWrappedRoot"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
      CHANGE POSTER / BACKDROP PICKER
      Opened by long-pressing a poster in the Library grid.
 ================================================     -->
@@ -604,9 +629,9 @@
                         </div>
                         <div class="settings-row-text">
                             <div class="settings-row-title">NovaWrapped</div>
-                            <div class="settings-row-sub">Releases January 1, 2027.</div>
+                            <div class="settings-row-sub">Your year in review.</div>
                         </div>
-                        <button class="hero-pill-btn" onclick="goToWrapped()">Coming Soon</button>
+                        <button class="hero-pill-btn" onclick="openNovaWrappedModal()">View</button>
                     </div>
                 </div>
             </div>
