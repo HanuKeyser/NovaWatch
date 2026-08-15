@@ -10,21 +10,20 @@ Live at `https://www.novawatch.site/`.
 
 ```
 / (novawatch.site root)
-├── index.html              The app itself (auth, Home/Discover/Library tabs, all modals)
+├── index.html              The app itself (auth, Home/Discover/Library tabs, all modals -
+│                            including NovaWrapped, which used to be its own page)
 ├── manifest.json           PWA manifest (installability, icons)
 ├── service-worker.js       Offline app-shell caching + notification click handling
 ├── styles/
-│   ├── tokens.css          Shared design tokens - linked by ALL THREE HTML pages
+│   ├── tokens.css          Shared design tokens - linked by both HTML pages
 │   └── app.css             index.html's component styles
 ├── scripts/
 │   └── app.js              index.html's application logic
-├── privacy-terms/
-│   └── index.html          Privacy Notice & Terms of Service (was privacy-terms.html)
-└── nova-wrapped/
-    └── index.html          Yearly recap page, releases Jan 1 2027 (was novawrapped.html)
+└── privacy-terms/
+    └── index.html          Privacy Notice & Terms of Service (was privacy-terms.html)
 ```
 
-**Deployment note:** `privacy-terms/` and `nova-wrapped/` deploy one folder level *deeper* than `index.html` (i.e. `novawatch.site/privacy-terms/` and `novawatch.site/nova-wrapped/`, vs `index.html` at the domain root). Both link `styles/tokens.css` as `../styles/tokens.css` to account for that. If either page - or the app itself - ever moves to a different depth, that relative path needs to move with it.
+**Deployment note:** `privacy-terms/` deploys one folder level *deeper* than `index.html` (i.e. `novawatch.site/privacy-terms/`, vs `index.html` at the domain root). It links `styles/tokens.css` as `../styles/tokens.css` to account for that. If it - or the app itself - ever moves to a different depth, that relative path needs to move with it.
 
 ### Why the split
 
@@ -76,7 +75,9 @@ A few things were tried or considered and explicitly ruled out:
 
 ## NovaWrapped
 
-A "Wrapped"-style yearly recap, gated to release **January 1, 2027**. Tracks Jan 1–Dec 31 UTC, with a 7-day grace period after account creation excluded from tracking (new users tend to bulk-add existing watch history rather than watching in real time). Deliberately **excludes rewatches** from its totals — only the original watch counts. This is the opposite of the Home tab's Viewing Analytics, which deliberately *does* count rewatches (`runtime × (1 + rewatchCount)`). If you're touching either calculation, don't accidentally make them consistent with each other — that inconsistency is intentional.
+A "Wrapped"-style yearly recap, gated to release **January 1, 2027**. Originally its own separate page; migrated into `index.html` as a modal (see `#novaWrappedModal` and `openNovaWrappedModal()`) since it always needed the same signed-in session's Firestore data as everything else - being separate meant loading a whole second copy of the Firebase SDK just to read data the main app already had in memory. Before the release date, opening it shows a countdown card instead of stats; the Settings row's "View" button works either way - the release gate lives inside the modal's content, not the entry point.
+
+Tracks Jan 1–Dec 31 UTC, with a 7-day grace period after account creation excluded from tracking (new users tend to bulk-add existing watch history rather than watching in real time). Deliberately **excludes rewatches** from its totals — only the original watch counts. This is the opposite of the Home tab's Viewing Analytics, which deliberately *does* count rewatches (`runtime × (1 + rewatchCount)`). If you're touching either calculation, don't accidentally make them consistent with each other — that inconsistency is intentional.
 
 ---
 
@@ -104,4 +105,4 @@ Other things flagged as ideas but not committed to a slot: all-time/lifetime sta
 
 This file has grown a lot in one sitting (`app.js` alone is ~5,500 lines). A few things worth watching as it keeps growing:
 - The `openDetails()` mishap (a routine edit briefly deleted its own function declaration, caught by a syntax check before shipping) is a preview of the kind of mistake that gets more likely as a single file gets larger. If a feature area gets substantial enough (achievements, sharing, the sync logic), consider whether it's ready to be its own module.
-- `privacy-terms/index.html` and `nova-wrapped/index.html` keep their own copies of a *few* CSS rules (dark-mode component overrides specific to each page). That's fine — it's `tokens.css` specifically that needs to stay singular, since that's what caused the actual sync bugs.
+- `privacy-terms/index.html` keeps its own copies of a handful of component classes it borrows from `app.css`'s visual language (`.analytics-card`, `.section-title`, `.settings-section-title`, `.section-header` - used to give it the same "stack of cards with labels" structure as Settings and NovaWrapped, instead of the one-big-document-card layout it used to have). That's a deliberate, contained exception - full `app.css` isn't linked there because its global `body`/`h1`/`a` rules are tuned for the app shell and risk leaking onto this page's own layout in ways that are hard to verify without live testing. If any of those four classes change in `app.css`, this page's copies need updating too. `tokens.css` (the actual colors/palette) staying singular is what matters most - that's what caused the real sync bugs earlier.
