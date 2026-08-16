@@ -10,7 +10,7 @@ Live at `https://www.novawatch.site/`.
 
 ```
 / (novawatch.site root)
-├── index.html              The app itself (auth, Home/Discover/Library tabs, all modals -
+├── index.html              The app itself (auth, Home/Discover/My Stuff/Upcoming tabs, all modals -
 │                            including NovaWrapped, which used to be its own page)
 ├── manifest.json           PWA manifest (installability, icons)
 ├── service-worker.js       Offline app-shell caching + notification click handling
@@ -96,6 +96,10 @@ The goal for premium is that it feels like genuine added value (personalization/
 ## Roadmap
 
 Confirmed build order was multi-profiles → dark mode, but dark mode, achievements, and the avatar picker ended up built first at the user's explicit request. **Multi-profiles is still the next big structural piece** — everything in the premium bundle above (extra profiles, per-profile avatars/achievements) depends on it existing.
+
+**Navigation restructure (implemented):** the old "Library" tab is now **My Stuff**, with a top-level segmented control (Library / Lists) above the existing TV Shows/Movies toggle — `setMyStuffView()` in `app.js`. This gives the future Lists feature (see below) a home inside the current 4-tab bottom nav instead of needing a 5th tab. Lists itself isn't built — selecting it currently shows a placeholder empty state. Discover and Upcoming are unchanged; Discover's search was already an inline search box rather than a separate nested screen, so no change was needed there.
+
+**Lists (planned, not built):** custom, freeform collections (e.g. "Future Watch", "Movie Night") that don't require adding a title to the tracked Library. Will live in My Stuff's Lists segment once built, replacing the current placeholder.
 
 Other things flagged as ideas but not committed to a slot: all-time/lifetime stats page, a "time to finish" estimator, custom watch statuses (Plan to Watch/On Hold/Dropped), a household activity view (once profiles exist), Discover genre/mood filters, home/lock-screen widgets (would require going native).
 
