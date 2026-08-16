@@ -7,11 +7,13 @@
 <script>
 // Same shared localStorage key as the main app, so this page (opened
 // in-app via the full-screen page overlay) always matches whatever theme
-// is currently selected there, instead of always rendering light.
+// is currently selected there, instead of always rendering light. 'auto'
+// and no saved value at all are treated the same - both fall back to the
+// OS-level preference, matching index.html's logic exactly.
 (function () {
     try {
         var saved = localStorage.getItem('novawatch-theme');
-        var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        var theme = (saved === 'light' || saved === 'dark') ? saved : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
     } catch (e) { /* localStorage unavailable - just default to light */ }
 })();
