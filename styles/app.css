@@ -1380,60 +1380,45 @@ img {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 4px;
-    /* Genuinely see-through, not just a dedicated blur - a low fill
-       opacity is what actually reads as "glass" rather than "frosted
-       panel", so real color/light from whatever's scrolling underneath
-       shows through. Heavy blur+saturation keeps it legible instead of
-       muddy at that opacity. A soft radial highlight near the top-left
-       stands in for a light source catching curved glass (a flat surface
-       has no such highlight - this is what sells the curve), layered
-       under the sheen. Decoupled from the shared --glass-chrome-* tokens
-       (those stay as they are for sheets/toasts/pill controls/circular
-       buttons) - this is the one surface meant to push furthest into
-       "liquid glass" rather than tinted-panel chrome. */
+    /* Genuinely see-through - low fill opacity so real color/light from
+       whatever's underneath shows through, with heavy blur+saturation to
+       stay legible instead of muddy at that opacity. Layered on top: a
+       soft radial highlight near the top-left (light catching curved
+       glass - a flat panel has no such highlight) and a wide, soft top-
+       edge glow that fades down into the fill (a diffuse glint, not a
+       hard line) - both are background layers, not a shadow ring, so
+       nothing here reads as an outline. */
     background:
-        radial-gradient(140px 70px at 20% 0%, rgba(255, 255, 255, 0.65), transparent 70%),
+        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
         var(--glass-sheen),
-        rgba(255, 255, 255, 0.22);
-    backdrop-filter: blur(64px) saturate(280%);
-    -webkit-backdrop-filter: blur(64px) saturate(280%);
-    /* No border - the glass edge is defined entirely by the box-shadow
-       rim highlights below instead, so it reads as light catching the
-       edge of the glass rather than an outlined panel. */
-    /* Full capsule instead of the app's usual --radius-2xl rounded-rect -
-       the floating pill is the single most recognizable "Apple Liquid
-       Glass" tab-bar signature, worth the one-off shape exception here. */
+        rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(72px) saturate(300%);
+    -webkit-backdrop-filter: blur(72px) saturate(300%);
+    /* No border, and no full-perimeter inset ring in the shadow either
+       (a uniform "inset 0 0 0 1px" reads as a border no matter what it's
+       implemented with) - just an elevation shadow plus a soft, diffuse
+       under-glow for a lensed/domed feel. */
     border-radius: 999px;
-    /* Clips the shimmer pseudo-element below to the pill shape - doesn't
-       affect the bar's own box-shadow, which paints outside the box
-       independent of overflow. */
-    overflow: hidden;
-    /* Tight contact shadow + soft ambient shadow for real elevation, plus
-       a brighter top inset than the shared chrome tokens use - simulates
-       light catching the rim of curved glass - and a second, wider inset
-       underneath it that fades out, for a lensed/domed feel rather than
-       a flat bright edge. */
     box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.06),
-        0 26px 54px rgba(0, 0, 0, 0.18),
-        inset 0 1.5px 0 rgba(255, 255, 255, 1),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.4),
-        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.55);
+        0 2px 8px rgba(0, 0, 0, 0.05),
+        0 30px 60px rgba(0, 0, 0, 0.16),
+        inset 0 -14px 22px -16px rgba(255, 255, 255, 0.5);
 }
 
-/* A slow, very low-contrast diagonal highlight sweeping across the bar -
-   real Liquid Glass isn't static frosting, it visibly catches and moves
-   light as content shifts underneath it. Sits above the buttons
-   (z-index) but pointer-events:none keeps it from blocking taps; kept
-   subtle (18% peak opacity) so it reads as ambient shimmer, not a
-   flashing overlay, and is disabled entirely for reduced-motion. */
+/* Clips the shimmer/highlight layers to the pill shape via its own
+   radius (inherits the bar's 999px) rather than overflow:hidden on the
+   fixed-position parent above - overflow:hidden + backdrop-filter on a
+   position:fixed element is a known WebKit rendering trap that can make
+   the element vanish or stop repainting, especially mid-scroll. */
 .bottom-nav::before {
     content: "";
     position: absolute;
     inset: 0;
+    border-radius: inherit;
     background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
     background-size: 260% 260%;
-    opacity: 0.18;
+    opacity: 0.16;
     pointer-events: none;
     z-index: 2;
     animation: navGlassShimmer 10s ease-in-out infinite;
@@ -1460,14 +1445,16 @@ img {
     left: 0;
     height: calc(100% - 14px);
     width: 0;
-    /* Pill, matching the bar's new full-capsule shape - concentric at any
+    /* Pill, matching the bar's full-capsule shape - concentric at any
        inset, unlike a fixed radius which would look wrong once the outer
        shape stopped being a rounded-rect. */
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    /* No full-perimeter ring here either - a soft top highlight and a
+       soft bottom shadow, not a hard-edged outline. */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07), inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.06);
     transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), width 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
     pointer-events: none;
     z-index: 0;
@@ -3079,22 +3066,21 @@ html[data-theme="dark"] .search-box input:focus {
 
 html[data-theme="dark"] .bottom-nav {
     background:
-        radial-gradient(140px 70px at 20% 0%, rgba(255, 255, 255, 0.16), transparent 70%),
+        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.14), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
         var(--glass-sheen),
-        rgba(40, 40, 46, 0.4);
-    backdrop-filter: blur(64px) saturate(220%);
-    -webkit-backdrop-filter: blur(64px) saturate(220%);
+        rgba(40, 40, 46, 0.32);
+    backdrop-filter: blur(72px) saturate(230%);
+    -webkit-backdrop-filter: blur(72px) saturate(230%);
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.45),
-        0 26px 60px rgba(0, 0, 0, 0.7),
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.26),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.1);
+        0 30px 66px rgba(0, 0, 0, 0.72),
+        inset 0 -14px 22px -16px rgba(255, 255, 255, 0.09);
 }
 
 html[data-theme="dark"] .nav-indicator {
     background: rgba(255, 255, 255, 0.14);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 1px rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.22), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.15);
 }
 
 html[data-theme="dark"] .skeleton {
