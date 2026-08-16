@@ -820,7 +820,7 @@ img {
     backdrop-filter: blur(20px) saturate(200%);
     -webkit-backdrop-filter: blur(20px) saturate(200%);
     color: var(--text);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 /* Scoped to the auth screen only, so the Sign In / Join tabs pick up the
@@ -1253,9 +1253,8 @@ img {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.46);
     backdrop-filter: blur(44px) saturate(240%);
     -webkit-backdrop-filter: blur(44px) saturate(240%);
-    border: 1px solid rgba(255, 255, 255, 0.85);
     border-radius: var(--radius-2xl);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 1);
     touch-action: pan-y;
     cursor: pointer;
     user-select: none;
@@ -2861,7 +2860,6 @@ html[data-theme="dark"] .avatar-edit-badge {
     background: var(--glass-sheen), var(--glass-chrome-fill);
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
-    border: 1px solid var(--glass-chrome-border);
     color: var(--text);
     font-size: 13.5px;
     font-weight: 700;
@@ -3052,8 +3050,7 @@ html[data-theme="dark"] .auth-overlay-card {
 
 html[data-theme="dark"] .continue-card {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.14);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 html[data-theme="dark"] .stat {
