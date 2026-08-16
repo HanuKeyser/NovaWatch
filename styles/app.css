@@ -1377,20 +1377,34 @@ img {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 4px;
-    /* Sheen gradient layered over the base fill so the pill reads as one
-       curved piece of glass catching light, rather than a flat tinted
-       panel - the strongest "chrome" treatment in the app, since this is
-       the one surface that's always floating above everything else. */
-    background: var(--glass-sheen), var(--glass-chrome-fill);
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
-    border: 1px solid var(--glass-chrome-border);
-    /* Matches the same corner radius used by the rest of the app's
-       top-level surfaces (hero card, modal sheets, analytics card)
-       instead of a fully-rounded pill, so the nav bar reads as part of
-       the same rounded-rectangle family rather than a one-off shape. */
-    border-radius: var(--radius-2xl);
-    box-shadow: var(--glass-chrome-shadow);
+    /* A dedicated, more aggressively translucent treatment than the
+       shared --glass-chrome-* tokens (those stay as they are for sheets/
+       toasts/pill controls/circular buttons) - this is the one surface
+       in the app meant to read as genuinely see-through glass rather
+       than a tinted panel, so it gets its own literal values: a lower
+       fill opacity lets real color/light from whatever's scrolling
+       underneath show through, with heavier blur+saturation keeping it
+       legible instead of muddy. Sheen layered on top for the curved-
+       glass catch-light look. */
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.38);
+    backdrop-filter: blur(56px) saturate(240%);
+    -webkit-backdrop-filter: blur(56px) saturate(240%);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    /* Full capsule instead of the app's usual --radius-2xl rounded-rect -
+       the floating pill is the single most recognizable "Apple Liquid
+       Glass" tab-bar signature, worth the one-off shape exception here. */
+    border-radius: 999px;
+    /* Tight contact shadow + soft ambient shadow for real elevation, plus
+       a brighter top inset than the shared chrome tokens use - simulates
+       light catching the rim of curved glass - and a second, wider inset
+       underneath it that fades out, for a subtle lensed/domed feel rather
+       than a flat bright edge. */
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        0 26px 54px rgba(0, 0, 0, 0.16),
+        inset 0 1.5px 0 rgba(255, 255, 255, 1),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.5);
 }
 
 /* Single floating "liquid glass" capsule that glides beneath whichever tab
@@ -1403,10 +1417,11 @@ img {
     left: 0;
     height: calc(100% - 14px);
     width: 0;
-    /* Nested to match the bar's new rounded-rectangle shape (7px inset
-       from a 28px outer radius reads as concentric around --radius-lg). */
-    border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.55);
+    /* Pill, matching the bar's new full-capsule shape - concentric at any
+       inset, unlike a fixed radius which would look wrong once the outer
+       shape stopped being a rounded-rect. */
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
@@ -3007,6 +3022,19 @@ html[data-theme="dark"] .stat {
 
 html[data-theme="dark"] .search-box input:focus {
     background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .bottom-nav {
+    background: var(--glass-sheen), rgba(40, 40, 46, 0.55);
+    backdrop-filter: blur(56px) saturate(190%);
+    -webkit-backdrop-filter: blur(56px) saturate(190%);
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.45),
+        0 26px 60px rgba(0, 0, 0, 0.7),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme="dark"] .nav-indicator {
