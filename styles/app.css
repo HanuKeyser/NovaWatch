@@ -1144,6 +1144,9 @@ img {
     font-size: 11.5px;
     line-height: 1.5;
     margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .upcoming-countdown {
@@ -1394,7 +1397,9 @@ img {
         rgba(255, 255, 255, 0.22);
     backdrop-filter: blur(64px) saturate(280%);
     -webkit-backdrop-filter: blur(64px) saturate(280%);
-    border: 1px solid rgba(255, 255, 255, 0.95);
+    /* No border - the glass edge is defined entirely by the box-shadow
+       rim highlights below instead, so it reads as light catching the
+       edge of the glass rather than an outlined panel. */
     /* Full capsule instead of the app's usual --radius-2xl rounded-rect -
        the floating pill is the single most recognizable "Apple Liquid
        Glass" tab-bar signature, worth the one-off shape exception here. */
@@ -1475,23 +1480,28 @@ img {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
     background: transparent;
     color: var(--text-muted);
     font-size: 10.5px;
     font-weight: 700;
+    letter-spacing: 0.1px;
     border-radius: 999px;
-    transition: color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.2s ease;
+    transition: color 0.35s cubic-bezier(0.25, 1, 0.5, 1), transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .nav-button:active {
-    transform: scale(0.94);
+    transform: scale(0.92);
 }
 
 .nav-button .icon {
-    width: 21px;
-    height: 21px;
-    transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    width: 22px;
+    height: 22px;
+    /* Slightly thinner than the app-wide default (2) - a finer stroke at
+       this size reads as more refined rather than heavy-handed, closer
+       to how iOS's own tab bar icons are drawn. */
+    stroke-width: 1.6;
+    transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1), filter 0.35s ease, stroke-width 0.35s ease;
 }
 
 .nav-button.active {
@@ -1499,7 +1509,12 @@ img {
 }
 
 .nav-button.active .icon {
-    transform: translateY(-1px) scale(1.05);
+    stroke-width: 1.9;
+    transform: translateY(-1px) scale(1.08);
+    /* Soft colored glow behind the active icon rather than just a color
+       swap - the same "lit from within" quality the rest of the app's
+       primary blue buttons already use. */
+    filter: drop-shadow(0 3px 8px rgba(0, 102, 204, 0.45));
 }
 
 /* =========================================================
@@ -2515,7 +2530,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     align-items: center;
     justify-content: center;
     color: white;
-    border: 2px solid #F0F2F6;
+    border: 2px solid #F3F4F9;
     box-shadow: 0 3px 8px rgba(0, 102, 204, 0.3);
 }
 
@@ -3069,7 +3084,6 @@ html[data-theme="dark"] .bottom-nav {
         rgba(40, 40, 46, 0.4);
     backdrop-filter: blur(64px) saturate(220%);
     -webkit-backdrop-filter: blur(64px) saturate(220%);
-    border-color: rgba(255, 255, 255, 0.22);
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.45),
         0 26px 60px rgba(0, 0, 0, 0.7),
