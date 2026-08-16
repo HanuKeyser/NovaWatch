@@ -227,6 +227,12 @@
      into one date-sorted schedule)
 ================================================     -->
 <main id="upcomingPage" class="page">
+    <div class="segmented-toggle three-way">
+        <button id="upcomingFilterAll" class="segmented-btn active" onclick="setUpcomingFilter('all')">All</button>
+        <button id="upcomingFilterTV" class="segmented-btn" onclick="setUpcomingFilter('tv')">TV Shows</button>
+        <button id="upcomingFilterMovies" class="segmented-btn" onclick="setUpcomingFilter('movie')">Movies</button>
+    </div>
+
     <div id="upcomingResultsList" class="search-results-grid"></div>
 </main>
 
