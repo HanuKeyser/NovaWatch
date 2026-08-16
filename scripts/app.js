@@ -120,16 +120,78 @@ function setTheme(theme) {
     syncThemeToggleUI();
 }
 
+/* =========================================================
+   THEME (LIGHT / DARK / AUTO)
+   Applied via a data-theme attribute on <html>, which the dark-mode CSS
+   block keys off - see the inline head script for the same logic applied
+   synchronously before first paint. Stored in localStorage rather than
+   Firestore since it's a device-level display preference, not account
+   data, and this way it costs nothing extra against the free Spark plan.
+   'auto' is stored explicitly (not just "no saved value") so Settings can
+   show it as the selected option, and so setupOSThemeListener() below
+   knows to keep following the OS after an explicit Light/Dark choice has
+   been made and then cleared back to Auto.
+========================================================= */
+let osThemeMediaQuery = null;
+
+function setTheme(theme) {
+    let effectiveTheme = theme;
+    if (theme === 'auto') {
+        effectiveTheme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        setupOSThemeListener();
+    }
+
+    if (effectiveTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    try {
+        localStorage.setItem('novawatch-theme', theme);
+    } catch (e) { /* localStorage unavailable - theme just won't persist */ }
+
+    const metaTheme = document.getElementById('metaThemeColor');
+    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#000000' : '#F3F4F9');
+
+    syncThemeToggleUI();
+}
+
+// Live-updates the site if the OS theme changes while Auto is active and
+// the tab stays open - e.g. the phone switching to dark mode at sunset.
+// Only registers once; re-checks localStorage on every OS change so it
+// correctly stops acting the moment the user picks an explicit Light or
+// Dark instead (rather than needing to be torn down and re-created).
+function setupOSThemeListener() {
+    if (osThemeMediaQuery || !window.matchMedia) return;
+    osThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    osThemeMediaQuery.addEventListener('change', () => {
+        let saved = null;
+        try { saved = localStorage.getItem('novawatch-theme'); } catch (e) {}
+        if (saved === 'auto') setTheme('auto');
+    });
+}
+
 function getCurrentTheme() {
     return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
 
+function getSavedThemeMode() {
+    try {
+        const saved = localStorage.getItem('novawatch-theme');
+        return (saved === 'light' || saved === 'dark') ? saved : 'auto';
+    } catch (e) {
+        return 'auto';
+    }
+}
+
 function syncThemeToggleUI() {
-    const theme = getCurrentTheme();
+    const mode = getSavedThemeMode();
     const lightBtn = document.getElementById('themeToggleLightBtn');
     const darkBtn = document.getElementById('themeToggleDarkBtn');
-    if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
-    if (darkBtn) darkBtn.classList.toggle('active', theme === 'dark');
+    const autoBtn = document.getElementById('themeToggleAutoBtn');
+    if (lightBtn) lightBtn.classList.toggle('active', mode === 'light');
+    if (darkBtn) darkBtn.classList.toggle('active', mode === 'dark');
+    if (autoBtn) autoBtn.classList.toggle('active', mode === 'auto');
 }
 
 /* =========================================================
@@ -611,6 +673,13 @@ function clearSearch(inputId) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    // The inline head script already applied the right theme before first
+    // paint (saved choice, or OS preference if none saved yet) - this just
+    // keeps it live-following the OS afterward when no explicit Light/Dark
+    // choice exists, and syncs the Settings toggle to match.
+    if (getSavedThemeMode() === 'auto') setupOSThemeListener();
+    syncThemeToggleUI();
+
     const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'regionSearchInput'];
     
     searchInputs.forEach(id => {
@@ -2672,6 +2741,7 @@ async function proceedToApp(user, authScreen, mainApp) {
             // no reason to make the recipient wait on their whole library
             // syncing first (which can be the slower of the two).
             const openedSharedItem = openSharedItemFromURL();
+            if (!openedSharedItem) openShortcutTabFromURL();
 
             try {
                 // The profile doc and the library collection are independent
@@ -3631,15 +3701,11 @@ function updateNavIndicator(animate = true) {
     const activeBtn = nav ? nav.querySelector(".nav-button.active") : null;
     if (!nav || !indicator || !activeBtn) return;
 
-    const navRect = nav.getBoundingClientRect();
-    const btnRect = activeBtn.getBoundingClientRect();
-
     if (!animate) {
         indicator.style.transition = "none";
     }
 
-    indicator.style.width = `${btnRect.width}px`;
-    indicator.style.transform = `translateX(${btnRect.left - navRect.left}px)`;
+    positionNavIndicatorAt(activeBtn);
 
     if (!animate) {
         // Force layout before restoring the transition so the snap doesn't
@@ -3649,7 +3715,94 @@ function updateNavIndicator(animate = true) {
     }
 }
 
+// Shared positioning math for the pill - targets whichever button element
+// is passed in, rather than always reading .nav-button.active, so the
+// drag-to-switch gesture below can live-preview the indicator sliding
+// under the finger without changing which tab is actually active yet
+// (that only happens once the gesture is released).
+function positionNavIndicatorAt(btn) {
+    const nav = document.querySelector(".bottom-nav");
+    const indicator = document.getElementById("navIndicator");
+    if (!nav || !indicator || !btn) return;
+
+    const navRect = nav.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    indicator.style.width = `${btnRect.width}px`;
+    indicator.style.transform = `translateX(${btnRect.left - navRect.left}px)`;
+}
+
 window.addEventListener("resize", () => updateNavIndicator(false));
+
+// Lets a finger land anywhere on the bar and drag across to the desired
+// tab, rather than needing a precise tap on the right button - the pill
+// live-follows the finger (snapping button-to-button as it crosses each
+// one) and commits the navigation only on release, via that button's own
+// existing onclick. A plain tap (no meaningful horizontal movement) is
+// left completely alone, so ordinary single-tap navigation is unaffected.
+function initNavBarDragToSwitch() {
+    const nav = document.querySelector(".bottom-nav");
+    const indicator = document.getElementById("navIndicator");
+    if (!nav || !indicator) return;
+
+    const DRAG_THRESHOLD = 10;
+    let startX = 0, startY = 0, dragging = false, pointerId = null, draggedOverButton = null;
+
+    nav.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        startX = e.clientX;
+        startY = e.clientY;
+        dragging = false;
+        pointerId = e.pointerId;
+        draggedOverButton = null;
+    });
+
+    nav.addEventListener("pointermove", (e) => {
+        if (e.pointerId !== pointerId) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (!dragging) {
+            // Require the movement to actually be horizontal - an
+            // accidental vertical wobble on a tap shouldn't hijack it.
+            if (Math.abs(dx) < DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+            dragging = true;
+            nav.setPointerCapture(pointerId);
+            indicator.style.transition = "none";
+        }
+
+        const hit = document.elementFromPoint(e.clientX, e.clientY);
+        const btn = hit ? hit.closest(".nav-button") : null;
+        if (btn && btn !== draggedOverButton && nav.contains(btn)) {
+            draggedOverButton = btn;
+            positionNavIndicatorAt(btn);
+        }
+    });
+
+    function finishDrag(e) {
+        if (pointerId === null || e.pointerId !== pointerId) return;
+
+        if (dragging) {
+            indicator.style.transition = "";
+            if (draggedOverButton) {
+                e.preventDefault();
+                draggedOverButton.click(); // reuses that button's own onclick -> showPage(...)
+            } else {
+                // Released outside any button - snap back to wherever the
+                // actually-active tab is, undoing the live preview.
+                updateNavIndicator(true);
+            }
+        }
+
+        dragging = false;
+        pointerId = null;
+        draggedOverButton = null;
+    }
+
+    nav.addEventListener("pointerup", finishDrag);
+    nav.addEventListener("pointercancel", finishDrag);
+}
+
+document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 
 // Switches between the TV Shows / Movies sub-views inside the Library
 // tab, toggling the segmented control and showing/hiding each sub-view's
@@ -4061,13 +4214,14 @@ function createContinueCard(type, item, episode) {
 
     const epId = type === 'tv' ? episode.id : '';
 
-    // Left-swipe action for TV cards only: shows with no watched episodes
-    // yet get removed outright, shows with any watched episodes get marked
-    // Stopped Watching instead of losing that watch history. Movies keep
-    // the original single "swipe = mark watched" behavior in both
-    // directions.
+    // Left-swipe action: TV shows with no watched episodes yet get removed
+    // outright, shows with any watched episodes get marked Stopped Watching
+    // instead of losing that watch history. Movies in this list are always
+    // unwatched by definition (Continue Watching only shows unwatched
+    // movies), so there's no watch history to protect - left-swipe always
+    // removes the movie outright, same as an untouched TV show.
     const hasWatchedEpisode = type === 'tv' && item.episodes && item.episodes.some(ep => ep.watched);
-    const leftAction = type === 'tv' ? (hasWatchedEpisode ? 'stop' : 'remove') : '';
+    const leftAction = type === 'tv' ? (hasWatchedEpisode ? 'stop' : 'remove') : 'remove';
 
     return `
         <div class="continue-card-wrap">
@@ -4145,13 +4299,12 @@ function renderContinueWatching(containerId = "continueWatchingList") {
 // threshold triggers an action and lets it fly off; a short drag springs
 // back. A vertical drag (scrolling) is left alone.
 //
-// Direction matters for TV cards: swiping right still marks the up-next
-// episode watched (green), but swiping left now removes the show (if
-// nothing's been watched yet) or marks it Stopped Watching (if some
-// episodes have been watched) - shown in red/orange while dragging so the
-// alternate action is clear before letting go. Movie cards don't have a
-// distinct left action, so they keep the original single "mark watched"
-// behavior in both directions.
+// Direction matters: swiping right always marks the up-next episode/movie
+// watched (green). Swiping left removes the item outright (red) - or, for
+// TV shows with some watched episodes already, marks it Stopped Watching
+// instead (orange) so that watch history isn't lost. Movies never have
+// partial watch history to protect here (Continue Watching only shows
+// unwatched movies), so a movie's left-swipe is always a plain removal.
 function initContinueCardSwipe(container) {
     const threshold = 90;
 
@@ -4467,6 +4620,21 @@ async function addModalItemToLibrary() {
 // shareable link to the clipboard on desktop/unsupported browsers. The
 // share always points back to NovaWatch itself (not TMDB) - it's the app
 // being shared from.
+// Handles a PWA install shortcut (long-press/right-click the installed
+// app icon -> Discover/Library/Upcoming) - jumps straight to that tab
+// right after the normal Home landing, same pattern as
+// openSharedItemFromURL() below for shared show/movie links. An
+// unrecognized or missing value just leaves the normal Home landing
+// alone. Strips the param afterward so refreshing doesn't keep re-jumping.
+function openShortcutTabFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const shortcut = params.get('shortcut');
+    if (!['discover', 'library', 'upcoming'].includes(shortcut)) return;
+
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    showPage(shortcut);
+}
+
 // Reads a shared item link from the URL, if present, and opens the right
 // thing directly - this is what makes a shared link actually take the
 // recipient to the specific show/movie/episode instead of just the app's
