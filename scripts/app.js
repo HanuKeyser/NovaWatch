@@ -530,9 +530,62 @@ let libSearchDebounceTimers = {};
 /* =========================================================
    NOTIFICATIONS SYSTEM
 ========================================================= */
-function checkNotificationPermissionState() {
+/* =========================================================
+   CAPACITOR (NATIVE APP DETECTION)
+   No import or bundler needed here, deliberately - app.js stays the
+   same classic, unbundled script either way. When this code runs
+   inside a Capacitor-wrapped native app (see capacitor.config.json),
+   Capacitor's native runtime auto-injects window.Capacitor - including
+   window.Capacitor.Plugins.<PluginName> for every plugin whose native
+   code was pulled in via `npx cap sync` - directly into the WebView
+   before this script ever runs; that's the actual mechanism Capacitor
+   plugins use under the hood, the npm packages are just a typed
+   convenience layer around it that needs a bundler. In a regular
+   browser or installed PWA, window.Capacitor simply doesn't exist, so
+   this always safely reports false there and every native-only code
+   path below is skipped entirely.
+========================================================= */
+function isNativeApp() {
+    return typeof window !== 'undefined'
+        && !!window.Capacitor
+        && typeof window.Capacitor.isNativePlatform === 'function'
+        && window.Capacitor.isNativePlatform();
+}
+
+/* =========================================================
+   NOTIFICATIONS SYSTEM
+   Each function branches on isNativeApp() right at the top; the
+   web/PWA path below that branch is completely unchanged from before.
+   The native path uses Capacitor's Local Notifications plugin instead,
+   since the Web Notifications API this app otherwise relies on isn't
+   reliably available inside a native WebView the way it is in a real
+   browser tab.
+========================================================= */
+async function checkNotificationPermissionState() {
     const btn = document.getElementById("notificationBtn");
     if (!btn) return;
+
+    if (isNativeApp()) {
+        try {
+            const { display } = await window.Capacitor.Plugins.LocalNotifications.checkPermissions();
+            if (display === "granted") {
+                btn.textContent = "Enabled";
+                btn.style.color = "white";
+                btn.disabled = true;
+            } else if (display === "denied") {
+                btn.textContent = "Blocked";
+                btn.disabled = true;
+            } else {
+                btn.textContent = "Enable";
+                btn.disabled = false;
+            }
+        } catch (e) {
+            btn.textContent = "Unsupported";
+            btn.disabled = true;
+        }
+        return;
+    }
+
     if (!("Notification" in window)) {
         btn.textContent = "Unsupported";
         btn.disabled = true;
@@ -552,6 +605,25 @@ function checkNotificationPermissionState() {
 }
 
 async function requestNotificationPermission() {
+    if (isNativeApp()) {
+        try {
+            const { display } = await window.Capacitor.Plugins.LocalNotifications.requestPermissions();
+            await checkNotificationPermissionState();
+            if (display === "granted") {
+                showToast("Notifications enabled successfully!", "success");
+                sendAppNotification("NovaWatch Notifications Active", {
+                    body: "You will now receive alerts for upcoming releases and new episodes!"
+                });
+            } else {
+                showToast("Notification permission denied.", "error");
+            }
+        } catch (err) {
+            console.error("Error requesting native notification permission:", err);
+            showToast("Could not enable notifications.", "error");
+        }
+        return;
+    }
+
     if (!("Notification" in window)) {
         showToast("Notifications not supported on this browser/device.", "error");
         return;
@@ -573,7 +645,28 @@ async function requestNotificationPermission() {
     }
 }
 
+// LocalNotifications.schedule() requires a numeric id per notification
+// (unlike the web path, which needs none) - a simple incrementing
+// counter is enough since these are all fire-now, not fire-later.
+let nextLocalNotificationId = 1;
+
 function sendAppNotification(title, options = {}) {
+    if (isNativeApp()) {
+        try {
+            window.Capacitor.Plugins.LocalNotifications.schedule({
+                notifications: [{
+                    id: nextLocalNotificationId++,
+                    title: title,
+                    body: options.body || "",
+                    smallIcon: "ic_stat_novawatch"
+                }]
+            });
+        } catch (e) {
+            console.error("Error sending native local notification:", e);
+        }
+        return;
+    }
+
     if (!("Notification" in window) || Notification.permission !== "granted") {
         return;
     }
