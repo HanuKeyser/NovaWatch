@@ -456,6 +456,11 @@ let scrollToNextEpisodeOnRender = false;
 let currentSearchType = 'tv';
 let currentAuthMode = 'signin';
 let currentLibraryView = 'tv';
+// Filter applied within the Upcoming tab's already-combined, date-sorted
+// schedule: 'all' (default) keeps TV and movies together, 'tv'/'movie'
+// narrow it to one type without losing the combined view as the default -
+// getUpcomingItems() already supports this filterType param.
+let currentUpcomingFilter = 'all';
 let toastTimer = null;
 let searchDebounceTimer = null;
 let libSearchDebounceTimers = {};
@@ -3687,15 +3692,22 @@ function groupUpcomingByTimeframe(items) {
 }
 
 // TV episodes and movie releases are shown together in one combined,
-// date-sorted list (getUpcomingItems with no filter returns both types).
+// date-sorted list by default (getUpcomingItems with no filter returns
+// both types); currentUpcomingFilter narrows that to one type on request
+// without changing what "All" shows.
 function renderUpcomingTab() {
     const listContainer = document.getElementById("upcomingResultsList");
     if (!listContainer) return;
 
-    const items = getUpcomingItems();
+    const filter = currentUpcomingFilter === 'all' ? null : currentUpcomingFilter;
+    const items = getUpcomingItems(filter);
 
     if (!items || items.length === 0) {
-        listContainer.innerHTML = emptyState("No Upcoming Releases", "No upcoming episodes or movies scheduled in your library.");
+        const emptyMessages = {
+            tv: "No upcoming episodes scheduled in your library.",
+            movie: "No upcoming movie releases scheduled in your library."
+        };
+        listContainer.innerHTML = emptyState("No Upcoming Releases", emptyMessages[filter] || "No upcoming episodes or movies scheduled in your library.");
         return;
     }
 
@@ -3706,6 +3718,19 @@ function renderUpcomingTab() {
             ${group.items.map(data => createUpcomingCard(data)).join("")}
         </div>
     `).join("");
+}
+
+// Switches the Upcoming tab's type filter and re-renders. Kept as
+// persistent module state (like currentLibraryView) so it survives
+// switching tabs and coming back, rather than resetting to "All" each time.
+function setUpcomingFilter(filter) {
+    currentUpcomingFilter = filter;
+
+    document.getElementById("upcomingFilterAll").classList.toggle("active", filter === 'all');
+    document.getElementById("upcomingFilterTV").classList.toggle("active", filter === 'tv');
+    document.getElementById("upcomingFilterMovies").classList.toggle("active", filter === 'movie');
+
+    renderUpcomingTab();
 }
 
 /* =========================================================
