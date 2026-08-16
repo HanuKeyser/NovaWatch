@@ -241,94 +241,8 @@ img {
    NOVAWRAPPED (migrated in from its own page - see the modal
    #novaWrappedModal in index.html and its open/render functions in
    app.js). Reuses .analytics-card/.stat/.section-title etc. above for
-   the actual stats display; these are the pieces specific to Wrapped
-   itself - the pre-release countdown card and the year-picker header.
+   the actual stats display.
 ========================================================= */
-.coming-soon-card {
-    padding: 40px 28px;
-    text-align: center;
-    background: var(--glass-sheen), linear-gradient(135deg, rgba(255,255,255,0.82) 0%, rgba(224, 238, 255, 0.62) 100%);
-    backdrop-filter: blur(46px) saturate(210%);
-    -webkit-backdrop-filter: blur(46px) saturate(210%);
-    border: 1px solid rgba(0, 102, 204, 0.2);
-    border-radius: var(--radius-2xl);
-    box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
-
-.coming-soon-badge {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 20px;
-    border-radius: 50%;
-    background: var(--glass-sheen), var(--blue-gradient);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    box-shadow: 0 10px 26px rgba(0, 102, 204, 0.4), inset 0 1px 0 rgba(255,255,255,0.5);
-}
-
-.coming-soon-badge .icon {
-    width: 30px;
-    height: 30px;
-}
-
-.coming-soon-eyebrow {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--blue);
-}
-
-.coming-soon-title {
-    font-size: 27px;
-    font-weight: 800;
-    letter-spacing: -0.6px;
-    margin: 8px 0 10px;
-}
-
-.coming-soon-sub {
-    font-size: 14.5px;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    max-width: 380px;
-    margin: 0 auto;
-}
-
-.coming-soon-date {
-    margin-top: 26px;
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    padding: 14px 26px;
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(0, 102, 204, 0.22);
-}
-
-.coming-soon-date-value {
-    font-size: 19px;
-    font-weight: 800;
-    letter-spacing: -0.3px;
-}
-
-.coming-soon-date-label {
-    font-size: 10.5px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-muted);
-}
-
-.coming-soon-countdown {
-    margin-top: 16px;
-    font-size: 12.5px;
-    font-weight: 650;
-    color: var(--text-secondary);
-}
-
 .state-card {
     padding: 36px 28px;
     text-align: center;
@@ -518,6 +432,13 @@ img {
     height: 100%;
     object-fit: cover;
     object-position: center;
+    /* Matches the parent's own radius rather than relying solely on the
+       parent's overflow:hidden to clip it - at certain zoom/DPI levels,
+       overflow-only clipping can leave a hairline sub-pixel gap at the
+       rounded corners showing the parent's own background through,
+       which reads as a faint white ring since --surface-2 is a
+       white-based color in both themes. */
+    border-radius: inherit;
 }
 
 /* Long-pressing a poster is how the "Change Poster" picker opens (see
@@ -1104,6 +1025,7 @@ img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: inherit;
 }
 
 .upcoming-poster-placeholder {
@@ -1462,6 +1384,14 @@ img {
     transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), width 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
     pointer-events: none;
     z-index: 0;
+}
+
+/* Applied only while a drag-to-switch gesture is in progress
+   (initNavBarDragToSwitch in app.js) - a subtle lift, like the pill is
+   floating slightly above the bar while it's being "held", rather than
+   staying visually identical to its normal resting state. */
+.nav-indicator.dragging {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.06);
 }
 
 .nav-button {
@@ -2280,6 +2210,23 @@ html[data-theme="dark"] .modal-sheet-compact {
     padding: 14px 0;
 }
 
+/* For settings rows whose control needs more room than fits inline next
+   to the label (e.g. a 3-way segmented toggle) - label+icon stays a
+   normal horizontal row on top, the control gets its own full-width row
+   below instead of being squeezed into the same line and forcing the
+   subtitle to wrap on narrower phones. */
+.settings-row-stacked {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.settings-row-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
 .settings-row + .settings-row {
     border-top: 1px solid var(--glass-border-subtle);
 }
@@ -2353,38 +2300,14 @@ html[data-theme="dark"] .modal-sheet-compact {
     color: var(--text-muted);
 }
 
-/* Compact 2-way toggle for a settings row's trailing slot (currently just
-   Appearance/theme) - same active-pill gradient language as the full-size
-   .segmented-toggle/.segmented-btn used elsewhere, just sized to sit
-   inline next to row text instead of spanning full width. */
-.theme-toggle-mini {
-    flex-shrink: 0;
-    display: flex;
-    background: var(--surface-2);
-    padding: 3px;
-    border-radius: 999px;
-    border: 1px solid var(--glass-border-subtle);
-}
-
-.theme-toggle-mini-btn {
-    height: 28px;
-    padding: 0 12px;
-    border-radius: 999px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 700;
-    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease;
-}
-
-.theme-toggle-mini-btn:active {
-    transform: scale(0.94);
-}
-
-.theme-toggle-mini-btn.active {
-    background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
-    box-shadow: 0 4px 10px rgba(0, 102, 204, 0.3);
+/* Appearance reuses the app's standard full-width .segmented-toggle
+   component (same one Library/Discover/Upcoming use) rather than a
+   separate compact toggle - one less one-off component, and more
+   breathing room for 3 options than a squeezed inline row gave. Its
+   default margin-bottom (meant for a toggle followed by more content
+   below it) isn't needed here, since it's the last thing in the row. */
+#themeToggleMini {
+    margin-bottom: 0;
 }
 
 .hero-pill-btn {
@@ -3085,19 +3008,12 @@ html[data-theme="dark"] .nav-indicator {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.22), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.15);
 }
 
+html[data-theme="dark"] .nav-indicator.dragging {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.15);
+}
+
 html[data-theme="dark"] .skeleton {
     background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.1) 50%, var(--surface-2) 75%);
-}
-
-html[data-theme="dark"] .coming-soon-card {
-    background: linear-gradient(150deg, rgba(40, 44, 56, 0.85) 0%, rgba(20, 30, 48, 0.75) 100%);
-    border-color: rgba(10, 132, 255, 0.25);
-    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-html[data-theme="dark"] .coming-soon-date {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(10, 132, 255, 0.3);
 }
 
 html[data-theme="dark"] .state-card {
