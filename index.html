@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#F0F2F6" id="metaThemeColor">
+<meta name="theme-color" content="#F3F4F9" id="metaThemeColor">
 <script>
 // Applied synchronously, before the stylesheet/body render, so a saved
 // dark-mode preference takes effect on first paint instead of flashing
@@ -227,9 +227,8 @@
      into one date-sorted schedule)
 ================================================     -->
 <main id="upcomingPage" class="page">
-    <div class="segmented-toggle three-way">
-        <button id="upcomingFilterAll" class="segmented-btn active" onclick="setUpcomingFilter('all')">All</button>
-        <button id="upcomingFilterTV" class="segmented-btn" onclick="setUpcomingFilter('tv')">TV Shows</button>
+    <div class="segmented-toggle">
+        <button id="upcomingFilterTV" class="segmented-btn active" onclick="setUpcomingFilter('tv')">TV Shows</button>
         <button id="upcomingFilterMovies" class="segmented-btn" onclick="setUpcomingFilter('movie')">Movies</button>
     </div>
 
