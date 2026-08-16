@@ -1371,11 +1371,11 @@ img {
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
-    max-width: 420px;
+    max-width: 480px;
     height: 70px;
     padding: 7px;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 4px;
     /* Sheen gradient layered over the base fill so the pill reads as one
        curved piece of glass catching light, rather than a flat tinted
