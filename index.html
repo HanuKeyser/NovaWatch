@@ -176,48 +176,76 @@
 </main>
 
 <!-- =====================================================
-     2. LIBRARY TAB (TV Shows + Movies)
+     2. MY STUFF TAB (Library: TV Shows + Movies  |  Lists)
+     Top-level Library/Lists split so the future Lists feature (custom,
+     freeform collections that don't require adding something to the
+     tracked Library) has a home inside the existing 4-tab bottom nav
+     instead of needing a 5th tab. Lists itself isn't built yet - the
+     Lists view below is a placeholder empty state; setMyStuffView() in
+     app.js just toggles which of the two containers is visible.
 ================================================     -->
 <main id="libraryPage" class="page">
     <div class="segmented-toggle">
-        <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
-        <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
+        <button id="myStuffTabLibrary" class="segmented-btn active" onclick="setMyStuffView('library')">Library</button>
+        <button id="myStuffTabLists" class="segmented-btn" onclick="setMyStuffView('lists')">Lists</button>
     </div>
 
-    <!-- TV Shows sub-view -->
-    <div id="libraryViewTV" class="library-subview">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="tvLibrarySearchInput" type="search" placeholder="Search TV shows library..." autocomplete="off">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
+    <!-- Library view: existing TV Shows / Movies tracking, unchanged -->
+    <div id="myStuffViewLibrary" class="library-subview">
+        <div class="segmented-toggle" style="margin-top: 16px;">
+            <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
+            <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
         </div>
 
-        <div id="tvLibraryCategories"></div>
+        <!-- TV Shows sub-view -->
+        <div id="libraryViewTV" class="library-subview">
+            <div class="library-toolbar">
+                <div class="search-box">
+                    <svg class="icon search-icon" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="M20 20l-4-4"/>
+                    </svg>
+                    <input id="tvLibrarySearchInput" type="search" placeholder="Search TV shows library..." autocomplete="off">
+                    <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
+                        <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="tvLibraryCategories"></div>
+        </div>
+
+        <!-- Movies sub-view -->
+        <div id="libraryViewMovies" class="library-subview" style="display: none;">
+            <div class="library-toolbar">
+                <div class="search-box">
+                    <svg class="icon search-icon" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="M20 20l-4-4"/>
+                    </svg>
+                    <input id="movieLibrarySearchInput" type="search" placeholder="Search movies library..." autocomplete="off">
+                    <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
+                        <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="movieLibraryCategories"></div>
+        </div>
     </div>
 
-    <!-- Movies sub-view -->
-    <div id="libraryViewMovies" class="library-subview" style="display: none;">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="movieLibrarySearchInput" type="search" placeholder="Search movies library..." autocomplete="off">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
+    <!-- Lists view: placeholder until the feature itself is built -->
+    <div id="myStuffViewLists" class="library-subview" style="display: none;">
+        <div class="empty-state" style="margin-top: 16px;">
+            <svg class="icon icon-large" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+                <line x1="7" y1="9" x2="17" y2="9"/>
+                <line x1="7" y1="13" x2="17" y2="13"/>
+                <line x1="7" y1="17" x2="13" y2="17"/>
+            </svg>
+            <h3>Lists are coming soon</h3>
+            <p>Custom collections like "Future Watch" or "Movie Night" - save shows and movies here without adding them to your tracked Library.</p>
         </div>
-
-        <div id="movieLibraryCategories"></div>
     </div>
 </main>
 
@@ -318,7 +346,7 @@
             <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/>
             <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>
         </svg>
-        Library
+        My Stuff
     </button>
     <button id="navUpcoming" class="nav-button" onclick="showPage('upcoming')">
         <svg class="icon" viewBox="0 0 24 24">
