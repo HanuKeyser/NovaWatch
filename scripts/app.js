@@ -115,7 +115,7 @@ function setTheme(theme) {
     } catch (e) { /* localStorage unavailable - theme just won't persist */ }
 
     const metaTheme = document.getElementById('metaThemeColor');
-    if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#000000' : '#F0F2F6');
+    if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#000000' : '#F3F4F9');
 
     syncThemeToggleUI();
 }
@@ -456,11 +456,11 @@ let scrollToNextEpisodeOnRender = false;
 let currentSearchType = 'tv';
 let currentAuthMode = 'signin';
 let currentLibraryView = 'tv';
-// Filter applied within the Upcoming tab's already-combined, date-sorted
-// schedule: 'all' (default) keeps TV and movies together, 'tv'/'movie'
-// narrow it to one type without losing the combined view as the default -
-// getUpcomingItems() already supports this filterType param.
-let currentUpcomingFilter = 'all';
+// Filter applied within the Upcoming tab: 'tv' or 'movie', matching the
+// plain 2-way TV Shows/Movies split used by Discover and Library (no
+// combined "All" view) - getUpcomingItems() already supports this
+// filterType param.
+let currentUpcomingFilter = 'tv';
 let toastTimer = null;
 let searchDebounceTimer = null;
 let libSearchDebounceTimers = {};
@@ -3691,23 +3691,23 @@ function groupUpcomingByTimeframe(items) {
     return buckets.filter(bucket => bucket.items.length > 0);
 }
 
-// TV episodes and movie releases are shown together in one combined,
-// date-sorted list by default (getUpcomingItems with no filter returns
-// both types); currentUpcomingFilter narrows that to one type on request
-// without changing what "All" shows.
+// Shows TV episode releases or movie releases for the library, one type
+// at a time via currentUpcomingFilter - matching the plain TV Shows/
+// Movies split used by Discover and Library, rather than a combined
+// feed. Still grouped into Today/Tomorrow/This Week/Later within
+// whichever type is selected.
 function renderUpcomingTab() {
     const listContainer = document.getElementById("upcomingResultsList");
     if (!listContainer) return;
 
-    const filter = currentUpcomingFilter === 'all' ? null : currentUpcomingFilter;
-    const items = getUpcomingItems(filter);
+    const items = getUpcomingItems(currentUpcomingFilter);
 
     if (!items || items.length === 0) {
         const emptyMessages = {
             tv: "No upcoming episodes scheduled in your library.",
             movie: "No upcoming movie releases scheduled in your library."
         };
-        listContainer.innerHTML = emptyState("No Upcoming Releases", emptyMessages[filter] || "No upcoming episodes or movies scheduled in your library.");
+        listContainer.innerHTML = emptyState("No Upcoming Releases", emptyMessages[currentUpcomingFilter]);
         return;
     }
 
@@ -3722,11 +3722,10 @@ function renderUpcomingTab() {
 
 // Switches the Upcoming tab's type filter and re-renders. Kept as
 // persistent module state (like currentLibraryView) so it survives
-// switching tabs and coming back, rather than resetting to "All" each time.
+// switching tabs and coming back, rather than resetting each time.
 function setUpcomingFilter(filter) {
     currentUpcomingFilter = filter;
 
-    document.getElementById("upcomingFilterAll").classList.toggle("active", filter === 'all');
     document.getElementById("upcomingFilterTV").classList.toggle("active", filter === 'tv');
     document.getElementById("upcomingFilterMovies").classList.toggle("active", filter === 'movie');
 
