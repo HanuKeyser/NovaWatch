@@ -10,23 +10,24 @@
    page to page. */
 
 :root {
-    /* A flat color gives the glass nothing to actually refract - Liquid
-       Glass depends on there being tonal variation behind it to bend and
-       blur. This is a soft mesh of white/grey tones (no color) at
-       different depths over a pale grey base, so glass surfaces still
-       have real light and shadow to pick up without ever reading as
-       colorful. background-attachment: fixed keeps it still as the page
-       scrolls, so the refraction reads as consistent, not scrolling text. */
+    /* Previously a flat white/grey mesh (deliberately colorless) - now a
+       soft multi-tone mesh instead, so translucent glass surfaces have
+       actual color and light to refract rather than white-on-white.
+       Kept low-saturation/low-opacity so it still reads as premium and
+       quiet rather than busy - four soft corner tints (blue, peach,
+       lavender, mint) over a cool near-white base, not primary colors.
+       background-attachment: fixed keeps it still as the page scrolls,
+       so the refraction reads as consistent, not scrolling text. */
     --bg-mesh:
-        radial-gradient(at 15% 12%, rgba(255, 255, 255, 0.9) 0px, transparent 48%),
-        radial-gradient(at 85% 8%, rgba(203, 210, 222, 0.55) 0px, transparent 50%),
-        radial-gradient(at 90% 75%, rgba(255, 255, 255, 0.7) 0px, transparent 50%),
-        radial-gradient(at 10% 88%, rgba(210, 216, 226, 0.5) 0px, transparent 50%),
-        radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.6) 0px, transparent 65%),
-        #F0F2F6;
-    --surface: rgba(255, 255, 255, 0.58);
-    --surface-2: rgba(255, 255, 255, 0.36);
-    --surface-3: rgba(255, 255, 255, 0.22);
+        radial-gradient(at 12% 8%, rgba(120, 170, 255, 0.22) 0px, transparent 50%),
+        radial-gradient(at 88% 6%, rgba(255, 190, 150, 0.16) 0px, transparent 50%),
+        radial-gradient(at 92% 80%, rgba(170, 140, 255, 0.15) 0px, transparent 55%),
+        radial-gradient(at 8% 90%, rgba(130, 220, 195, 0.13) 0px, transparent 55%),
+        radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.5) 0px, transparent 65%),
+        #F3F4F9;
+    --surface: rgba(255, 255, 255, 0.5);
+    --surface-2: rgba(255, 255, 255, 0.3);
+    --surface-3: rgba(255, 255, 255, 0.18);
 
     --glass-border: rgba(255, 255, 255, 0.7);
     --glass-border-subtle: rgba(255, 255, 255, 0.38);
@@ -36,19 +37,23 @@
     /* =====================================================
        LIQUID GLASS "CHROME" SYSTEM
        Modeled after Apple's Liquid Glass material: reserved for the
-       floating/functional layer (nav, sheets, toasts, pill controls,
-       circular buttons) rather than large content areas, so it reads as
-       one dynamic, reflective layer sitting *above* the content instead
-       of everything looking uniformly "glassy". Versus --surface, this
-       has heavier blur+saturation (more optical distortion of what's
-       behind it), a brighter top specular edge, and a two-layer elevation
-       shadow (a tight contact shadow + a soft ambient one) for real depth.
-       --glass-sheen is a diagonal highlight meant to be layered as an
-       extra background-image on top of a base fill, simulating light
-       glancing off the surface of the glass.
-    ===================================================== */
-    --glass-chrome-fill: rgba(255, 255, 255, 0.52);
-    --glass-chrome-blur: blur(60px) saturate(220%);
+       floating/functional layer (sheets, toasts, pill controls, circular
+       buttons) rather than large content areas, so it reads as one
+       dynamic, reflective layer sitting *above* the content instead of
+       everything looking uniformly "glassy". Versus --surface, this has
+       heavier blur+saturation (more optical distortion of what's behind
+       it), a brighter top specular edge, and a two-layer elevation
+       shadow (a tight contact shadow + a soft ambient one) for real
+       depth. --glass-sheen is a diagonal highlight meant to be layered
+       as an extra background-image on top of a base fill, simulating
+       light glancing off the surface of the glass. The bottom nav bar
+       pushes further into this same language with its own even more
+       translucent, borderless treatment (see .bottom-nav in app.css) -
+       it's the one surface meant to read as most aggressively "glass";
+       these shared tokens stay a notch more opaque since they also back
+       sheets and toasts that need to stay legible over varied content. */
+    --glass-chrome-fill: rgba(255, 255, 255, 0.42);
+    --glass-chrome-blur: blur(64px) saturate(240%);
     --glass-chrome-border: rgba(255, 255, 255, 0.92);
     --glass-chrome-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 24px 48px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
@@ -102,7 +107,7 @@
 }
 
 html {
-    background: #F0F2F6;
+    background: #F3F4F9;
     color-scheme: light;
 }
 
