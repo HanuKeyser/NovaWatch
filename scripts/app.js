@@ -1577,6 +1577,10 @@ let novaWrappedAccountCreatedAt = null;
 let currentNovaWrappedYear = null;
 
 function openNovaWrappedModal() {
+    if (Date.now() < NOVAWRAPPED_RELEASE_MS) {
+        showToast("Available 1 January 2027 @ 00:00 UTC", "error");
+        return;
+    }
     const modal = document.getElementById("novaWrappedModal");
     renderNovaWrappedEntry();
     if (modal.classList.contains("open")) return;
@@ -1593,36 +1597,15 @@ function closeNovaWrappedModalOutside(event) {
     if (event.target.id === "novaWrappedModal") closeNovaWrappedModal();
 }
 
+// The release-date check now happens earlier, in openNovaWrappedModal()
+// itself (as an error toast instead of ever opening the modal) - by the
+// time this runs, we're already past the release date, so it goes
+// straight to the real render.
 function renderNovaWrappedEntry() {
-    if (Date.now() < NOVAWRAPPED_RELEASE_MS) {
-        renderNovaWrappedComingSoon();
-        return;
-    }
     novaWrappedAccountCreatedAt = (auth && auth.currentUser && auth.currentUser.metadata && auth.currentUser.metadata.creationTime)
         ? new Date(auth.currentUser.metadata.creationTime)
         : null;
     renderNovaWrapped();
-}
-
-function renderNovaWrappedComingSoon() {
-    const msRemaining = NOVAWRAPPED_RELEASE_MS - Date.now();
-    const daysRemaining = Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
-
-    document.getElementById("novaWrappedRoot").innerHTML = `
-        <div class="coming-soon-card">
-            <div class="coming-soon-badge">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z"/></svg>
-            </div>
-            <div class="coming-soon-eyebrow">Coming Soon</div>
-            <div class="coming-soon-title">NovaWrapped</div>
-            <p class="coming-soon-sub">A look back at everything you watched - total time, your most-watched show, your busiest month, and more.</p>
-            <div class="coming-soon-date">
-                <div class="coming-soon-date-value">January 1, 2027</div>
-                <div class="coming-soon-date-label">00:00 UTC</div>
-            </div>
-            <div class="coming-soon-countdown">${daysRemaining} day${daysRemaining === 1 ? '' : 's'} to go</div>
-        </div>
-    `;
 }
 
 /* =========================================================
@@ -2092,14 +2075,40 @@ async function refreshItemFromTMDBInternal(item) {
 
                     let newEpisodes = [];
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
-                    const seasonPromises = validSeasons.map(season => 
-                        fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}/season/${season.season_number}?api_key=${TMDB_API_KEY}`)
-                        .then(r => r.json())
-                        .catch(e => null)
-                    );
+                    // One retry before giving up on a season - reduces how often the
+                    // fallback below is even needed, since most failures here are
+                    // transient (a network blip, a rate limit) rather than TMDB
+                    // actually having removed the season.
+                    const fetchSeason = async (seasonNumber) => {
+                        for (let attempt = 0; attempt < 2; attempt++) {
+                            try {
+                                const r = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
+                                const data = await r.json();
+                                if (data && data.episodes) return data;
+                            } catch (e) {
+                                // fall through and retry, or give up after the 2nd attempt
+                            }
+                        }
+                        return null;
+                    };
+                    const seasonPromises = validSeasons.map(season => fetchSeason(season.season_number));
 
                     const seasonsData = await Promise.all(seasonPromises);
-                    seasonsData.forEach(seasonData => {
+                    // BUG FIX: this used to only check `if (seasonData && seasonData.episodes)`
+                    // and otherwise silently skip the season entirely - meaning a single
+                    // season's fetch failing (still possible even with the retry above)
+                    // meant that season just never made it into newEpisodes. Since
+                    // newEpisodes wholesale-replaces item.episodes further down as long
+                    // as ANY season succeeded, one transient failure for one season out
+                    // of several was enough to permanently wipe that season's episodes -
+                    // watched history included - on the very next background sync, with
+                    // no error shown anywhere. This is the actual cause of a previously-
+                    // watched season disappearing on its own. Now: a season whose fetch
+                    // still failed after the retry falls back to that season's EXISTING
+                    // episodes, completely untouched, instead of being dropped - worst
+                    // case that one season's data is a sync cycle stale, never lost.
+                    validSeasons.forEach((season, i) => {
+                        const seasonData = seasonsData[i];
                         if (seasonData && seasonData.episodes) {
                             seasonData.episodes.forEach(ep => {
                                 newEpisodes.push({
@@ -2115,6 +2124,8 @@ async function refreshItemFromTMDBInternal(item) {
                                     releaseDate: ep.air_date ? tmdbDateToISO(ep.air_date) : new Date().toISOString()
                                 });
                             });
+                        } else if (item.episodes && item.episodes.length > 0) {
+                            newEpisodes.push(...item.episodes.filter(ep => ep.season === season.season_number));
                         }
                     });
 
@@ -3860,7 +3871,18 @@ function initNavBarDragToSwitch() {
             if (Math.abs(dx) < DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
             dragging = true;
             nav.setPointerCapture(pointerId);
-            indicator.style.transition = "none";
+            // A short, eased transition during the drag - not none - is
+            // what actually makes this read as the pill gliding smoothly
+            // from button to button instead of teleporting between them.
+            // A fast swipe across several buttons in a row still reads as
+            // one continuous glide rather than a series of jumps, since a
+            // new target retargets the transition already in progress
+            // instead of restarting it (standard CSS transition
+            // interruption behavior). The subtle scale/shadow lift below
+            // is a small tactile "you're holding this now" cue, settling
+            // back to normal on release.
+            indicator.style.transition = "transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), width 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease";
+            indicator.classList.add("dragging");
         }
 
         const hit = document.elementFromPoint(e.clientX, e.clientY);
@@ -3875,6 +3897,12 @@ function initNavBarDragToSwitch() {
         if (pointerId === null || e.pointerId !== pointerId) return;
 
         if (dragging) {
+            indicator.classList.remove("dragging");
+            // Reset back to the default (CSS-defined, slower) settle
+            // transition before the click below triggers showPage() ->
+            // updateNavIndicator() - otherwise that final settle into the
+            // confirmed active button would inherit this drag's faster
+            // transition instead of the intended one.
             indicator.style.transition = "";
             if (draggedOverButton) {
                 e.preventDefault();
