@@ -1379,6 +1379,11 @@ img {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 4px;
+    /* The drag-to-switch gesture (initNavBarDragToSwitch in app.js) needs
+       to own horizontal pointer movement on this bar itself, rather than
+       the browser trying to interpret it as a scroll/pull-to-refresh
+       gesture before JS ever sees a clean pointermove sequence. */
+    touch-action: none;
     /* Genuinely see-through - low fill opacity so real color/light from
        whatever's underneath shows through, with heavy blur+saturation to
        stay legible instead of muddy at that opacity. Layered on top: a
