@@ -456,11 +456,6 @@ let scrollToNextEpisodeOnRender = false;
 let currentSearchType = 'tv';
 let currentAuthMode = 'signin';
 let currentLibraryView = 'tv';
-// Top-level split inside the My Stuff tab: 'library' (existing TV/Movie
-// tracking) vs 'lists' (future custom-collections feature). Persists
-// across visits to the tab the same way currentLibraryView does for
-// TV/Movies, so re-opening My Stuff doesn't reset to Library every time.
-let currentMyStuffView = 'library';
 let toastTimer = null;
 let searchDebounceTimer = null;
 let libSearchDebounceTimers = {};
@@ -1794,7 +1789,7 @@ async function confirmDeleteAccount() {
 }
 
 function refreshActivePage() {
-    if (document.getElementById("libraryPage").classList.contains("active") && currentMyStuffView === 'library') {
+    if (document.getElementById("libraryPage").classList.contains("active")) {
         if (currentLibraryView === 'tv') renderTVLibrarySection();
         if (currentLibraryView === 'movies') renderMovieLibrarySection();
     }
@@ -3598,10 +3593,7 @@ function showPage(page, subType = null, focusSearch = false) {
 
     updateNavIndicator();
 
-    if (page === "library") {
-        setMyStuffView(currentMyStuffView);
-        if (subType) setLibraryView(subType);
-    }
+    if (page === "library") setLibraryView(subType || currentLibraryView);
     if (page === "discover") {
         if (subType) {
             setSearchType(subType);
@@ -3654,25 +3646,8 @@ function updateNavIndicator(animate = true) {
 
 window.addEventListener("resize", () => updateNavIndicator(false));
 
-// Switches between the Library / Lists sub-views inside the My Stuff
-// tab (formerly just "Library"). Lists isn't built yet - selecting it
-// just shows the placeholder empty state already in the markup. When
-// switching to Library, re-applies whatever TV/Movies sub-view was last
-// active rather than resetting it.
-function setMyStuffView(view) {
-    currentMyStuffView = view;
-
-    document.getElementById("myStuffTabLibrary").classList.toggle("active", view === 'library');
-    document.getElementById("myStuffTabLists").classList.toggle("active", view === 'lists');
-
-    document.getElementById("myStuffViewLibrary").style.display = view === 'library' ? 'block' : 'none';
-    document.getElementById("myStuffViewLists").style.display = view === 'lists' ? 'block' : 'none';
-
-    if (view === 'library') setLibraryView(currentLibraryView);
-}
-
 // Switches between the TV Shows / Movies sub-views inside the Library
-// view, toggling the segmented control and showing/hiding each sub-view's
+// tab, toggling the segmented control and showing/hiding each sub-view's
 // container rather than re-rendering the whole page.
 function setLibraryView(view) {
     currentLibraryView = view;
