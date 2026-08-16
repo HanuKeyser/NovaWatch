@@ -1377,34 +1377,72 @@ img {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 4px;
-    /* A dedicated, more aggressively translucent treatment than the
-       shared --glass-chrome-* tokens (those stay as they are for sheets/
-       toasts/pill controls/circular buttons) - this is the one surface
-       in the app meant to read as genuinely see-through glass rather
-       than a tinted panel, so it gets its own literal values: a lower
-       fill opacity lets real color/light from whatever's scrolling
-       underneath show through, with heavier blur+saturation keeping it
-       legible instead of muddy. Sheen layered on top for the curved-
-       glass catch-light look. */
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.38);
-    backdrop-filter: blur(56px) saturate(240%);
-    -webkit-backdrop-filter: blur(56px) saturate(240%);
-    border: 1px solid rgba(255, 255, 255, 0.9);
+    /* Genuinely see-through, not just a dedicated blur - a low fill
+       opacity is what actually reads as "glass" rather than "frosted
+       panel", so real color/light from whatever's scrolling underneath
+       shows through. Heavy blur+saturation keeps it legible instead of
+       muddy at that opacity. A soft radial highlight near the top-left
+       stands in for a light source catching curved glass (a flat surface
+       has no such highlight - this is what sells the curve), layered
+       under the sheen. Decoupled from the shared --glass-chrome-* tokens
+       (those stay as they are for sheets/toasts/pill controls/circular
+       buttons) - this is the one surface meant to push furthest into
+       "liquid glass" rather than tinted-panel chrome. */
+    background:
+        radial-gradient(140px 70px at 20% 0%, rgba(255, 255, 255, 0.65), transparent 70%),
+        var(--glass-sheen),
+        rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(64px) saturate(280%);
+    -webkit-backdrop-filter: blur(64px) saturate(280%);
+    border: 1px solid rgba(255, 255, 255, 0.95);
     /* Full capsule instead of the app's usual --radius-2xl rounded-rect -
        the floating pill is the single most recognizable "Apple Liquid
        Glass" tab-bar signature, worth the one-off shape exception here. */
     border-radius: 999px;
+    /* Clips the shimmer pseudo-element below to the pill shape - doesn't
+       affect the bar's own box-shadow, which paints outside the box
+       independent of overflow. */
+    overflow: hidden;
     /* Tight contact shadow + soft ambient shadow for real elevation, plus
        a brighter top inset than the shared chrome tokens use - simulates
        light catching the rim of curved glass - and a second, wider inset
-       underneath it that fades out, for a subtle lensed/domed feel rather
-       than a flat bright edge. */
+       underneath it that fades out, for a lensed/domed feel rather than
+       a flat bright edge. */
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.06),
-        0 26px 54px rgba(0, 0, 0, 0.16),
+        0 26px 54px rgba(0, 0, 0, 0.18),
         inset 0 1.5px 0 rgba(255, 255, 255, 1),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.35),
-        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.5);
+        inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.55);
+}
+
+/* A slow, very low-contrast diagonal highlight sweeping across the bar -
+   real Liquid Glass isn't static frosting, it visibly catches and moves
+   light as content shifts underneath it. Sits above the buttons
+   (z-index) but pointer-events:none keeps it from blocking taps; kept
+   subtle (18% peak opacity) so it reads as ambient shimmer, not a
+   flashing overlay, and is disabled entirely for reduced-motion. */
+.bottom-nav::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+    background-size: 260% 260%;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 2;
+    animation: navGlassShimmer 10s ease-in-out infinite;
+}
+
+@keyframes navGlassShimmer {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 100% 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bottom-nav::before {
+        animation: none;
+    }
 }
 
 /* Single floating "liquid glass" capsule that glides beneath whichever tab
@@ -3025,16 +3063,19 @@ html[data-theme="dark"] .search-box input:focus {
 }
 
 html[data-theme="dark"] .bottom-nav {
-    background: var(--glass-sheen), rgba(40, 40, 46, 0.55);
-    backdrop-filter: blur(56px) saturate(190%);
-    -webkit-backdrop-filter: blur(56px) saturate(190%);
-    border-color: rgba(255, 255, 255, 0.18);
+    background:
+        radial-gradient(140px 70px at 20% 0%, rgba(255, 255, 255, 0.16), transparent 70%),
+        var(--glass-sheen),
+        rgba(40, 40, 46, 0.4);
+    backdrop-filter: blur(64px) saturate(220%);
+    -webkit-backdrop-filter: blur(64px) saturate(220%);
+    border-color: rgba(255, 255, 255, 0.22);
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.45),
         0 26px 60px rgba(0, 0, 0, 0.7),
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
-        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.08);
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.26),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 -10px 18px -12px rgba(255, 255, 255, 0.1);
 }
 
 html[data-theme="dark"] .nav-indicator {
