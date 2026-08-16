@@ -65,7 +65,7 @@ function saveLastTab(page) {
 function getLastTab() {
     try {
         const saved = localStorage.getItem(LAST_ACTIVE_TAB_KEY);
-        return ['home', 'discover', 'library'].includes(saved) ? saved : 'home';
+        return ['home', 'discover', 'library', 'upcoming'].includes(saved) ? saved : 'home';
     } catch (e) {
         return 'home';
     }
@@ -1792,8 +1792,8 @@ function refreshActivePage() {
     if (document.getElementById("libraryPage").classList.contains("active")) {
         if (currentLibraryView === 'tv') renderTVLibrarySection();
         if (currentLibraryView === 'movies') renderMovieLibrarySection();
-        if (currentLibraryView === 'upcoming') renderUpcomingTab();
     }
+    if (document.getElementById("upcomingPage").classList.contains("active")) renderUpcomingTab();
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
     updateHomeUI();
     checkAchievements();
@@ -3614,6 +3614,7 @@ function showPage(page, subType = null, focusSearch = false) {
         }
     }
     if (page === "home") renderHomeTab();
+    if (page === "upcoming") renderUpcomingTab();
 }
 
 // Slides the shared glass capsule under whichever nav button is active,
@@ -3645,23 +3646,20 @@ function updateNavIndicator(animate = true) {
 
 window.addEventListener("resize", () => updateNavIndicator(false));
 
-// Switches between the TV Shows / Movies / Upcoming sub-views inside the
-// merged Library tab, toggling the segmented control and showing/hiding
-// each sub-view's container rather than re-rendering the whole page.
+// Switches between the TV Shows / Movies sub-views inside the Library
+// tab, toggling the segmented control and showing/hiding each sub-view's
+// container rather than re-rendering the whole page.
 function setLibraryView(view) {
     currentLibraryView = view;
 
     document.getElementById("libraryTabTV").classList.toggle("active", view === 'tv');
     document.getElementById("libraryTabMovies").classList.toggle("active", view === 'movies');
-    document.getElementById("libraryTabUpcoming").classList.toggle("active", view === 'upcoming');
 
     document.getElementById("libraryViewTV").style.display = view === 'tv' ? 'block' : 'none';
     document.getElementById("libraryViewMovies").style.display = view === 'movies' ? 'block' : 'none';
-    document.getElementById("libraryViewUpcoming").style.display = view === 'upcoming' ? 'block' : 'none';
 
     if (view === 'tv') renderTVLibrarySection();
     if (view === 'movies') renderMovieLibrarySection();
-    if (view === 'upcoming') renderUpcomingTab();
 }
 
 /* =========================================================
