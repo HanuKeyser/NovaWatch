@@ -117,7 +117,11 @@ Other things flagged as ideas but not committed to a slot: all-time/lifetime sta
 
 ---
 
-## Latest round (card style unification + real drag gesture fix)
+## Latest round (border/shadow removed entirely, not just "fixed")
+
+The previous round's `.episode` fix (border-bottom -> box-shadow, on the theory that a partial border on a rounded element was misrendering as a full ring under WebKit compositing) turned out to still show a border, per user report - same for `.search-card` and `.upcoming-card`. Rather than continue refining a rendering theory that clearly wasn't fully correct (or wasn't the whole story), all three now have `border: none; box-shadow: none;` explicitly - no separator, no divider line, nothing left that could possibly render as a border regardless of the exact mechanism. Certainty over cleverness this time. Also swept the rest of `app.css` for every remaining use of `--glass-border-subtle` (6 left) to check none of them were the same bug in disguise - confirmed all 6 are unrelated, legitimate elements (full intentional borders on `.category-count`/`.segmented-toggle`, or flat non-rounded divider lines between Settings rows and the auth screen's "OR" divider) - none are rounded list-cards, so none share the pattern that actually caused this.
+
+---
 
 **1. Discover's search-card poster now matches Upcoming's poster exactly** (66x94, 14px radius, same shadow - was 80x116 @ 16px). `createUpcomingCard()` already renders TV and Movie entries identically (confirmed by reading the code - both use `data.item.poster`, the show/movie's own poster, not an episode still, so there was no actual TV/Movie mismatch within Upcoming to fix). The real gap was between Upcoming's cards and Discover's `.search-card` - unified on the poster dimensions/radius while keeping each's own necessarily-different content (Discover needs the add button + description; Upcoming needs the countdown + date).
 
