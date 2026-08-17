@@ -777,8 +777,12 @@
 <!-- =====================================================
      CHOOSE YOUR LIBRARY
      Opened from the header switcher's "Manage Libraries" link, or from
-     Settings > Libraries. Grid of every library on the account (avatar +
-     name, tap to switch) plus Add/Edit utility tiles - see
+     Settings > Libraries. Tall backdrop image up top (the most recent
+     item across the account's libraries, same .modal-backdrop-header
+     pattern the show/episode details modal uses - falls back to a plain
+     brand gradient if there's no item yet to pull one from), fading into
+     a grid of every library on the account (avatar + name, tap to
+     switch) plus Add/Edit utility tiles - see
      renderLibrarySelectionScreen() in multi-library.js.
 ================================================     -->
 <div id="libraryScreen" class="modal" onclick="closeLibraryScreenOutside(event)">
@@ -791,7 +795,13 @@
                 </svg>
             </button>
         </div>
-        <div class="modal-content" style="padding-top: 60px;">
+        <div id="libraryScreenBackdrop" class="modal-backdrop-header library-screen-backdrop">
+            <div class="modal-backdrop-overlay"></div>
+            <div class="modal-hero-title-container library-screen-hero-title">
+                <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="library-screen-logo">
+            </div>
+        </div>
+        <div class="modal-content library-screen-content">
             <h2 class="poster-picker-title">Choose Your Library</h2>
             <div id="libraryScreenGrid" class="library-select-grid"></div>
         </div>
