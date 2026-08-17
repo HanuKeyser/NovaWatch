@@ -16,9 +16,11 @@ Live at `https://www.novawatch.site/`.
 ├── service-worker.js       Offline app-shell caching + notification click handling
 ├── styles/
 │   ├── tokens.css          Shared design tokens - linked by both HTML pages
-│   └── app.css             index.html's component styles
+│   ├── app.css             index.html's component styles
+│   └── multi-library.css   Multi-Library feature's styles (switcher, selection screen, modals)
 ├── scripts/
-│   └── app.js              index.html's application logic
+│   ├── app.js              index.html's application logic
+│   └── multi-library.js    Multi-Library feature's logic (see "Multi-Library" below)
 └── privacy-terms/
     └── index.html          Privacy Notice & Terms of Service (was privacy-terms.html)
 ```
@@ -72,6 +74,34 @@ A few things were tried or considered and explicitly ruled out:
 
 ---
 
+## Multi-Library
+
+Every account can hold up to `MAX_LIBRARIES` (3, defined in `multi-library.js`) completely independent libraries - separate items, watched/unwatched state, episode progress, Continue Watching, rewatch counts, everything. Switching libraries via the header pill or the "Choose Your Library" screen swaps out the entire active dataset; nothing is ever auto-copied between libraries.
+
+**Firestore structure:**
+
+```
+users/{uid}                                  account-level doc, unchanged, plus one new
+                                              field: activeLibraryId
+users/{uid}/libraries/{libraryId}            one doc per library - name, avatarId, createdAt
+users/{uid}/libraries/{libraryId}/items            the actual watch data (same doc shape the
+users/{uid}/libraries/{libraryId}/archivedShows    old flat users/{uid}/library and
+                                                    users/{uid}/archivedShows collections used
+                                                    to hold, just nested one level deeper)
+```
+
+`{libraryId}` is a normal Firestore auto-id - never `library1`/`library2`/`library3` - so `MAX_LIBRARIES` is purely an app-level check inside `createLibrary()`, not something baked into the data model. Raising or removing the limit later is a one-line change.
+
+region, isPremiumUser, the account avatar (`state.profiles`), theme, and notification permission are account-level settings, not watch data - they intentionally stay shared across every library and are untouched by this feature.
+
+**Existing accounts:** the first time `initMultiLibrary()` finds no `libraries` subcollection yet, it runs a one-time migration (`migrateLegacyLibraryData()`) that creates a default "My Library" and moves every doc out of the old flat `users/{uid}/library` and `users/{uid}/archivedShows` collections into it, then deletes the old flat collections. A brand-new account hits the same code path with nothing to move, which is what "builds on the existing library instead of a separate setup flow" means in practice.
+
+**What's a partial implementation, on purpose:** the brief also asked for movie/show *metadata* (title, poster, cast, episode lists) to live in a separate shared `content/{id}` collection so the same title added to two libraries doesn't store its metadata twice. That part isn't built. Every library item doc here is still the same fully denormalized shape the app has always used (metadata + this library's watch state together). Actually splitting those apart would mean rewriting how virtually every rendering function in `app.js` reads an item - hundreds of call sites (`item.title`, `item.poster`, `item.episodes`, etc.) - which isn't something to do blind, in one pass, against a live app with real user data. What's fully built is the part the brief itself calls out as the *Core Principle*: watch data is completely isolated per library, and nothing is ever auto-shared between libraries (see `deleteLibrary()`, `switchActiveLibrary()`, and every `getActiveLibraryItemsRef()`/`getActiveLibraryArchivedRef()` call site in `app.js`). The metadata-deduplication half is a real, clearly-scoped follow-up (a top-level `content/{mediaType}_{tmdbId}` collection, populated from the existing TMDB-fetch call sites, with item docs storing a reference instead of a full copy) - flagged rather than done partially.
+
+**UI:** a small floating pill ("My Library ▾") pinned to the top of every tab, hidden automatically for accounts with just one library - see `.library-header-bar` in `multi-library.css`. Tapping it opens a dropdown to switch instantly, or jump into the full "Choose Your Library" screen (also reachable via Settings → Libraries), which shows every library's avatar + name plus Add/Edit tiles matching the provided reference design. Deleting a library requires confirmation and is blocked if it's the account's only remaining library.
+
+---
+
 ## NovaWrapped
 
 A "Wrapped"-style yearly recap, gated to release **January 1, 2027**. Originally its own separate page; migrated into `index.html` as a modal (see `#novaWrappedModal` and `openNovaWrappedModal()`) since it always needed the same signed-in session's Firestore data as everything else - being separate meant loading a whole second copy of the Firebase SDK just to read data the main app already had in memory. Before the release date, tapping the Settings row's "View" button doesn't open the modal at all - it shows an error toast ("Available 1 January 2027 @ 00:00 UTC") and returns; the release gate is checked at the top of `openNovaWrappedModal()`, before the modal is ever shown, rather than being rendered as content inside it.
@@ -113,6 +143,18 @@ If nav visibility or tab-switching problems persist after this fix, they're not 
 The same full-perimeter-ring-reads-as-a-border issue found on the nav bar (bug #2 above) turned out to still be present in the *shared* `--glass-chrome-shadow` token itself (both light and dark), so every consumer of it still looked bordered even after the nav bar was fixed - removed there too, plus the matching literal borders on `.toast` and the ring on `.search-type-btn.active`, and the same border+ring combo on `.continue-card` (Home's Continue Watching cards, the next most visible glass surface after nav). `.search-box input` deliberately keeps its border - that one does real work as a focus-state indicator on a form field, not just decoration, so it stayed.
 
 Other things flagged as ideas but not committed to a slot: all-time/lifetime stats page, a "time to finish" estimator, custom watch statuses (Plan to Watch/On Hold/Dropped), a household activity view (once profiles exist), Discover genre/mood filters.
+
+---
+
+## Multi-Library feature (new)
+
+Implemented the Multi-Library feature end to end - see the "Multi-Library" section above for the full writeup (schema, migration, UI, and the one deliberately partial piece). Summary of what changed:
+
+- **New files:** `scripts/multi-library.js` (all of the feature's logic) and `styles/multi-library.css` (all of its styling) - kept separate from `app.js`/`app.css` rather than merged in, at the user's request.
+- **`app.js`:** every call site that used to hardcode `db.collection("users").doc(uid).collection("library")` (or `"archivedShows"`) now goes through `getActiveLibraryItemsRef()`/`getActiveLibraryArchivedRef()` instead, so it automatically follows whichever library is active. `proceedToApp()` now calls `initMultiLibrary()` first. `deleteAllUserData()` now wipes every library on the account, not just one.
+- **`index.html`:** header switcher pill ("My Library ▾", auto-hidden for single-library accounts), the "Choose Your Library" screen matching the provided reference design, Add/Edit/Delete-library modals, and a Libraries row in Settings.
+- **`service-worker.js`:** cache list updated to include both new files, bumped to v12.
+- Ran the full validation sweep (JS syntax, CSS brace balance, HTML tag balance, no duplicate IDs, every `onclick`/CSS class/CSS variable resolves) across every changed file - all clean.
 
 ---
 
