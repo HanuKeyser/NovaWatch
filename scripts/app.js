@@ -3843,9 +3843,8 @@ window.addEventListener("resize", () => updateNavIndicator(false));
 // so the motion is genuinely visible throughout the whole gesture rather
 // than the pill sitting still and then jumping. It keeps a fixed width
 // while dragging and only resizes/settles into the target button's exact
-// bounds once released - which is also where navigation commits, via
-// that button's own existing onclick. A plain tap (no meaningful
-// horizontal movement) is left completely alone.
+// bounds once released, with a slight spring overshoot. A plain tap (no
+// meaningful horizontal movement) is left completely alone.
 function initNavBarDragToSwitch() {
     const nav = document.querySelector(".bottom-nav");
     const indicator = document.getElementById("navIndicator");
@@ -3853,6 +3852,22 @@ function initNavBarDragToSwitch() {
 
     const DRAG_THRESHOLD = 10;
     let startX = 0, startY = 0, dragging = false, pointerId = null, draggedOverButton = null, dragWidth = 0;
+    let hitTestPending = false, suppressNextClick = false;
+
+    // Belt-and-suspenders: swallow whatever click event follows a drag,
+    // whichever element the browser decides to target it at. Navigation
+    // itself is driven directly by finishDrag() below via showPage(), not
+    // by this click at all - this listener exists purely to stop a
+    // second, possibly-conflicting native click (a real risk once
+    // setPointerCapture is involved) from firing right after and
+    // silently reverting the tab that was just switched to.
+    nav.addEventListener("click", (e) => {
+        if (suppressNextClick) {
+            e.preventDefault();
+            e.stopPropagation();
+            suppressNextClick = false;
+        }
+    }, true);
 
     nav.addEventListener("pointerdown", (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -3877,7 +3892,7 @@ function initNavBarDragToSwitch() {
             // Zero transition lag during the drag itself - the pill has
             // to track the finger in real time for the motion to actually
             // read as continuous dragging rather than snapping between
-            // rest points. The eased "settle" transition is restored in
+            // rest points. The spring settle transition is restored in
             // finishDrag() below, once, for the release animation only.
             indicator.style.transition = "none";
             indicator.classList.add("dragging");
@@ -3887,17 +3902,32 @@ function initNavBarDragToSwitch() {
         const navRect = nav.getBoundingClientRect();
         // The pill's left edge follows the raw finger x-position directly
         // (centered under it), clamped so it can't run outside the bar -
-        // updated on every pointermove, not just when crossing into a
-        // different button, so it's always visibly moving with the finger.
+        // this cheap update runs on every single pointermove so the
+        // motion is always visibly continuous, never frozen between
+        // button crossings.
         const rawX = e.clientX - navRect.left - (dragWidth / 2);
         const clampedX = Math.max(0, Math.min(rawX, navRect.width - dragWidth));
         indicator.style.width = `${dragWidth}px`;
         indicator.style.transform = `translateX(${clampedX}px)`;
 
-        const hit = document.elementFromPoint(e.clientX, e.clientY);
-        const btn = hit ? hit.closest(".nav-button") : null;
-        if (btn && nav.contains(btn)) {
-            draggedOverButton = btn;
+        // elementFromPoint() is a real DOM hit-test - noticeably more
+        // expensive than the transform update above, and pointermove can
+        // fire well over 60 times/sec on a modern phone. Throttling this
+        // specific part to once per animation frame (rather than once per
+        // event) is what keeps the drag itself buttery rather than
+        // occasionally janking on a busy frame, without affecting how
+        // often the pill's actual position updates.
+        if (!hitTestPending) {
+            hitTestPending = true;
+            requestAnimationFrame(() => {
+                hitTestPending = false;
+                if (!dragging) return;
+                const hit = document.elementFromPoint(e.clientX, e.clientY);
+                const btn = hit ? hit.closest(".nav-button") : null;
+                if (btn && nav.contains(btn)) {
+                    draggedOverButton = btn;
+                }
+            });
         }
     });
 
@@ -3906,14 +3936,24 @@ function initNavBarDragToSwitch() {
 
         if (dragging) {
             indicator.classList.remove("dragging");
-            // Restore the default (CSS-defined, eased) transition now
-            // that the raw 1:1 tracking is done - this is what animates
-            // the pill's final snap into its confirmed resting position,
-            // whether that's via the click below or the fallback reset.
+            // Restore the default CSS transition (the spring/bounce
+            // easing defined on .nav-indicator itself) now that the raw
+            // 1:1 tracking is done - this is what animates the pill's
+            // final settle, for both the success path below and the
+            // released-outside-any-button fallback.
             indicator.style.transition = "";
+
             if (draggedOverButton) {
                 e.preventDefault();
-                draggedOverButton.click(); // reuses that button's own onclick -> showPage(...)
+                suppressNextClick = true;
+                // Calls showPage() directly rather than
+                // draggedOverButton.click() - after setPointerCapture, the
+                // browser's own native click synthesis isn't guaranteed to
+                // target the same element my drag logic resolved to, and
+                // that mismatch was the likely cause of navigation
+                // intermittently reverting right after it committed.
+                const targetPage = draggedOverButton.id.replace(/^nav/, "").toLowerCase();
+                showPage(targetPage);
             } else {
                 // Released outside any button - snap back to wherever the
                 // actually-active tab is, undoing the live preview.
