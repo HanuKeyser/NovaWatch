@@ -171,10 +171,6 @@ function setupOSThemeListener() {
     });
 }
 
-function getCurrentTheme() {
-    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-}
-
 function getSavedThemeMode() {
     try {
         const saved = localStorage.getItem('novawatch-theme');
@@ -3851,8 +3847,8 @@ function initNavBarDragToSwitch() {
     if (!nav || !indicator) return;
 
     const DRAG_THRESHOLD = 10;
-    let startX = 0, startY = 0, dragging = false, pointerId = null, draggedOverButton = null, dragWidth = 0;
-    let hitTestPending = false, suppressNextClick = false;
+    let startX = 0, startY = 0, dragging = false, pointerId = null, dragWidth = 0;
+    let suppressNextClick = false, suppressClickTimer = null;
 
     // Belt-and-suspenders: swallow whatever click event follows a drag,
     // whichever element the browser decides to target it at. Navigation
@@ -3860,12 +3856,16 @@ function initNavBarDragToSwitch() {
     // by this click at all - this listener exists purely to stop a
     // second, possibly-conflicting native click (a real risk once
     // setPointerCapture is involved) from firing right after and
-    // silently reverting the tab that was just switched to.
+    // silently reverting the tab that was just switched to. The timer
+    // guarantees this flag can never get stuck true forever (e.g. if the
+    // browser never actually fires a click at all after preventDefault on
+    // pointerup) and end up silently eating some later, unrelated tap.
     nav.addEventListener("click", (e) => {
         if (suppressNextClick) {
             e.preventDefault();
             e.stopPropagation();
             suppressNextClick = false;
+            clearTimeout(suppressClickTimer);
         }
     }, true);
 
@@ -3875,7 +3875,6 @@ function initNavBarDragToSwitch() {
         startY = e.clientY;
         dragging = false;
         pointerId = e.pointerId;
-        draggedOverButton = null;
     });
 
     nav.addEventListener("pointermove", (e) => {
@@ -3899,36 +3898,21 @@ function initNavBarDragToSwitch() {
             dragWidth = indicator.getBoundingClientRect().width;
         }
 
+        // This is the ONLY thing pointermove does now - purely visual,
+        // no hit-testing. Which button counts as the target is decided
+        // exactly once, synchronously, at release (see finishDrag) - not
+        // guessed at here. An earlier version tried to track the
+        // hovered button during the drag itself via a throttled
+        // elementFromPoint() check, but that check could lag behind the
+        // real finger position by up to a frame, or - for a fast flick -
+        // never get a chance to run at all before release. Both were
+        // real bugs: the pill would visually reach a tab but release
+        // would revert to the start, or land on the wrong one.
         const navRect = nav.getBoundingClientRect();
-        // The pill's left edge follows the raw finger x-position directly
-        // (centered under it), clamped so it can't run outside the bar -
-        // this cheap update runs on every single pointermove so the
-        // motion is always visibly continuous, never frozen between
-        // button crossings.
         const rawX = e.clientX - navRect.left - (dragWidth / 2);
         const clampedX = Math.max(0, Math.min(rawX, navRect.width - dragWidth));
         indicator.style.width = `${dragWidth}px`;
         indicator.style.transform = `translateX(${clampedX}px)`;
-
-        // elementFromPoint() is a real DOM hit-test - noticeably more
-        // expensive than the transform update above, and pointermove can
-        // fire well over 60 times/sec on a modern phone. Throttling this
-        // specific part to once per animation frame (rather than once per
-        // event) is what keeps the drag itself buttery rather than
-        // occasionally janking on a busy frame, without affecting how
-        // often the pill's actual position updates.
-        if (!hitTestPending) {
-            hitTestPending = true;
-            requestAnimationFrame(() => {
-                hitTestPending = false;
-                if (!dragging) return;
-                const hit = document.elementFromPoint(e.clientX, e.clientY);
-                const btn = hit ? hit.closest(".nav-button") : null;
-                if (btn && nav.contains(btn)) {
-                    draggedOverButton = btn;
-                }
-            });
-        }
     });
 
     function finishDrag(e) {
@@ -3943,16 +3927,27 @@ function initNavBarDragToSwitch() {
             // released-outside-any-button fallback.
             indicator.style.transition = "";
 
-            if (draggedOverButton) {
+            // The single, authoritative hit-test - computed fresh, right
+            // now, from the exact release coordinates. This is what fixes
+            // both "reverts to the original tab" and "lands on the wrong
+            // tab": there's no throttled/stale state to be wrong here,
+            // just one direct check of what's actually under the finger
+            // at the exact moment it lifts.
+            const hit = document.elementFromPoint(e.clientX, e.clientY);
+            const releaseButton = hit ? hit.closest(".nav-button") : null;
+
+            if (releaseButton && nav.contains(releaseButton)) {
                 e.preventDefault();
                 suppressNextClick = true;
+                clearTimeout(suppressClickTimer);
+                suppressClickTimer = setTimeout(() => { suppressNextClick = false; }, 400);
                 // Calls showPage() directly rather than
-                // draggedOverButton.click() - after setPointerCapture, the
-                // browser's own native click synthesis isn't guaranteed to
-                // target the same element my drag logic resolved to, and
-                // that mismatch was the likely cause of navigation
+                // releaseButton.click() - after setPointerCapture, the
+                // browser's own native click synthesis isn't guaranteed
+                // to target the same element this resolved to, and that
+                // mismatch was an earlier cause of navigation
                 // intermittently reverting right after it committed.
-                const targetPage = draggedOverButton.id.replace(/^nav/, "").toLowerCase();
+                const targetPage = releaseButton.id.replace(/^nav/, "").toLowerCase();
                 showPage(targetPage);
             } else {
                 // Released outside any button - snap back to wherever the
@@ -3963,7 +3958,6 @@ function initNavBarDragToSwitch() {
 
         dragging = false;
         pointerId = null;
-        draggedOverButton = null;
     }
 
     nav.addEventListener("pointerup", finishDrag);
@@ -4616,18 +4610,6 @@ async function markContinueItemWatched(type, itemId, epId) {
 
     await saveItem(item);
     refreshActivePage();
-}
-
-function renderGrid(containerId, items, emptyText) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    if (!items.length) {
-        container.innerHTML = `<div style="font-size:12px; color:var(--text-muted); padding:10px 0; grid-column: 1 / -1;">${emptyText}</div>`;
-        return;
-    }
-
-    container.innerHTML = items.map(item => createCard(item)).join("");
 }
 
 function emptyState(title, message = "Check back later or search for new shows and movies to add.", cta = null) {
