@@ -813,14 +813,22 @@ img {
     padding: 14px 6px;
     align-items: flex-start;
     border-radius: var(--radius-md);
-    border-bottom: 1px solid var(--glass-border-subtle);
+    border: none;
+    /* A box-shadow line instead of border-bottom - a partial border
+       (only one edge set) on an element with border-radius is a known
+       category of WebKit rendering quirk: under GPU compositing
+       (triggered by backdrop-filter, which is everywhere in this app),
+       it can paint as a full outline around all four corners instead of
+       just the specified edge. A box-shadow offset doesn't interact with
+       border-radius the same way, so it can't do that. */
+    box-shadow: 0 1px 0 0 var(--glass-border-subtle);
     transition: background 0.2s ease, transform 0.15s ease;
     cursor: pointer;
     position: relative;
 }
 
 .search-card:last-child {
-    border-bottom: none;
+    box-shadow: none;
 }
 
 .search-card:active {
@@ -997,13 +1005,14 @@ img {
     padding: 14px 6px;
     align-items: flex-start;
     border-radius: var(--radius-md);
-    border-bottom: 1px solid var(--glass-border-subtle);
+    border: none;
+    box-shadow: 0 1px 0 0 var(--glass-border-subtle);
     cursor: pointer;
     transition: background 0.2s ease, transform 0.15s ease;
 }
 
 .upcoming-group:last-child .upcoming-card:last-child {
-    border-bottom: none;
+    box-shadow: none;
 }
 
 .upcoming-card:active {
@@ -2003,7 +2012,8 @@ html[data-theme="dark"] .modal-sheet-compact {
     gap: 10px;
     padding: 16px 10px;
     margin: 0 -10px;
-    border-bottom: 1px solid var(--glass-border-subtle);
+    border: none;
+    box-shadow: 0 1px 0 0 var(--glass-border-subtle);
     border-radius: var(--radius-md);
     cursor: pointer;
 }
@@ -2014,7 +2024,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .episode-up-next {
     background: rgba(0, 102, 204, 0.06);
-    border-bottom-color: transparent;
+    box-shadow: none;
 }
 
 .episode-up-next-badge {
