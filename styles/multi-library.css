@@ -1,0 +1,311 @@
+/* =========================================================
+   MULTI-LIBRARY
+   Styles for the header library switcher, the "Choose Your Library"
+   screen, and the Add/Edit/Delete Library modals - see multi-library.js
+   for the logic that renders into these. Kept in its own file, same
+   reasoning as app.js/multi-library.js: everything this feature needs
+   lives in one place instead of scattered across the main stylesheet.
+   Reuses the app's existing design tokens throughout (tokens.css) so
+   nothing here can drift out of sync with the rest of the app's light/
+   dark palette.
+========================================================= */
+
+/* =========================================================
+   HEADER SWITCHER PILL
+   Floating glass capsule, same visual language as .bottom-nav (see
+   app.css) but much smaller and pinned to the top instead of the
+   bottom. Only shown once an account actually has more than one
+   library - see renderLibrarySwitcherPill() in multi-library.js.
+========================================================= */
+.library-header-bar {
+    position: fixed;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    display: flex;
+    justify-content: center;
+}
+
+.library-switcher-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    max-width: 62vw;
+    border-radius: 999px;
+    background:
+        radial-gradient(120px 60px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
+        var(--glass-sheen),
+        rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(48px) saturate(220%);
+    -webkit-backdrop-filter: blur(48px) saturate(220%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), 0 18px 36px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.library-switcher-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-switcher-pill .icon-small {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.library-switcher-pill.open .icon-small {
+    transform: rotate(180deg);
+}
+
+.library-switcher-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-6px) scale(0.96);
+    transform-origin: top center;
+    width: max-content;
+    min-width: 200px;
+    max-width: 78vw;
+    padding: 8px;
+    border-radius: var(--radius-lg);
+    background: var(--glass-sheen), rgba(248, 250, 252, 0.92);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.library-switcher-menu.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.library-switcher-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 650;
+    text-align: left;
+}
+
+.library-switcher-option:active {
+    background: var(--surface-2);
+}
+
+.library-switcher-option span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-switcher-option.active {
+    color: var(--blue);
+}
+
+.library-switcher-option .icon-small {
+    width: 16px;
+    height: 16px;
+    color: var(--blue);
+    flex-shrink: 0;
+}
+
+.library-switcher-option-avatar {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(150deg, #6babff 0%, var(--blue-light) 45%, var(--blue) 100%);
+    color: white;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.library-switcher-manage {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--glass-border-subtle);
+    color: var(--blue);
+}
+
+html[data-theme="dark"] .library-switcher-pill {
+    background:
+        radial-gradient(120px 60px at 18% -10%, rgba(255, 255, 255, 0.12), transparent 65%),
+        var(--glass-sheen),
+        rgba(255, 255, 255, 0.06);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 18px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .library-switcher-menu {
+    background: var(--glass-sheen), rgba(28, 28, 30, 0.92);
+}
+
+/* .page already has top padding for general breathing room (see
+   app.css) - this adds just enough extra to clear the switcher pill
+   above it, since the pill is fixed/floating and would otherwise
+   overlap the first few pixels of whichever tab is showing. Applied
+   unconditionally rather than only while the bar is visible, since a
+   sudden layout shift the moment a second library gets added would be
+   more jarring than a little extra empty space above Home for
+   single-library accounts. */
+.page {
+    padding-top: calc(78px + env(safe-area-inset-top, 0px));
+}
+
+/* =========================================================
+   "CHOOSE YOUR LIBRARY" SCREEN
+========================================================= */
+#libraryScreen {
+    z-index: 260;
+}
+
+/* Opened from a card tap inside #libraryScreen itself (z-index 260), so
+   both need to sit above it - same reasoning as app.css's own
+   #avatarPickerModal/#achievementsModal/#novaWrappedModal group, just
+   one step higher since this feature's own full-screen sits between
+   that group and these. */
+#addLibraryModal,
+#editLibraryModal {
+    z-index: 270;
+}
+
+.library-select-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px 14px;
+    margin-top: 28px;
+}
+
+.library-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.library-card-avatar {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(150deg, #6babff 0%, var(--blue-light) 45%, var(--blue) 100%);
+    color: white;
+    font-size: 26px;
+    font-weight: 800;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.15s ease;
+}
+
+.library-card:active .library-card-avatar {
+    transform: scale(0.94);
+}
+
+.library-card.active .library-card-avatar {
+    box-shadow: 0 0 0 3px var(--blue), 0 8px 18px rgba(0, 0, 0, 0.15);
+}
+
+.library-card-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.library-card-utility .library-card-icon {
+    background: var(--surface-2);
+    border: 1.5px dashed var(--glass-border);
+    color: var(--text-muted);
+    box-shadow: none;
+}
+
+.library-card-utility.active .library-card-icon {
+    background: var(--blue-gradient);
+    border-style: solid;
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35);
+}
+
+.library-card-icon .icon {
+    width: 26px;
+    height: 26px;
+}
+
+/* =========================================================
+   ADD / EDIT LIBRARY MODALS
+========================================================= */
+.library-modal-avatar-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.library-modal-avatar-preview {
+    width: 84px;
+    height: 84px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: linear-gradient(150deg, #6babff 0%, var(--blue-light) 45%, var(--blue) 100%);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.library-modal-avatar-preview:active {
+    transform: scale(0.94);
+}
+
+.settings-text-input {
+    width: 100%;
+    height: 46px;
+    margin-top: 20px;
+    padding: 0 16px;
+    outline: none;
+    background: var(--surface-2);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 15px;
+}
+
+.settings-text-input:focus {
+    border-color: var(--blue);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+}
+
+.library-modal-submit {
+    width: 100%;
+    margin-top: 20px;
+}
+
+.library-modal-delete {
+    margin-top: 24px;
+}
