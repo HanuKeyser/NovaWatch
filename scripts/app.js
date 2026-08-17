@@ -87,13 +87,12 @@ let state = {
     // watch" lookups. null until detectDefaultRegion() runs on first sign-in
     // or an existing profile doc is loaded - see proceedToApp().
     region: null,
-    // Default for a brand-new profile before Firestore loads - overwritten
-    // by the saved value from the user's profile doc once it loads (see
-    // profilePromise in the auth state handler), or set true via
-    // confirmPremiumPaymentManually() in Settings > Premium. Currently
-    // gates premium achievements (see ACHIEVEMENTS/PREMIUM_ACHIEVEMENTS);
-    // deeper Wrapped detail and avatar upload are planned to check this
-    // same flag once those features themselves exist.
+    // Placeholder until real subscription/billing infrastructure exists.
+    // Hardcoded false for now - this is the single flag every premium-gated
+    // feature (extra profiles, deeper Wrapped, premium achievements, avatar
+    // upload once Blaze is in use) should check, so wiring up real payment
+    // status later is a one-line change here rather than touching every
+    // feature individually.
     isPremiumUser: false
 };
 
@@ -287,10 +286,10 @@ async function selectAvatar(avatarId) {
    Only the small unlockedAchievements ID array on the profile is written,
    so a milestone doesn't re-trigger its unlock toast on every reload.
 
-   Premium achievements (PREMIUM_ACHIEVEMENTS below) are merged back into
-   the active list right after both arrays are declared - kept as a
-   separate array rather than inlined into ACHIEVEMENTS directly so the
-   free/premium split stays easy to see at a glance.
+   Premium achievements are pulled out for now (not shown, not checked) -
+   kept in PREMIUM_ACHIEVEMENTS below rather than deleted, so they're a
+   one-line change (append them back into ACHIEVEMENTS) once premium is
+   actually ready to launch.
 ========================================================= */
 const ACHIEVEMENTS = [
     { id: 'movies_10', tier: 'free', title: '10 Movies Watched', description: 'Watch 10 movies.', check: (s) => s.moviesWatched >= 10 },
@@ -299,8 +298,10 @@ const ACHIEVEMENTS = [
     { id: 'first_rewatch', tier: 'free', title: 'First Rewatch', description: 'Log your first rewatch.', check: (s) => s.totalRewatches >= 1 }
 ];
 
-// Merged into ACHIEVEMENTS right below - see the comment in the header
-// block above.
+// Not currently active - see comment block above. Untouched otherwise so
+// re-enabling later is just `ACHIEVEMENTS.push(...PREMIUM_ACHIEVEMENTS)`
+// (or folding this list back into ACHIEVEMENTS directly) once
+// state.isPremiumUser is backed by real subscription status.
 const PREMIUM_ACHIEVEMENTS = [
     { id: 'movies_50', tier: 'premium', title: '50 Movies Watched', description: 'Watch 50 movies.', check: (s) => s.moviesWatched >= 50 },
     { id: 'movies_100', tier: 'premium', title: '100 Movies Watched', description: 'Watch 100 movies.', check: (s) => s.moviesWatched >= 100 },
@@ -312,11 +313,6 @@ const PREMIUM_ACHIEVEMENTS = [
     { id: 'cleared_watchlist', tier: 'premium', title: 'Cleared Your Watchlist', description: 'Watch everything currently in your library.', check: (s) => s.clearedWatchlist },
     { id: 'same_week_finish', tier: 'premium', title: 'Binge Finisher', description: 'Finish a show within a week of starting it.', check: (s) => s.sameWeekFinish }
 ];
-
-// Premium is live (manual Peach Payment Link + self-report, see
-// syncPremiumUI() etc. below) - folding the premium tier back into the
-// active list, exactly as the comment above anticipated.
-ACHIEVEMENTS.push(...PREMIUM_ACHIEVEMENTS);
 
 function computeAchievementStats() {
     let moviesWatched = 0;
@@ -1065,8 +1061,7 @@ async function saveUserProfile() {
             .set({
                 profiles: state.profiles,
                 activeProfileId: state.activeProfileId,
-                region: state.region,
-                isPremiumUser: state.isPremiumUser
+                region: state.region
             }, { merge: true });
         return true;
     } catch (err) {
@@ -2450,59 +2445,6 @@ function syncRegionUI() {
     });
 }
 
-/* =========================================================
-   PREMIUM (Peach Payments via a manually-created Payment Link)
-   Deliberately no backend involved - Peach's API credentials can't
-   safely live in this app's client-side code, and there's no server
-   here to hold them instead. Peach's Dashboard can generate a
-   shareable Payment Link with zero API/backend work, which is what
-   PEACH_PAYMENT_LINK_URL below points at.
-   The real trade-off: nothing here actually verifies a payment
-   happened. confirmPremiumPaymentManually() is a plain self-report -
-   fine while it's just the developer/early testers, genuinely not
-   fine once real strangers can sign up and self-grant Premium for
-   free. The proper fix (a Cloud Function verifying Peach's webhook
-   signature before ever setting isPremiumUser) is a deliberately
-   deferred, separate piece of work - see the README.
-========================================================= */
-
-// Replace with the actual Payment Link URL from the Peach Payments
-// Dashboard (Payment Links section) once created - this is a manually
-// generated link, not something fetched via their API.
-const PEACH_PAYMENT_LINK_URL = "https://pay.peachpayments.com/REPLACE_WITH_YOUR_LINK";
-
-function syncPremiumUI() {
-    const upsell = document.getElementById("premiumUpsellSection");
-    const active = document.getElementById("premiumActiveState");
-    if (!upsell || !active) return;
-
-    upsell.style.display = state.isPremiumUser ? "none" : "block";
-    active.style.display = state.isPremiumUser ? "block" : "none";
-}
-
-function openPeachPaymentLink() {
-    window.open(PEACH_PAYMENT_LINK_URL, "_blank");
-}
-
-async function confirmPremiumPaymentManually() {
-    state.isPremiumUser = true;
-    syncPremiumUI();
-
-    const saved = await saveUserProfile();
-    if (saved) {
-        showToast("Premium unlocked - thank you!", "success");
-    } else {
-        showToast("Premium unlocked on this device, but couldn't save to your account. Try again once you're back online.", "error");
-    }
-
-    // Premium achievements were built but held back specifically until
-    // isPremiumUser meant something real (see the comment above
-    // PREMIUM_ACHIEVEMENTS) - re-check now in case unlocking Premium
-    // just retroactively qualified for any of them (e.g. already has
-    // 50+ movies watched).
-    checkAchievements();
-}
-
 function openRegionPicker() {
     // Always open to the full, unfiltered list rather than wherever a
     // previous search was left - avoids "why can't I see all countries"
@@ -2932,7 +2874,6 @@ async function proceedToApp(user, authScreen, mainApp) {
                         await saveUserProfile();
                     }
                     syncRegionUI();
-                    syncPremiumUI();
                 })();
 
                 const libraryPromise = (async () => {
