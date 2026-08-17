@@ -51,7 +51,10 @@ const TMDB_API_KEY = "c8dc4239290060d91afd45c40d8182b7";
 const NOVAWATCH_APP_URL = window.location.origin + "/";
 
 // Remembers which top-level tab (Home / Discover / Library) the user was
-// last on, so reloading the app doesn't always dump them back on Home.
+// last on. Currently write-only: saveLastTab() persists it on every tab
+// switch, but nothing reads it back on load (the app always opens on
+// Home) - kept as-is rather than wired up, since restoring the last tab
+// on launch wasn't asked for.
 const LAST_ACTIVE_TAB_KEY = "novawatch_last_tab";
 
 function saveLastTab(page) {
@@ -59,15 +62,6 @@ function saveLastTab(page) {
         localStorage.setItem(LAST_ACTIVE_TAB_KEY, page);
     } catch (e) {
         // Private browsing / storage disabled - not worth failing over.
-    }
-}
-
-function getLastTab() {
-    try {
-        const saved = localStorage.getItem(LAST_ACTIVE_TAB_KEY);
-        return ['home', 'discover', 'library', 'upcoming'].includes(saved) ? saved : 'home';
-    } catch (e) {
-        return 'home';
     }
 }
 
