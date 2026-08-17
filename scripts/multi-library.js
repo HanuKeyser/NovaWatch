@@ -119,6 +119,15 @@ async function initMultiLibrary(uid, displayName) {
         state.libraries = librariesSnap.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+        // A library doc existing is NOT proof the migration that created
+        // it actually finished - if the very first migration ever got
+        // interrupted (tab closed, connection dropped, page reloaded)
+        // between creating this library and finishing the move, the old
+        // fashioned collections here checks for that leftover data every
+        // time from here on, and finishes the move into the first
+        // library instead of leaving it stranded and unreadable forever.
+        await resumeInterruptedLegacyMigration(uid, state.libraries[0].id);
     }
 
     // Figure out which library should open. Prefer whatever was saved as
@@ -145,6 +154,60 @@ async function initMultiLibrary(uid, displayName) {
     state.activeLibraryId = activeId;
 }
 
+// Batched copy-then-delete from one collection into another, 400 docs at
+// a time (Firestore batches top out at 500 ops; each doc here is 1 set +
+// 1 delete). Each batch is atomic, so a doc is never deleted from the
+// source without its copy having already committed at the destination in
+// that same batch - what can happen is the WHOLE OPERATION getting
+// interrupted between batches (tab closed mid-migration, connection
+// drops), leaving some docs moved and some still sitting at the source.
+// Nothing is ever lost either way, just possibly split across both
+// locations until whichever of migrateLegacyLibraryData() or
+// resumeInterruptedLegacyMigration() next gets a chance to finish it.
+async function moveCollection(oldRef, newRef) {
+    const snap = await oldRef.get();
+    if (snap.empty) return;
+    const BATCH_LIMIT = 400;
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+        const batch = db.batch();
+        docs.slice(i, i + BATCH_LIMIT).forEach(doc => {
+            batch.set(newRef.doc(doc.id), doc.data());
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+    }
+}
+
+// Runs on every sign-in for an account that already has at least one
+// library (so migrateLegacyLibraryData() itself was skipped) - checks
+// whether the old flat users/{uid}/library or users/{uid}/archivedShows
+// collections still have anything in them, and if so, finishes moving it
+// into the first library rather than leaving it invisible to the app
+// forever. Cheap on every normal load (two 1-doc reads that come back
+// empty) - only does real work the rare time it finds something.
+async function resumeInterruptedLegacyMigration(uid, targetLibraryId) {
+    try {
+        const legacyItemsSnap = await db.collection("users").doc(uid).collection("library").limit(1).get();
+        if (!legacyItemsSnap.empty) {
+            console.warn("Found leftover pre-migration library items - resuming an interrupted migration.");
+            await moveCollection(
+                db.collection("users").doc(uid).collection("library"),
+                getLibraryItemsRef(uid, targetLibraryId)
+            );
+        }
+        const legacyArchivedSnap = await db.collection("users").doc(uid).collection("archivedShows").limit(1).get();
+        if (!legacyArchivedSnap.empty) {
+            await moveCollection(
+                db.collection("users").doc(uid).collection("archivedShows"),
+                getLibraryArchivedRef(uid, targetLibraryId)
+            );
+        }
+    } catch (err) {
+        console.error("Resuming an interrupted legacy migration failed:", err);
+    }
+}
+
 // Runs exactly once per account, the first time initMultiLibrary() finds
 // no libraries subcollection yet. Creates the default "My Library" and
 // moves every existing item out of the old flat users/{uid}/library and
@@ -159,23 +222,7 @@ async function migrateLegacyLibraryData(uid, displayName) {
     };
     await defaultLibraryRef.set(defaultLibrary);
 
-    async function moveCollection(oldRef, newRef) {
-        const snap = await oldRef.get();
-        if (snap.empty) return;
-        const BATCH_LIMIT = 400; // Firestore batches top out at 500 ops;
-                                  // each doc here is 1 set + 1 delete, so
-                                  // 400 docs per batch stays safely under.
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
-            const batch = db.batch();
-            docs.slice(i, i + BATCH_LIMIT).forEach(doc => {
-                batch.set(newRef.doc(doc.id), doc.data());
-                batch.delete(doc.ref);
-            });
-            await batch.commit();
-        }
-    }
-
+    let migrationFailed = false;
     try {
         await moveCollection(
             db.collection("users").doc(uid).collection("library"),
@@ -189,14 +236,26 @@ async function migrateLegacyLibraryData(uid, displayName) {
         // The default library doc itself was already created successfully
         // above, so the account is never left without a library even if
         // the migration copy fails partway - worst case some legacy items
-        // are still sitting in the old flat collection and need a retry,
-        // never data loss of the library itself.
+        // are still sitting in the old flat collection, and
+        // resumeInterruptedLegacyMigration() above will pick up and
+        // finish moving them the next time this account signs in.
         console.error("Legacy library migration failed partway through:", err);
+        migrationFailed = true;
     }
 
     state.libraries = [{ id: defaultLibraryRef.id, ...defaultLibrary }];
     state.activeLibraryId = defaultLibraryRef.id;
     await db.collection("users").doc(uid).set({ activeLibraryId: defaultLibraryRef.id }, { merge: true });
+
+    // This whole migration is silent by design on the happy path (it runs
+    // automatically, once, with no setup screen - see the Multi-Library
+    // README section) - but that means a failure would otherwise be
+    // invisible too, sitting only in the console. Surfacing it here means
+    // "why is my library empty" has an actual on-screen answer instead of
+    // requiring devtools to notice anything went wrong.
+    if (migrationFailed) {
+        showToast("Some library data couldn't be moved to the new library system - it's still safe, and will finish moving automatically next time.", "error");
+    }
 }
 
 /* =========================================================
@@ -457,6 +516,21 @@ function toggleLibraryScreenEditMode() {
 function renderLibrarySelectionScreen() {
     const grid = document.getElementById("libraryScreenGrid");
     if (!grid) return;
+
+    // Hero image: the most recently added item in whichever library is
+    // currently loaded into state.library, same "recently added" sort
+    // app.js already uses elsewhere (addedAt, newest first). Falls back
+    // to the plain brand gradient (see .library-screen-backdrop in
+    // multi-library.css) once there's nothing to pull a photo from -
+    // clearing the inline style lets that CSS fallback show through.
+    const backdropEl = document.getElementById("libraryScreenBackdrop");
+    if (backdropEl) {
+        const withBackdrop = [...state.library]
+            .filter(item => item.backdrop || item.poster)
+            .sort((a, b) => new Date(b.addedAt || 0) - new Date(a.addedAt || 0));
+        const heroImage = withBackdrop[0] ? (withBackdrop[0].backdrop || withBackdrop[0].poster) : null;
+        backdropEl.style.backgroundImage = heroImage ? `url('${heroImage}')` : '';
+    }
 
     const cards = state.libraries.map(lib => {
         const avatar = AVATAR_OPTIONS.find(a => a.id === lib.avatarId);
