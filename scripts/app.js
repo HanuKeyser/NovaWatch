@@ -3838,18 +3838,21 @@ function positionNavIndicatorAt(btn) {
 window.addEventListener("resize", () => updateNavIndicator(false));
 
 // Lets a finger land anywhere on the bar and drag across to the desired
-// tab, rather than needing a precise tap on the right button - the pill
-// live-follows the finger (snapping button-to-button as it crosses each
-// one) and commits the navigation only on release, via that button's own
-// existing onclick. A plain tap (no meaningful horizontal movement) is
-// left completely alone, so ordinary single-tap navigation is unaffected.
+// tab - the pill tracks the raw finger position continuously, in real
+// time (every pointermove, not just when crossing into a new button),
+// so the motion is genuinely visible throughout the whole gesture rather
+// than the pill sitting still and then jumping. It keeps a fixed width
+// while dragging and only resizes/settles into the target button's exact
+// bounds once released - which is also where navigation commits, via
+// that button's own existing onclick. A plain tap (no meaningful
+// horizontal movement) is left completely alone.
 function initNavBarDragToSwitch() {
     const nav = document.querySelector(".bottom-nav");
     const indicator = document.getElementById("navIndicator");
     if (!nav || !indicator) return;
 
     const DRAG_THRESHOLD = 10;
-    let startX = 0, startY = 0, dragging = false, pointerId = null, draggedOverButton = null;
+    let startX = 0, startY = 0, dragging = false, pointerId = null, draggedOverButton = null, dragWidth = 0;
 
     nav.addEventListener("pointerdown", (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -3871,25 +3874,30 @@ function initNavBarDragToSwitch() {
             if (Math.abs(dx) < DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
             dragging = true;
             nav.setPointerCapture(pointerId);
-            // A short, eased transition during the drag - not none - is
-            // what actually makes this read as the pill gliding smoothly
-            // from button to button instead of teleporting between them.
-            // A fast swipe across several buttons in a row still reads as
-            // one continuous glide rather than a series of jumps, since a
-            // new target retargets the transition already in progress
-            // instead of restarting it (standard CSS transition
-            // interruption behavior). The subtle scale/shadow lift below
-            // is a small tactile "you're holding this now" cue, settling
-            // back to normal on release.
-            indicator.style.transition = "transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), width 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease";
+            // Zero transition lag during the drag itself - the pill has
+            // to track the finger in real time for the motion to actually
+            // read as continuous dragging rather than snapping between
+            // rest points. The eased "settle" transition is restored in
+            // finishDrag() below, once, for the release animation only.
+            indicator.style.transition = "none";
             indicator.classList.add("dragging");
+            dragWidth = indicator.getBoundingClientRect().width;
         }
+
+        const navRect = nav.getBoundingClientRect();
+        // The pill's left edge follows the raw finger x-position directly
+        // (centered under it), clamped so it can't run outside the bar -
+        // updated on every pointermove, not just when crossing into a
+        // different button, so it's always visibly moving with the finger.
+        const rawX = e.clientX - navRect.left - (dragWidth / 2);
+        const clampedX = Math.max(0, Math.min(rawX, navRect.width - dragWidth));
+        indicator.style.width = `${dragWidth}px`;
+        indicator.style.transform = `translateX(${clampedX}px)`;
 
         const hit = document.elementFromPoint(e.clientX, e.clientY);
         const btn = hit ? hit.closest(".nav-button") : null;
-        if (btn && btn !== draggedOverButton && nav.contains(btn)) {
+        if (btn && nav.contains(btn)) {
             draggedOverButton = btn;
-            positionNavIndicatorAt(btn);
         }
     });
 
@@ -3898,11 +3906,10 @@ function initNavBarDragToSwitch() {
 
         if (dragging) {
             indicator.classList.remove("dragging");
-            // Reset back to the default (CSS-defined, slower) settle
-            // transition before the click below triggers showPage() ->
-            // updateNavIndicator() - otherwise that final settle into the
-            // confirmed active button would inherit this drag's faster
-            // transition instead of the intended one.
+            // Restore the default (CSS-defined, eased) transition now
+            // that the raw 1:1 tracking is done - this is what animates
+            // the pill's final snap into its confirmed resting position,
+            // whether that's via the click below or the fallback reset.
             indicator.style.transition = "";
             if (draggedOverButton) {
                 e.preventDefault();
