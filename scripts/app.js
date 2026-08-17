@@ -67,6 +67,12 @@ function saveLastTab(page) {
 
 let state = {
     library: [],
+    // Populated by initMultiLibrary() in multi-library.js on sign-in;
+    // libraries: [{ id, name, avatarId, createdAt }], activeLibraryId:
+    // whichever of those is currently open. Seeded empty/null here just
+    // so nothing reads them as undefined before that first runs.
+    libraries: [],
+    activeLibraryId: null,
     profiles: [
         {
             id: "profile-guest",
@@ -919,11 +925,9 @@ async function saveItem(item) {
             return false;
         }
 
-        await db.collection("users")
-            .doc(auth.currentUser.uid)
-            .collection("library")
-            .doc(item.id)
-            .set(item, { merge: true });
+        const itemsRef = getActiveLibraryItemsRef();
+        if (!itemsRef) return false;
+        await itemsRef.doc(item.id).set(item, { merge: true });
         return true;
     } catch (err) {
         console.error(`Firestore save item ${item.id} FAILED`, err);
@@ -939,7 +943,8 @@ async function saveUserProfile() {
             .set({
                 profiles: state.profiles,
                 activeProfileId: state.activeProfileId,
-                region: state.region
+                region: state.region,
+                activeLibraryId: state.activeLibraryId
             }, { merge: true });
         return true;
     } catch (err) {
@@ -1331,29 +1336,15 @@ async function reauthenticateCurrentUser(user) {
 }
 
 // Firestore doesn't cascade-delete a subcollection when its parent
-// document is deleted, so the library subcollection has to be cleared out
-// document-by-document (batched, since a batch write tops out at 500 ops).
-// Deletes every trace of the user's library data - both the live library
-// and any archived watch history left behind by removeLibraryItem (see
-// there) for shows that were removed but not permanently deleted. The
+// document is deleted, so every library's data has to be cleared out
+// document-by-document (batched, since a batch write tops out at 500
+// ops) - see deleteAllLibrariesData() in multi-library.js, which loops
+// every library on the account (not just the currently active one) and
+// clears its items + archivedShows + the library doc itself. The
 // Privacy Notice promises "all associated library data" goes with the
-// account, so both collections have to go, not just the visible one.
+// account, so every library has to go, not just whichever one was open.
 async function deleteAllUserData(uid) {
-    const BATCH_LIMIT = 400;
-
-    async function deleteCollection(collectionName) {
-        const snap = await db.collection("users").doc(uid).collection(collectionName).get();
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
-            const batch = db.batch();
-            docs.slice(i, i + BATCH_LIMIT).forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-        }
-    }
-
-    await deleteCollection("library");
-    await deleteCollection("archivedShows");
-
+    await deleteAllLibrariesData(uid);
     await db.collection("users").doc(uid).delete().catch(() => {});
 }
 
@@ -2615,10 +2606,11 @@ function dedupeAndCleanLibrary(rawLibrary, uid) {
         // trip that rather than letting one bad legacy id abort the batch.
         const deletableIds = staleIds.filter(id => typeof id === 'string' && id.length > 0 && !id.includes('/'));
 
-        if (deletableIds.length > 0 && uid && db) {
+        const itemsRef = uid ? getLibraryItemsRef(uid, state.activeLibraryId) : null;
+        if (deletableIds.length > 0 && itemsRef) {
             const batch = db.batch();
             deletableIds.forEach(id => {
-                batch.delete(db.collection("users").doc(uid).collection("library").doc(id));
+                batch.delete(itemsRef.doc(id));
             });
             batch.commit().catch(err => console.error("Failed to clean up stale library entries:", err));
         }
@@ -2658,6 +2650,12 @@ if (auth) {
 
             // Clear local state
             state.library = [];
+            state.libraries = [];
+            state.activeLibraryId = null;
+            if (activeLibraryUnsubscribe) {
+                activeLibraryUnsubscribe();
+                activeLibraryUnsubscribe = null;
+            }
             libraryLoaded = false;
             document.getElementById("homeName").textContent = "Guest";
             const homeEmailSubtitleEl = document.getElementById("homeEmailSubtitle");
@@ -2722,11 +2720,17 @@ async function proceedToApp(user, authScreen, mainApp) {
             if (!openedSharedItem) openShortcutTabFromURL();
 
             try {
-                // The profile doc and the library collection are independent
-                // reads - fetching them in parallel rather than one after
-                // the other roughly halves the wait before Home has real
-                // data to show, instead of paying for two round trips
-                // back to back.
+                // Determines state.libraries + state.activeLibraryId - runs
+                // the one-time legacy migration into the default "My
+                // Library" if this account predates the multi-library
+                // feature. See multi-library.js.
+                await initMultiLibrary(user.uid, displayName);
+
+                // The profile doc and the active library's items are
+                // independent reads - fetching them in parallel rather than
+                // one after the other roughly halves the wait before Home
+                // has real data to show, instead of paying for two round
+                // trips back to back.
                 const profilePromise = (async () => {
                     const userDoc = await db.collection("users").doc(user.uid).get();
                     if (userDoc.exists) {
@@ -2754,37 +2758,20 @@ async function proceedToApp(user, authScreen, mainApp) {
                     syncRegionUI();
                 })();
 
-                const libraryPromise = (async () => {
-                    // Fetch Personal Library with error handling
-                    let cloudLibrary = [];
-                    try {
-                        const librarySnapshot = await db.collection("users")
-                            .doc(user.uid)
-                            .collection("library")
-                            .get();
-
-                        librarySnapshot.forEach(doc => {
-                            if (doc.exists) cloudLibrary.push(doc.data());
-                        });
-                    } catch (fetchErr) {
-                        console.warn("Could not fetch library from server, trying cache:", fetchErr);
-                        // Attempt to fetch from local firestore cache if offline
-                        try {
-                            const cachedSnapshot = await db.collection("users")
-                                .doc(user.uid)
-                                .collection("library")
-                                .get({ source: 'cache' });
-                            cachedSnapshot.forEach(doc => {
-                                if (doc.exists) cloudLibrary.push(doc.data());
-                            });
-                        } catch (cacheErr) {
-                            console.error("Cache fetch also failed:", cacheErr);
-                        }
-                    }
-                    return cloudLibrary;
-                })();
+                const libraryPromise = fetchActiveLibraryItems(user.uid);
 
                 const [, cloudLibrary] = await Promise.all([profilePromise, libraryPromise]);
+
+                // The profile read above can bring back a stale
+                // activeLibraryId (e.g. the doc still had one from a
+                // library that's since been deleted) - initMultiLibrary
+                // already validated it once before this ran, but the
+                // profilePromise's state spread happens afterward, so
+                // re-check here rather than risk switching state.library
+                // and this activeLibraryId out of sync with each other.
+                if (!state.libraries.some(l => l.id === state.activeLibraryId)) {
+                    state.activeLibraryId = state.libraries[0] ? state.libraries[0].id : null;
+                }
 
                 let dedupedLibrary = cloudLibrary;
                 try {
@@ -2800,6 +2787,7 @@ async function proceedToApp(user, authScreen, mainApp) {
                 }
                 
                 libraryLoaded = true;
+                renderLibrarySwitcherPill();
                 refreshActivePage();
 
                 // If this session was opened via a shared show/movie link,
@@ -2812,42 +2800,8 @@ async function proceedToApp(user, authScreen, mainApp) {
                 // Trigger Background Updates & Notifications
                 await checkLibraryForUpdates();
 
-                // Listen for real-time changes
-                db.collection("users")
-                    .doc(user.uid)
-                    .collection("library")
-                    .onSnapshot((snapshot) => {
-                        let updatedLibrary = [...state.library];
-
-                        snapshot.docChanges().forEach((change) => {
-                            const itemData = change.doc.data();
-                            if (!itemData || !itemData.id) return;
-
-                            // Never let a stray "preview" doc, or a broken
-                            // stub missing fields the real add flow always
-                            // sets, back into the live library - see
-                            // dedupeAndCleanLibrary above.
-                            const isBrokenStub = !itemData.type
-                                || itemData.title === undefined
-                                || itemData.description === undefined
-                                || (itemData.type !== 'movie' && itemData.episodes === undefined)
-                                || (itemData.type !== 'movie' && Array.isArray(itemData.episodes) && itemData.episodes.length === 0 && !itemData.numberOfSeasons && !itemData.poster)
-                                || (itemData.type === 'movie' && !itemData.poster && !itemData.backdrop && !itemData.runtime);
-                            if (itemData.isPreview || itemData.id.startsWith('preview-') || isBrokenStub) return;
-
-                            const index = updatedLibrary.findIndex(i => i.id === itemData.id);
-
-                            if (change.type === "added" || change.type === "modified") {
-                                if (index !== -1) updatedLibrary[index] = itemData;
-                                else updatedLibrary.push(itemData);
-                            } else if (change.type === "removed") {
-                                if (index !== -1) updatedLibrary.splice(index, 1);
-                            }
-                        });
-
-                        state.library = updatedLibrary;
-                        refreshActivePage();
-                    });
+                // Listen for real-time changes on the active library.
+                subscribeToActiveLibrary(user.uid);
             } catch (err) {
                 console.error("Error fetching cloud data:", err);
                 showToast("Library sync failed.", "error");
@@ -3330,9 +3284,10 @@ async function importMediaData(id, type, buttonElement) {
             // for it now so a re-add can restore watched episodes instead
             // of starting the show over from scratch.
             let archivedShow = null;
-            if (auth && auth.currentUser && db) {
+            const archivedRef = getActiveLibraryArchivedRef();
+            if (archivedRef) {
                 try {
-                    const archivedDoc = await db.collection("users").doc(auth.currentUser.uid).collection("archivedShows").doc(slug).get();
+                    const archivedDoc = await archivedRef.doc(slug).get();
                     if (archivedDoc.exists) archivedShow = archivedDoc.data();
                 } catch (err) {
                     console.warn("Failed to check for archived watch history:", err);
@@ -3422,11 +3377,14 @@ async function importMediaData(id, type, buttonElement) {
             // The restore is complete now that the show is back in the
             // live library - clear the archive entry so it doesn't linger
             // as a stale duplicate of what's now the real item.
-            if (archivedShow && auth && auth.currentUser && db) {
-                try {
-                    await db.collection("users").doc(auth.currentUser.uid).collection("archivedShows").doc(slug).delete();
-                } catch (err) {
-                    console.warn("Failed to clear archived watch history after restore:", err);
+            if (archivedShow) {
+                const restoredArchivedRef = getActiveLibraryArchivedRef();
+                if (restoredArchivedRef) {
+                    try {
+                        await restoredArchivedRef.doc(slug).delete();
+                    } catch (err) {
+                        console.warn("Failed to clear archived watch history after restore:", err);
+                    }
                 }
             }
 
@@ -5862,12 +5820,14 @@ async function markShowStoppedById(id) {
 // still deleted outright, same as before.
 async function removeLibraryItem(item) {
     if (auth && auth.currentUser && db) {
-        const uid = auth.currentUser.uid;
+        const itemsRef = getActiveLibraryItemsRef();
+        const archivedRef = getActiveLibraryArchivedRef();
+        if (!itemsRef || !archivedRef) return false;
         try {
             if (item.type !== 'movie') {
-                await db.collection("users").doc(uid).collection("archivedShows").doc(item.id).set(item);
+                await archivedRef.doc(item.id).set(item);
             }
-            await db.collection("users").doc(uid).collection("library").doc(item.id).delete();
+            await itemsRef.doc(item.id).delete();
             return true;
         } catch (err) {
             console.error("Failed to remove item:", err);
