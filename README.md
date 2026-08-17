@@ -66,7 +66,6 @@ Currently on the **free Spark plan**. This is a real constraint on the feature s
 ### Deliberately not built
 
 A few things were tried or considered and explicitly ruled out:
-- **PWA install shortcuts** — declined.
 - **Calendar/.ics export** — tried in an earlier version, didn't like it, not revisiting.
 - **Per-user private ratings** — moving to a combined/community rating (all users' ratings averaged per title) instead.
 - **Emoji-reaction popups on marking watched** — a TV Time pain point; deliberately avoided to keep "mark as watched" a single, frictionless tap.
@@ -114,6 +113,21 @@ If nav visibility or tab-switching problems persist after this fix, they're not 
 The same full-perimeter-ring-reads-as-a-border issue found on the nav bar (bug #2 above) turned out to still be present in the *shared* `--glass-chrome-shadow` token itself (both light and dark), so every consumer of it still looked bordered even after the nav bar was fixed - removed there too, plus the matching literal borders on `.toast` and the ring on `.search-type-btn.active`, and the same border+ring combo on `.continue-card` (Home's Continue Watching cards, the next most visible glass surface after nav). `.search-box input` deliberately keeps its border - that one does real work as a focus-state indicator on a form field, not just decoration, so it stayed.
 
 Other things flagged as ideas but not committed to a slot: all-time/lifetime stats page, a "time to finish" estimator, custom watch statuses (Plan to Watch/On Hold/Dropped), a household activity view (once profiles exist), Discover genre/mood filters, home/lock-screen widgets (would require going native).
+
+---
+
+## Dead-code sweep + README correction
+
+**Removed genuinely unused code**, confirmed zero references anywhere (`app.js`, `index.html`, `privacy-terms/index.html`) before deleting:
+- `getTheme()`'s superseded duplicate: `setTheme()` was defined twice in `app.js` - a stale two-way (light/dark only) version left in place from before the Light/Dark/Auto rework, silently shadowed by the real three-way version defined right after it. Removed the dead copy.
+- `getLastTab()` - read `novawatch_last_tab` from `localStorage` but was never called anywhere; the app always lands on Home regardless. `saveLastTab()` (which writes that key on every tab switch) is still called and was left in place, since removing a write half of a pair isn't the same "unused code" as removing a function nobody calls - just annotated as currently write-only.
+- Seven CSS rules in `app.css` with zero matching usage anywhere: `.tab-nav-footer`, `.footer-browse-button` (+ its `:active` state), `.horizontal-row`, `.spinner-container`, `.home-card`, `.home-row`, `.auth-footer-sep`.
+
+**Left alone on purpose:** `--surface-3` in `tokens.css` is unused (0 references), but it's one rung of a deliberate `--surface`/`--surface-2`/`--surface-3` depth scale defined in parallel across both light and dark blocks, not a leftover from a removed feature - reserved for future use rather than deleted.
+
+Bumped `service-worker.js`'s `CACHE_NAME` (since `app.js`/`app.css` both changed) and re-ran the full validation sweep (JS syntax, CSS brace balance, HTML tag balance, no duplicate IDs, every `onclick` resolves, every CSS class/variable resolves) - all clean.
+
+**Corrected a real README inaccuracy:** the "Deliberately not built" list still said PWA install shortcuts were declined, but they were reversed and implemented in the 7-request round documented further down this same file (`manifest.json`'s `shortcuts` array, `openShortcutTabFromURL()` in `app.js`) - removed the stale bullet so the two sections stop contradicting each other. Also updated the `app.js` line-count estimate below (was ~5,500, actually ~6,000).
 
 ---
 
@@ -185,6 +199,6 @@ Deferred at the user's request until the app has revenue to justify the ~$99/yea
 
 ---
 
-This file has grown a lot in one sitting (`app.js` alone is ~5,500 lines). A few things worth watching as it keeps growing:
+This file has grown a lot in one sitting (`app.js` alone is ~6,000 lines). A few things worth watching as it keeps growing:
 - The `openDetails()` mishap (a routine edit briefly deleted its own function declaration, caught by a syntax check before shipping) is a preview of the kind of mistake that gets more likely as a single file gets larger. If a feature area gets substantial enough (achievements, sharing, the sync logic), consider whether it's ready to be its own module.
 - `privacy-terms/index.html` keeps its own copies of a handful of component classes it borrows from `app.css`'s visual language (`.analytics-card`, `.section-title`, `.settings-section-title`, `.section-header` - used to give it the same "stack of cards with labels" structure as Settings and NovaWrapped, instead of the one-big-document-card layout it used to have). That's a deliberate, contained exception - full `app.css` isn't linked there because its global `body`/`h1`/`a` rules are tuned for the app shell and risk leaking onto this page's own layout in ways that are hard to verify without live testing. If any of those four classes change in `app.css`, this page's copies need updating too. `tokens.css` (the actual colors/palette) staying singular is what matters most - that's what caused the real sync bugs earlier.
