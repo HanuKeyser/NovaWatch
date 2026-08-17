@@ -97,30 +97,6 @@ let state = {
 };
 
 /* =========================================================
-   THEME (LIGHT / DARK)
-   Applied via a data-theme attribute on <html>, which the dark-mode CSS
-   block keys off - see the inline head script for the same logic applied
-   synchronously before first paint. Stored in localStorage rather than
-   Firestore since it's a device-level display preference, not account
-   data, and this way it costs nothing extra against the free Spark plan.
-========================================================= */
-function setTheme(theme) {
-    if (theme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-        document.documentElement.removeAttribute('data-theme');
-    }
-    try {
-        localStorage.setItem('novawatch-theme', theme);
-    } catch (e) { /* localStorage unavailable - theme just won't persist */ }
-
-    const metaTheme = document.getElementById('metaThemeColor');
-    if (metaTheme) metaTheme.setAttribute('content', theme === 'dark' ? '#000000' : '#F3F4F9');
-
-    syncThemeToggleUI();
-}
-
-/* =========================================================
    THEME (LIGHT / DARK / AUTO)
    Applied via a data-theme attribute on <html>, which the dark-mode CSS
    block keys off - see the inline head script for the same logic applied
