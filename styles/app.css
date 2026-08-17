@@ -127,37 +127,6 @@ img {
     letter-spacing: -0.6px;
 }
 
-.tab-nav-footer {
-    margin-top: 12px;
-    padding-top: 20px;
-    border-top: 1px solid var(--glass-border-subtle);
-    display: flex;
-    justify-content: center;
-}
-
-.footer-browse-button {
-    width: 100%;
-    min-height: 52px;
-    padding: 0 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    border-radius: var(--radius-sm);
-    background: var(--glass-sheen), var(--surface);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid var(--glass-border);
-    color: var(--blue);
-    font-size: 14px;
-    font-weight: 700;
-    box-shadow: var(--glass-shadow-sm);
-}
-
-.footer-browse-button:active {
-    transform: scale(0.98);
-}
-
 .category-block {
     margin-bottom: 28px;
 }
@@ -393,13 +362,6 @@ img {
 /* =========================================================
    HORIZONTAL ROW & CARDS
 ========================================================= */
-.horizontal-row {
-    display: flex;
-    gap: 14px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-}
-
 .card {
     flex: 0 0 126px;
     width: 126px;
@@ -903,12 +865,6 @@ img {
     border: 1px solid rgba(52, 199, 89, 0.3);
     box-shadow: none;
     cursor: default;
-}
-
-.spinner-container {
-    display: flex;
-    justify-content: center;
-    padding: 40px 0;
 }
 
 .spinner {
@@ -2410,22 +2366,6 @@ html[data-theme="dark"] .modal-sheet-compact {
     overflow-y: auto;
 }
 
-.home-card {
-    padding: 22px;
-    background: var(--surface);
-    backdrop-filter: blur(35px) saturate(180%);
-    -webkit-backdrop-filter: blur(35px) saturate(180%);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius);
-    box-shadow: var(--glass-shadow);
-}
-
-.home-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
 .avatar-edit-wrap {
     position: relative;
     flex-shrink: 0;
@@ -2676,11 +2616,6 @@ html[data-theme="dark"] .avatar-edit-badge {
     justify-content: center;
     gap: 8px;
     margin-top: 12px;
-}
-
-.auth-footer-sep {
-    color: var(--text-muted);
-    font-size: 12px;
 }
 
 /* =========================================================
