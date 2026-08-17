@@ -1524,11 +1524,12 @@ html[data-theme="dark"] .modal-sheet-compact {
     position: relative;
 }
 
-/* Same-origin sub-pages (NovaWrapped, etc.) loaded inside a full-screen
-   iframe instead of a top-level navigation - see #pageOverlayModal. The
-   iframe owns its own scrolling, so the wrapping .modal-sheet is set to
-   overflow: hidden inline where this is used, to avoid a double
-   scrollbar. */
+/* Same-origin sub-pages (currently just Privacy & Terms - NovaWrapped
+   was migrated from its own page into a plain in-app modal, so it no
+   longer uses this) loaded inside a full-screen iframe instead of a
+   top-level navigation - see #pageOverlayModal. The iframe owns its own
+   scrolling, so the wrapping .modal-sheet is set to overflow: hidden
+   inline where this is used, to avoid a double scrollbar. */
 .page-overlay-frame {
     width: 100%;
     height: 100%;
