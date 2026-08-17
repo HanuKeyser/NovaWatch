@@ -657,6 +657,63 @@
                 </div>
             </div>
 
+            <!-- =====================================================
+                 PREMIUM
+                 Peach Payments via a Payment Link (created manually in
+                 the Peach dashboard, not via their API) - deliberately
+                 no backend involved, since their API credentials can't
+                 safely live in client-side code and there's no server
+                 here to hold them. The trade-off: nothing here actually
+                 verifies a payment happened - "I've completed my
+                 payment" is a self-report that just sets isPremiumUser
+                 locally + in Firestore. Fine for now (solo testing, no
+                 other users yet); genuinely not fine once real strangers
+                 can sign up - see confirmPremiumPaymentManually() and
+                 the README for the real fix (a webhook-verifying Cloud
+                 Function) this is deliberately deferring.
+            ================================================     -->
+            <div class="settings-section">
+                <div class="section-header"><div class="section-title settings-section-title">Premium</div></div>
+
+                <div id="premiumUpsellSection">
+                    <div class="analytics-card settings-card">
+                        <div class="settings-row">
+                            <div class="settings-row-icon" style="background: var(--blue-gradient);">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z"/></svg>
+                            </div>
+                            <div class="settings-row-text">
+                                <div class="settings-row-title">NovaWatch Premium</div>
+                                <div class="settings-row-sub">Extra profiles, deeper NovaWrapped, and more.</div>
+                            </div>
+                            <button class="hero-pill-btn" onclick="openPeachPaymentLink()">Upgrade</button>
+                        </div>
+                    </div>
+                    <div class="analytics-card settings-card settings-card-list" style="margin-top: 12px;">
+                        <button class="settings-action-row" onclick="confirmPremiumPaymentManually()">
+                            <div class="settings-row-icon" style="background: var(--flat-blue);">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+                            </div>
+                            <div class="settings-row-text">
+                                <div class="settings-row-title">I've completed my payment</div>
+                                <div class="settings-row-sub">Unlocks Premium right away - not verified automatically yet.</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="analytics-card settings-card" id="premiumActiveState" style="display: none;">
+                    <div class="settings-row">
+                        <div class="settings-row-icon" style="background: var(--blue-gradient);">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5L12 2z"/></svg>
+                        </div>
+                        <div class="settings-row-text">
+                            <div class="settings-row-title">Premium Active</div>
+                            <div class="settings-row-sub">Thanks for supporting NovaWatch.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="settings-section">
                 <div class="section-header"><div class="section-title settings-section-title">Account</div></div>
                 <div class="analytics-card settings-card settings-card-list">
