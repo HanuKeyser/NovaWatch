@@ -179,14 +179,42 @@ html[data-theme="dark"] .library-switcher-menu {
     z-index: 260;
 }
 
-/* Opened from a card tap inside #libraryScreen itself (z-index 260), so
-   both need to sit above it - same reasoning as app.css's own
-   #avatarPickerModal/#achievementsModal/#novaWrappedModal group, just
-   one step higher since this feature's own full-screen sits between
-   that group and these. */
-#addLibraryModal,
-#editLibraryModal {
-    z-index: 270;
+/* Taller than the 240px .modal-backdrop-header default (see app.css) -
+   this screen's image is the dominant visual, not a supporting header
+   for a title next to it, closer to a third-to-half of the viewport
+   like the reference design rather than a slim strip. background-image
+   is set from JS (renderLibrarySelectionScreen()) to the most recent
+   item's backdrop across the account; the gradient/logo fallback below
+   is what shows through until there's any watch data to pull one from. */
+.library-screen-backdrop {
+    height: 46vh;
+    min-height: 320px;
+    max-height: 460px;
+    background-color: var(--blue);
+    background-image: linear-gradient(160deg, var(--blue-light) 0%, var(--blue) 55%, var(--blue-dark) 100%);
+}
+
+.library-screen-hero-title {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding-bottom: 8px;
+}
+
+/* Only actually visible while the gradient fallback above is showing -
+   a real backdrop photo covers it entirely, same as the fallback itself
+   being covered. Kept fairly subtle (small, semi-transparent) since it's
+   standing in for empty content, not meant to read as a hero logo. */
+.library-screen-logo {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-lg);
+    opacity: 0.9;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+}
+
+.library-screen-content {
+    padding-top: 4px;
 }
 
 .library-select-grid {
@@ -261,6 +289,16 @@ html[data-theme="dark"] .library-switcher-menu {
 /* =========================================================
    ADD / EDIT LIBRARY MODALS
 ========================================================= */
+/* Opened from a card tap inside #libraryScreen itself (z-index 260), so
+   both need to sit above it - same reasoning as app.css's own
+   #avatarPickerModal/#achievementsModal/#novaWrappedModal group, just
+   one step higher since this feature's own full-screen sits between
+   that group and these. */
+#addLibraryModal,
+#editLibraryModal {
+    z-index: 270;
+}
+
 .library-modal-avatar-row {
     display: flex;
     justify-content: center;
