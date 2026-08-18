@@ -17,7 +17,7 @@ Live at `https://www.novawatch.site/`.
 ├── styles/
 │   ├── tokens.css          Shared design tokens - linked by both HTML pages
 │   ├── app.css             index.html's component styles
-│   └── multi-library.css   Multi-Library feature's styles (switcher, selection screen, modals)
+│   └── multi-library.css   Multi-Library feature's styles (selection screen, sharing, modals)
 ├── scripts/
 │   ├── app.js              index.html's application logic
 │   └── multi-library.js    Multi-Library feature's logic (see "Multi-Library" below)
@@ -76,29 +76,108 @@ A few things were tried or considered and explicitly ruled out:
 
 ## Multi-Library
 
-Every account can hold up to `MAX_LIBRARIES` (3, defined in `multi-library.js`) completely independent libraries - separate items, watched/unwatched state, episode progress, Continue Watching, rewatch counts, everything. Switching libraries via the header pill or the "Choose Your Library" screen swaps out the entire active dataset; nothing is ever auto-copied between libraries.
+Every account can hold up to `MAX_LIBRARIES` (3, defined in `multi-library.js`) libraries - separate items, watched/unwatched state, episode progress, Continue Watching, rewatch counts, everything. Switching libraries via Settings → Libraries swaps out the entire active dataset; nothing is ever auto-copied between libraries. Libraries can also be shared: a library's creator can turn sharing on for it and hand out an invite code, letting another account join and see the same live library - not a copy, not a one-way sync, the same data both accounts read and write.
 
 **Firestore structure:**
 
 ```
-users/{uid}                                  account-level doc, unchanged, plus one new
-                                              field: activeLibraryId
-users/{uid}/libraries/{libraryId}            one doc per library - name, avatarId, createdAt
-users/{uid}/libraries/{libraryId}/items            the actual watch data (same doc shape the
-users/{uid}/libraries/{libraryId}/archivedShows    old flat users/{uid}/library and
-                                                    users/{uid}/archivedShows collections used
-                                                    to hold, just nested one level deeper)
+users/{uid}                             account-level doc, unchanged, plus two new
+                                         fields: activeLibraryId, librarySharingEnabled
+libraries/{libraryId}                   top-level collection (NOT nested under a user,
+                                         so more than one account can access the same
+                                         library) - name, avatarId, createdAt, ownerId,
+                                         memberIds (always includes ownerId), sharingEnabled,
+                                         inviteCode
+libraries/{libraryId}/items             the actual watch data (same doc shape this
+libraries/{libraryId}/archivedShows     app has always used)
 ```
 
-`{libraryId}` is a normal Firestore auto-id - never `library1`/`library2`/`library3` - so `MAX_LIBRARIES` is purely an app-level check inside `createLibrary()`, not something baked into the data model. Raising or removing the limit later is a one-line change.
+`{libraryId}` is a normal Firestore auto-id - never `library1`/`library2`/`library3` - so `MAX_LIBRARIES` is purely an app-level check inside `createLibrary()`, not something baked into the data model.
 
-region, isPremiumUser, the account avatar (`state.profiles`), theme, and notification permission are account-level settings, not watch data - they intentionally stay shared across every library and are untouched by this feature.
+region, isPremiumUser, the account avatar (`state.profiles`), theme, and notification permission are account-level settings, not watch data - they intentionally stay shared across every library and are untouched by this feature. `librarySharingEnabled` is also account-level: an off-by-default capability toggle (Settings → Preferences → Library Sharing) that hides every share/join affordance app-wide while off. Turning it on doesn't share anything by itself - each library's own sharing is still a separate, explicit choice its owner makes in Edit Library.
 
-**Existing accounts:** the first time `initMultiLibrary()` finds no `libraries` subcollection yet, it runs a one-time migration (`migrateLegacyLibraryData()`) that creates a default "My Library" and moves every doc out of the old flat `users/{uid}/library` and `users/{uid}/archivedShows` collections into it, then deletes the old flat collections. A brand-new account hits the same code path with nothing to move, which is what "builds on the existing library instead of a separate setup flow" means in practice.
+**Ownership vs. membership:** `ownerId` is whoever created the library - only they can rename it, change its avatar, manage its sharing, or delete it (enforced both in the UI and in the Firestore rules below, not just client-side). Every other id in `memberIds` joined via invite code; they get full read/write access to the library's watch data like any member, but can only remove themselves ("Leave Library") - never delete the library itself. Deleting an account only ever deletes libraries it *owns*; libraries it merely joined are left untouched except removing that account from `memberIds` (see `deleteAllLibrariesData()`).
 
-**What's a partial implementation, on purpose:** the brief also asked for movie/show *metadata* (title, poster, cast, episode lists) to live in a separate shared `content/{id}` collection so the same title added to two libraries doesn't store its metadata twice. That part isn't built. Every library item doc here is still the same fully denormalized shape the app has always used (metadata + this library's watch state together). Actually splitting those apart would mean rewriting how virtually every rendering function in `app.js` reads an item - hundreds of call sites (`item.title`, `item.poster`, `item.episodes`, etc.) - which isn't something to do blind, in one pass, against a live app with real user data. What's fully built is the part the brief itself calls out as the *Core Principle*: watch data is completely isolated per library, and nothing is ever auto-shared between libraries (see `deleteLibrary()`, `switchActiveLibrary()`, and every `getActiveLibraryItemsRef()`/`getActiveLibraryArchivedRef()` call site in `app.js`). The metadata-deduplication half is a real, clearly-scoped follow-up (a top-level `content/{mediaType}_{tmdbId}` collection, populated from the existing TMDB-fetch call sites, with item docs storing a reference instead of a full copy) - flagged rather than done partially.
+**Sharing mechanics:** turning sharing on for a library generates a 6-character invite code (reused on subsequent toggles, not regenerated each time) via `setLibrarySharing()`. Joining (`joinLibraryByCode()`) queries `libraries` for a doc whose `inviteCode` matches and whose `sharingEnabled` is `true`, then adds the joining account's uid to `memberIds`. Joining counts toward the joiner's own `MAX_LIBRARIES` cap the same as creating does.
 
-**UI:** a small floating pill ("My Library ▾") pinned to the top of every tab, hidden automatically for accounts with just one library - see `.library-header-bar` in `multi-library.css`. Tapping it opens a dropdown to switch instantly, or jump into the full "Choose Your Library" screen (also reachable via Settings → Libraries), which shows every library's avatar + name plus Add/Edit tiles matching the provided reference design. Deleting a library requires confirmation and is blocked if it's the account's only remaining library.
+**Firestore rules** - these replace the previous version and need to be pasted into the Firebase console manually (Firestore → Rules); nothing here can apply them for you. Given how much more these do than the old single-line ownership check, **test them in the Rules Playground before relying on them** - a mistake in a security rule is a different order of risk than a mistake in app code:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Per-account data: profile settings, avatar, region, premium status,
+    // library-sharing preference, and legacy-migration bookkeeping.
+    // Still fully private to the account it belongs to.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Libraries are a top-level collection (not nested under a single
+    // owning user) so more than one account can read/write the same
+    // library once it's shared. Every library always lists its owner
+    // inside memberIds too, so "is a member" covers both cases.
+    match /libraries/{libraryId} {
+      // Members can read the library doc as normal. A non-member can
+      // also read it, but only while it's actively shareable - that's
+      // what lets someone look a library up by invite code before
+      // they've joined it (name/avatar/code are visible; the actual
+      // watch data in items/archivedShows below is not, until joined).
+      allow read: if request.auth != null && (
+        request.auth.uid in resource.data.memberIds ||
+        resource.data.sharingEnabled == true
+      );
+
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberIds == [request.auth.uid];
+
+      allow update: if request.auth != null && (
+        // The owner can change anything about their own library.
+        request.auth.uid == resource.data.ownerId
+        ||
+        // Any existing member may remove ONLY themselves from
+        // memberIds (leaving) - nothing else about the doc changes.
+        (
+          request.auth.uid in resource.data.memberIds &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds']) &&
+          request.resource.data.memberIds == resource.data.memberIds.removeAll([request.auth.uid])
+        )
+        ||
+        // A non-member may add ONLY themselves to memberIds (joining)
+        // while the library is actively shareable.
+        (
+          !(request.auth.uid in resource.data.memberIds) &&
+          resource.data.sharingEnabled == true &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds']) &&
+          request.resource.data.memberIds == resource.data.memberIds.concat([request.auth.uid])
+        )
+      );
+
+      // Only the creator can delete the library itself - anyone else
+      // who wants out uses the "leave" update path above instead.
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+
+      match /items/{itemId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/libraries/$(libraryId)).data.memberIds;
+      }
+      match /archivedShows/{itemId} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/libraries/$(libraryId)).data.memberIds;
+      }
+    }
+  }
+}
+```
+
+Two things worth knowing about this design rather than discovering them later: (1) a would-be joiner can read a shareable library's `name`/`avatarId`/`memberIds`/`inviteCode` before joining - that's inherent to letting someone preview/look up a library by code, and `memberIds` exposes other members' Firebase Auth uids (not real PII, just opaque ids, but worth knowing). (2) `MAX_LIBRARIES` is only enforced client-side, same as it was before sharing existed - nothing in these rules stops a request that bypasses the app from joining or creating past the 3-library cap; that's a pre-existing soft limit, not a new gap introduced here.
+
+**Existing accounts:** `initMultiLibrary()` now runs two migrations in sequence on every sign-in, each safe to re-run and each resuming cleanly if a previous attempt was interrupted partway (tab closed, connection dropped): first, anything still sitting at the old per-user `users/{uid}/libraries/{id}` path (how this feature stored libraries before sharing existed) gets promoted to the current top-level `libraries/{id}` collection, same id preserved. Then, if an account still has no library at all even after that, `migrateLegacyLibraryData()` runs - the original migration from the very first version of this feature, building a library directly out of whatever's sitting in the oldest, flat `users/{uid}/library` shape (or nothing, for a genuinely new account).
+
+**What's still a partial implementation, on purpose:** the brief also asked for movie/show *metadata* (title, poster, cast, episode lists) to live in a separate shared `content/{id}` collection so the same title added to two libraries doesn't store its metadata twice. That part isn't built. Every library item doc here is still the same fully denormalized shape the app has always used (metadata + that library's watch state together). Actually splitting those apart would mean rewriting how virtually every rendering function in `app.js` reads an item - hundreds of call sites (`item.title`, `item.poster`, `item.episodes`, etc.) - which isn't something to do blind, in one pass, against a live app with real user data. What's fully built is everything the brief calls its *Core Principle*: watch data is completely isolated per library and nothing is ever auto-shared except through an explicit join.
+
+**UI:** there is no persistent switcher anywhere in the main app - Settings → Libraries (positioned directly above Sign Out) is the only entry point, opening the full "Choose Your Library" screen. That screen's background is one continuous surface (a photo pulled from the account's most recently added item, or a brand gradient) fading into the page's own background color, with the title and library grid floating directly on it rather than inside a separate card - matching the reference design. Editing a library shows an owner "Delete Library" or a member's "Leave Library" depending on who's looking, plus - owner only, and only while the account-level Library Sharing toggle is on - a Share on/off control and the invite code once sharing's on. Add Library gains a Join tab under the same account-level gating, taking just an invite code.
 
 ---
 
@@ -146,9 +225,20 @@ Other things flagged as ideas but not committed to a slot: all-time/lifetime sta
 
 ---
 
-## Multi-Library feature (new)
+## Multi-Library: sharing, Settings-only switching, screen redesign (4 requests)
 
-Implemented the Multi-Library feature end to end - see the "Multi-Library" section above for the full writeup (schema, migration, UI, and the one deliberately partial piece). Summary of what changed:
+1. **Removed the header switcher entirely** - not hidden, deleted (markup, CSS, JS). Switching/managing libraries now only happens from Settings → Libraries, moved into the Account section directly above Sign Out, per explicit request. `.library-header-bar`/`.library-switcher-*` and every function that rendered them are gone; `renderLibrarySwitcherPill()` became the much smaller `updateLibrariesSettingsRow()`, which only updates that one Settings row's subtitle.
+2. **Library sharing, built end to end** - see the rewritten "Multi-Library" section above for the full design (top-level `libraries/{id}` collection replacing the old per-user nesting, `ownerId`/`memberIds`, invite codes, the account-level Library Sharing Settings toggle, new Firestore rules). This is a genuinely bigger architectural change than anything else in this file so far - libraries had to move out from under a single owning user's path entirely, since two different accounts now need to read/write the same one.
+3. **Owner-only delete** - `deleteLibrary()` now checks `ownerId` (and the Firestore rules enforce the same thing server-side, not just client-side); a non-owner member gets `leaveLibrary()` instead, reachable from the same button in Edit Library (it just says "Leave Library" for them instead of "Delete Library").
+4. **Selection screen redesigned again** - the previous attempt (a bounded `.modal-backdrop-header` image above a separate content card) still didn't match the reference. Rebuilt as one continuous surface: a tall background (photo or brand gradient) that fades directly into the page's own flat background color via a single gradient, with the title and grid floating on top of that instead of inside their own panel.
+
+Also ran the full validation sweep again after all of this (JS syntax, CSS brace balance, HTML tag balance, no duplicate IDs, every `onclick`/CSS class/CSS variable/`getElementById` target resolves) - all clean.
+
+---
+
+## Multi-Library feature (new) [superseded above - kept for history]
+
+Implemented the Multi-Library feature end to end. Summary of what changed at the time (the header switcher pill and per-user `libraries` collection this round describes were both superseded by the round above - kept here only as a record of what shipped first):
 
 - **New files:** `scripts/multi-library.js` (all of the feature's logic) and `styles/multi-library.css` (all of its styling) - kept separate from `app.js`/`app.css` rather than merged in, at the user's request.
 - **`app.js`:** every call site that used to hardcode `db.collection("users").doc(uid).collection("library")` (or `"archivedShows"`) now goes through `getActiveLibraryItemsRef()`/`getActiveLibraryArchivedRef()` instead, so it automatically follows whichever library is active. `proceedToApp()` now calls `initMultiLibrary()` first. `deleteAllUserData()` now wipes every library on the account, not just one.
