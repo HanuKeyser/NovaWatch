@@ -836,7 +836,13 @@
                 <path d="M18 6L6 18"/>
             </svg>
         </button>
-        <div class="confirm-icon-badge">
+        <!-- .rewatch-icon-badge here is just this shared component's
+             existing "make it blue, not red" modifier (the base
+             .confirm-icon-badge defaults to --red-gradient, meant for
+             destructive actions like Delete Account) - editing your
+             display name isn't destructive, so it shouldn't get the
+             same alarming red glow. -->
+        <div class="confirm-icon-badge rewatch-icon-badge">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </div>
         <div class="confirm-title">Display Name</div>
