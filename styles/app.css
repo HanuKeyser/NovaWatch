@@ -26,6 +26,13 @@ body {
     overflow-x: hidden;
     padding-bottom: 100px;
     -webkit-font-smoothing: antialiased;
+    /* Stops a vertical drag at the very top/bottom of the page from
+       rubber-banding into the browser's own pull-to-refresh/overscroll
+       glow - a PWA meant to feel like an installed app shouldn't visibly
+       "bounce" against the OS chrome the way a plain webpage does. Scoped
+       to the Y axis only so horizontal gestures (the nav bar's
+       drag-to-switch, card swipe-to-remove) are completely unaffected. */
+    overscroll-behavior-y: contain;
 }
 
 button, input {
@@ -1500,11 +1507,14 @@ html[data-theme="dark"] .modal-sheet-compact {
     margin: 0;
     overflow-y: auto;
     /* Soft top-lit sheen (light "entering" from the top edge) layered over
-       the base fill, instead of a flat tint - same glass surface as
-       before, just now filling the whole screen edge-to-edge rather than
-       being a bottom-anchored card, so no rounded corners or drop shadow
-       (nothing for either to read against once it's full-bleed). */
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), rgba(248, 250, 252, 0.68);
+       the SAME --bg-mesh every other surface in the app sits on (Home,
+       Discover, etc. via <body>) - previously this was a flat frosted
+       white/grey fill instead, which is the real reason full-screen
+       sheets like Settings read as a visually distinct "layer" rather
+       than feeling like part of the same app: the glass cards inside
+       them matched, but the surface underneath them didn't. */
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
+    background-attachment: fixed;
     backdrop-filter: blur(70px) saturate(230%);
     -webkit-backdrop-filter: blur(70px) saturate(230%);
     border-radius: 0;
@@ -2183,7 +2193,7 @@ html[data-theme="dark"] .modal-sheet-compact {
    (Home relies on .tab-content-wrapper's gap instead, which Settings
    doesn't have). */
 .settings-hero-card {
-    margin: 20px 0 28px;
+    margin: 0 0 28px;
 }
 
 .settings-section {
@@ -2894,7 +2904,8 @@ html[data-theme="dark"] .avatar-edit-badge {
 /* Targeted fixes for components with a hardcoded light-mode fill layered
    alongside the tokens above (see comment block header). */
 html[data-theme="dark"] .modal-sheet {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 32%), rgba(18, 18, 20, 0.85);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
+    background-attachment: fixed;
 }
 
 html[data-theme="dark"] .modal-backdrop-overlay {
