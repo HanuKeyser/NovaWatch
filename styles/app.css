@@ -1986,34 +1986,35 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .season-selector {
     display: flex;
-    gap: 4px;
+    gap: 8px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     flex: 1;
     min-width: 0;
-    /* One shared "trough" background/border for the whole strip, instead
-       of each season pill carrying its own full glass treatment
-       (background + border + shadow). That per-pill approach was what
-       made several adjacent pills' individual shadows visually merge
-       into one continuous shadowed band underneath the whole row -
-       reading as "in a block" rather than as distinct buttons. This is
-       the exact same pattern .segmented-toggle already uses elsewhere in
-       the app (Light/Dark/Auto, TV/Movies) for the same kind of "row of
-       small buttons" control, which never had this problem - one shared
-       container, individual buttons transparent except when active. */
-    background: var(--surface-2);
-    padding: 4px;
-    border-radius: 999px;
-    border: 1px solid var(--glass-border-subtle);
+    /* No shared "trough" background/border on this row anymore - each
+       .season-button carries its own individual pill fill/border again,
+       so the strip reads as several distinct floating buttons sitting
+       directly on the page, not as buttons cut out of one visible
+       container block. The trough was added in an earlier round
+       specifically to stop adjacent pills' individual box-shadows from
+       visually merging into one continuous shadowed band underneath the
+       row - which was itself its own version of "looks like it's in a
+       block". The actual fix for that (see .season-button below) is
+       giving inactive pills their own background+border but NO shadow -
+       enough definition to read as separate buttons without a shadow
+       band ever forming, and without a wrapping background either.
+       Gap widened back to 8px (from the trough's tighter 4px) now that
+       pills are visually separated by their own edges, not by sitting
+       inside a shared container. */
 }
 
 .season-button {
     flex: 0 0 auto;
-    height: 36px;
+    height: 40px;
     padding: 0 16px;
     border-radius: 999px;
-    background: transparent;
-    border: none;
+    background: var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
     box-shadow: none;
     color: var(--text-secondary);
     font-size: 13px;
