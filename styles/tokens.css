@@ -25,37 +25,39 @@
         radial-gradient(at 8% 90%, rgba(130, 220, 195, 0.13) 0px, transparent 55%),
         radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.5) 0px, transparent 65%),
         #F3F4F9;
-    --surface: rgba(255, 255, 255, 0.5);
-    --surface-2: rgba(255, 255, 255, 0.3);
-    --surface-3: rgba(255, 255, 255, 0.18);
+    --surface: rgba(255, 255, 255, 0.32);
+    --surface-2: rgba(255, 255, 255, 0.20);
+    --surface-3: rgba(255, 255, 255, 0.12);
 
-    --glass-border: rgba(255, 255, 255, 0.7);
-    --glass-border-subtle: rgba(255, 255, 255, 0.38);
-    --glass-shadow: 0 22px 46px rgba(0, 0, 0, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-    --glass-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    /* Borders across the app are now much fainter, moving toward the
+       bottom nav bar's own borderless treatment - a real 1px border was
+       always the odd one out next to a genuinely see-through surface;
+       the blur+saturation is what should read as "glass" now, not an
+       outline. Not dropped to zero: a hairline is still useful for edge
+       definition at rounded corners over similarly-toned backgrounds
+       (dark-on-dark especially), just far softer than before. */
+    --glass-border: rgba(255, 255, 255, 0.38);
+    --glass-border-subtle: rgba(255, 255, 255, 0.2);
+    --glass-shadow: 0 24px 54px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    --glass-shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 
     /* =====================================================
        LIQUID GLASS "CHROME" SYSTEM
-       Modeled after Apple's Liquid Glass material: reserved for the
-       floating/functional layer (sheets, toasts, pill controls, circular
-       buttons) rather than large content areas, so it reads as one
-       dynamic, reflective layer sitting *above* the content instead of
-       everything looking uniformly "glassy". Versus --surface, this has
-       heavier blur+saturation (more optical distortion of what's behind
-       it), a brighter top specular edge, and a two-layer elevation
-       shadow (a tight contact shadow + a soft ambient one) for real
-       depth. --glass-sheen is a diagonal highlight meant to be layered
-       as an extra background-image on top of a base fill, simulating
-       light glancing off the surface of the glass. The bottom nav bar
-       pushes further into this same language with its own even more
-       translucent, borderless treatment (see .bottom-nav in app.css) -
-       it's the one surface meant to read as most aggressively "glass";
-       these shared tokens stay a notch more opaque since they also back
-       sheets and toasts that need to stay legible over varied content. */
-    --glass-chrome-fill: rgba(255, 255, 255, 0.42);
-    --glass-chrome-blur: blur(64px) saturate(240%);
-    --glass-chrome-border: rgba(255, 255, 255, 0.92);
-    --glass-chrome-shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 24px 48px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 1);
+       These tokens now match the bottom nav bar's own recipe (see
+       .bottom-nav in app.css) rather than sitting a notch behind it -
+       lower fill opacity (genuinely see-through, not just tinted),
+       heavier blur+saturation to compensate and stay legible at that
+       opacity, and a much softer border. The nav bar itself is still the
+       one surface pushed furthest (fully borderless, its own bespoke
+       highlight/shimmer layers) since it's a floating control rather
+       than a content-backing surface, but everything else in the app -
+       sheets, toasts, pill controls, cards via --surface above - now
+       shares its underlying glass language instead of a visibly more
+       opaque, more bordered variant of it. */
+    --glass-chrome-fill: rgba(255, 255, 255, 0.26);
+    --glass-chrome-blur: blur(72px) saturate(280%);
+    --glass-chrome-border: rgba(255, 255, 255, 0.5);
+    --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
 
     --blue: #0066cc;      /* Apple System Blue */
@@ -122,19 +124,19 @@ html[data-theme="dark"] {
         radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.5) 0px, transparent 50%),
         radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.5) 0px, transparent 65%),
         #000000;
-    --surface: rgba(255, 255, 255, 0.08);
-    --surface-2: rgba(255, 255, 255, 0.05);
-    --surface-3: rgba(255, 255, 255, 0.035);
+    --surface: rgba(255, 255, 255, 0.06);
+    --surface-2: rgba(255, 255, 255, 0.04);
+    --surface-3: rgba(255, 255, 255, 0.025);
 
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-border-subtle: rgba(255, 255, 255, 0.07);
-    --glass-shadow: 0 22px 46px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.09);
-    --glass-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-border-subtle: rgba(255, 255, 255, 0.05);
+    --glass-shadow: 0 24px 54px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    --glass-shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
-    --glass-chrome-fill: rgba(50, 50, 56, 0.68);
-    --glass-chrome-blur: blur(60px) saturate(180%);
-    --glass-chrome-border: rgba(255, 255, 255, 0.22);
-    --glass-chrome-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 54px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    --glass-chrome-fill: rgba(40, 40, 46, 0.5);
+    --glass-chrome-blur: blur(70px) saturate(220%);
+    --glass-chrome-border: rgba(255, 255, 255, 0.14);
+    --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.42), 0 28px 60px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
 
     --blue: #0a84ff;
