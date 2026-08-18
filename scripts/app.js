@@ -672,6 +672,14 @@ document.addEventListener("DOMContentLoaded", () => {
         input.addEventListener("input", () => sanitizeUsernameInput(input));
     });
 
+    // Live availability feedback for the Choose Username screen - see
+    // wireUsernameAvailabilityCheck(). Registered after the sanitizer
+    // above so it always reads the already-lowercased/filtered value.
+    // Scoped to this screen only for now (not the Join form's username
+    // field, which lacks a status slot of its own in its compact
+    // two-column row) - the submit-time check there still applies.
+    wireUsernameAvailabilityCheck('chooseUsernameInput', 'chooseUsernameStatus');
+
     // Filters the region picker's rows as you type - separate from the
     // has-text toggle above, which only handles the clear button's visibility.
     const regionSearchInput = document.getElementById("regionSearchInput");
@@ -1037,6 +1045,49 @@ async function claimUsername(uid, username) {
     });
 }
 
+// Debounced "is this available?" feedback while typing a username -
+// previously availability was only ever discovered at submit time,
+// after already finishing the rest of the form. Purely informational:
+// the actual enforcement is still claimUsername()'s transaction at
+// submit, since availability can change again in the gap between
+// typing and submitting - this is a convenience, not a guarantee.
+let usernameCheckTimer = null;
+let usernameCheckToken = 0;
+
+function wireUsernameAvailabilityCheck(inputId, statusId) {
+    const input = document.getElementById(inputId);
+    const statusEl = document.getElementById(statusId);
+    if (!input || !statusEl) return;
+
+    input.addEventListener("input", () => {
+        const value = input.value.trim();
+        clearTimeout(usernameCheckTimer);
+
+        if (!value || !isValidUsernameFormat(value)) {
+            statusEl.textContent = "";
+            statusEl.className = "username-check-status";
+            return;
+        }
+
+        statusEl.textContent = "Checking availability...";
+        statusEl.className = "username-check-status checking";
+
+        const myToken = ++usernameCheckToken;
+        usernameCheckTimer = setTimeout(async () => {
+            const available = await isUsernameAvailable(value);
+            // A newer check has since started (more typing happened), or
+            // the field's live value has since changed some other way
+            // (e.g. cleared and retyped) - either way this result is
+            // stale and shouldn't overwrite whatever's more current.
+            if (myToken !== usernameCheckToken) return;
+            if (input.value.trim() !== value) return;
+
+            statusEl.textContent = available ? "Username is available" : "Username is already taken";
+            statusEl.className = `username-check-status ${available ? 'available' : 'taken'}`;
+        }, 500);
+    });
+}
+
 /* =========================================================
    CHOOSE USERNAME SCREEN
    A full-screen blocking overlay, same tier as #authScreen/#verifyScreen -
@@ -1123,16 +1174,27 @@ async function submitChosenUsername() {
         }
 
         await claimUsername(auth.currentUser.uid, username);
-        await auth.currentUser.updateProfile({ displayName: username });
 
         if (!state.profiles || state.profiles.length === 0) {
             state.profiles = [{ id: "profile-main", name: username, initials: username.charAt(0).toUpperCase(), avatarId: randomAvatarId() }];
-        } else {
+        } else if (!state.profiles[0].name) {
+            // Only default the display name to the username if one isn't
+            // already set - an existing account (e.g. a pre-username
+            // Google sign-in, which already has its Google name sitting
+            // in profiles[0].name from proceedToApp) already has a real
+            // display name, and claiming a username here shouldn't
+            // clobber it with the handle instead.
             state.profiles[0].name = username;
             state.profiles[0].initials = username.charAt(0).toUpperCase();
         }
         state.username = username;
         await saveUserProfile();
+
+        // Best-effort sync of the resolved display name (not necessarily
+        // the username itself - see above) into Firebase Auth's own
+        // displayName field. Not load-bearing: updateHomeUI() reads
+        // state.profiles[0].name as the real source of truth now.
+        auth.currentUser.updateProfile({ displayName: state.profiles[0].name }).catch(() => {});
 
         hideChooseUsernameScreen();
         updateHomeUI();
@@ -4864,11 +4926,18 @@ function skeletonGrid(count = 9) {
 function updateHomeUI() {
     let displayName = "";
 
-    if (auth && auth.currentUser) {
+    // The editable display name (state.profiles[0].name) is now the
+    // primary source of truth for what's shown everywhere - separate
+    // from the unique, fixed username used only for the reservation
+    // itself. Firebase Auth's own user.displayName is just a fallback
+    // for the brief window right after sign-in before the profile doc
+    // has actually loaded (or if it's somehow missing), not the main
+    // source it used to be.
+    if (state.profiles && state.profiles[0] && state.profiles[0].name) {
+        displayName = state.profiles[0].name;
+    } else if (auth && auth.currentUser) {
         const user = auth.currentUser;
         displayName = user.displayName || user.email.split('@')[0];
-    } else if (state.profiles && state.profiles[0] && state.profiles[0].name) {
-        displayName = state.profiles[0].name;
     } else {
         displayName = "Guest";
     }
@@ -4887,7 +4956,7 @@ function updateHomeUI() {
 
     const homeEmailSub = document.getElementById("homeEmailSubtitle");
     if (homeEmailSub) {
-        // Only the username (homeName above) is shown for a signed-in
+        // Only the display name (homeName above) is shown for a signed-in
         // account now - the email itself is never rendered. The subtitle
         // line stays in use for the guest/logged-out state.
         if (auth && auth.currentUser) {
@@ -4906,6 +4975,22 @@ function updateHomeUI() {
     const settingsNameEl = document.getElementById("settingsName");
     if (settingsNameEl) settingsNameEl.textContent = displayName;
 
+    // The username - the fixed, unique handle, distinct from the display
+    // name above - shown as a secondary "@handle" line, same idea as
+    // display name vs. handle on most social apps. Only ever shown
+    // signed-in with a reserved username on file; hidden entirely
+    // otherwise (guest, or the brief window before a first-time
+    // Google/legacy account has claimed one).
+    const settingsUsernameSub = document.getElementById("settingsUsernameSubtitle");
+    if (settingsUsernameSub) {
+        if (auth && auth.currentUser && state.username) {
+            settingsUsernameSub.style.display = "";
+            settingsUsernameSub.textContent = `@${state.username}`;
+        } else {
+            settingsUsernameSub.style.display = "none";
+        }
+    }
+
     const settingsEmailSub = document.getElementById("settingsEmailSubtitle");
     if (settingsEmailSub) {
         if (auth && auth.currentUser) {
@@ -4918,6 +5003,106 @@ function updateHomeUI() {
 
     const settingsAvatarEl = document.getElementById("settingsAvatar");
     renderAvatarInto(settingsAvatarEl, initial);
+}
+
+/* =========================================================
+   EDIT DISPLAY NAME
+   Separate from the username on purpose - see the HTML comment on
+   #editDisplayNameModal. Reuses the confirm-card pattern (same as
+   Delete Account) rather than a full page, since it's a single field.
+========================================================= */
+function openEditDisplayNameModal() {
+    if (!auth || !auth.currentUser) return;
+    const modal = document.getElementById("editDisplayNameModal");
+    if (modal.classList.contains("open")) return;
+
+    const input = document.getElementById("editDisplayNameInput");
+    if (input) {
+        input.value = (state.profiles && state.profiles[0] && state.profiles[0].name) || "";
+    }
+    clearEditDisplayNameError();
+
+    modal.classList.add("open");
+    lockBodyScroll("editDisplayNameModal");
+    setTimeout(() => input && input.focus(), 50);
+}
+
+function closeEditDisplayNameModal() {
+    document.getElementById("editDisplayNameModal").classList.remove("open");
+    unlockBodyScroll("editDisplayNameModal");
+}
+
+function closeEditDisplayNameModalOutside(event) {
+    if (event.target.id === "editDisplayNameModal") closeEditDisplayNameModal();
+}
+
+function clearEditDisplayNameError() {
+    const errEl = document.getElementById("editDisplayNameError");
+    if (errEl) {
+        errEl.textContent = "";
+        errEl.classList.remove("show");
+    }
+    const input = document.getElementById("editDisplayNameInput");
+    if (input) input.classList.remove("input-error");
+}
+
+function showEditDisplayNameError(message) {
+    const errEl = document.getElementById("editDisplayNameError");
+    if (errEl) {
+        errEl.textContent = message;
+        errEl.classList.add("show");
+    }
+    const input = document.getElementById("editDisplayNameInput");
+    if (input) input.classList.add("input-error");
+}
+
+function handleEditDisplayNameKeydown(event) {
+    if (event.key === "Enter") saveDisplayName();
+}
+
+async function saveDisplayName() {
+    if (!auth || !auth.currentUser) return;
+
+    const input = document.getElementById("editDisplayNameInput");
+    const name = input ? input.value.trim() : "";
+
+    if (!name) {
+        showEditDisplayNameError("Please enter a display name.");
+        return;
+    }
+
+    const btn = document.getElementById("saveDisplayNameBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving...";
+    }
+
+    try {
+        if (!state.profiles || state.profiles.length === 0) {
+            state.profiles = [{ id: "profile-main", name: name, initials: name.charAt(0).toUpperCase(), avatarId: randomAvatarId() }];
+        } else {
+            state.profiles[0].name = name;
+            state.profiles[0].initials = name.charAt(0).toUpperCase();
+        }
+        await saveUserProfile();
+
+        // Best-effort only - Firebase Auth's own displayName is no longer
+        // what the app actually reads (see updateHomeUI), so a failure
+        // here shouldn't block saving the name that matters.
+        auth.currentUser.updateProfile({ displayName: name }).catch(() => {});
+
+        updateHomeUI();
+        closeEditDisplayNameModal();
+        showToast("Display name updated!", "success");
+    } catch (err) {
+        console.error("Display name save FAILED", err);
+        showEditDisplayNameError("Couldn't save right now. Please try again.");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Save";
+        }
+    }
 }
 
 /* =========================================================
