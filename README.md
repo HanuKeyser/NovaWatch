@@ -39,7 +39,7 @@ Live at `https://www.novawatch.site/`.
 ## Tech stack
 
 - **Firebase Auth** — email/password + Google sign-in
-- **Firestore** — per-user profile doc (`users/{uid}`) holding `profiles`, `activeProfileId`, `region`; library items stored per-user
+- **Firestore** — per-user profile doc (`users/{uid}`) holding `profiles`, `activeProfileId`, `region`, `username`; library items stored per-user; a top-level `usernames/{lowercased-username}` collection enforces unique usernames (see below)
 - **TMDB API** — search, metadata, episode/season data, recommendations
 - **JustWatch (via TMDB)** — streaming availability by region
 - No backend of its own — everything runs client-side against Firebase + TMDB directly
@@ -47,6 +47,26 @@ Live at `https://www.novawatch.site/`.
 ### Firebase plan
 
 Currently on the **free Spark plan**. This is a real constraint on the feature set: Spark dropped Cloud Storage access (Feb 2026), which is why avatars are a curated set of hosted images rather than user uploads — that would need Storage, i.e. the paid Blaze plan. Anything requiring Blaze is intentionally deferred until premium revenue justifies the upgrade (see **Monetization** below).
+
+### Usernames & Firestore security rules
+
+Every account now reserves a unique username: chosen at signup (the Join form's username field) or, for Google sign-in and any pre-existing account from before this was required, via a blocking "Choose a username" screen shown right after sign-in. Reservations live in `usernames/{lowercased-username}` → `{uid, username}` — a separate collection from `users/{uid}` so checking/claiming a name never needs to know who currently owns it.
+
+Uniqueness is enforced two ways, and **both matter**:
+1. **Client-side (already shipped)** — a `db.runTransaction()` in `claimUsername()` re-reads the reservation doc and only writes if it's still free (or already owned by the same uid). This is what actually stops two people claiming the same name at the same moment; a plain read-then-write would have a race window. Signup rolls the whole account creation back (`user.delete()`) if the claim loses that race. Deleting an account also deletes its username reservation, freeing the name for reuse.
+2. **Firestore security rules (not shipped — needs to be set in the Firebase console)** — the client-side transaction assumes a well-behaved client. A modified/malicious client could bypass `claimUsername()` and write directly to `usernames/{name}`. Add rules along these lines so the *database* also refuses to let anyone overwrite an existing reservation or write one for a uid that isn't their own:
+
+```
+match /usernames/{username} {
+  allow read: if true;
+  allow create: if request.auth != null
+    && request.resource.data.uid == request.auth.uid;
+  allow update, delete: if request.auth != null
+    && resource.data.uid == request.auth.uid;
+}
+```
+
+Until these are added in the console, uniqueness is real for any normal use of the app but not airtight against a deliberately modified client.
 
 ---
 
@@ -62,6 +82,7 @@ Currently on the **free Spark plan**. This is a real constraint on the feature s
 - **Avatars** — 8 curated hosted images (not uploads — see the Firebase Spark note above). New accounts get one assigned at random; always changeable via the picker in Settings.
 - **Streaming region** — full ISO 3166-1 country list, drives which "where to watch" info TMDB/JustWatch returns.
 - **Release-date buffer** — TMDB dates are pinned to 08:00 UTC rather than raw midnight (`tmdbDateToISO()`), giving the periodic background sync a window to have actually pulled fresh data before anything's treated as released.
+- **Unique usernames** — every account reserves a unique username (see the Firebase plan section above for how uniqueness is enforced).
 
 ### Deliberately not built
 
@@ -202,3 +223,18 @@ One behavioral note: dragging into Discover no longer auto-focuses the search in
 This file has grown a lot in one sitting (`app.js` alone is ~6,000 lines). A few things worth watching as it keeps growing:
 - The `openDetails()` mishap (a routine edit briefly deleted its own function declaration, caught by a syntax check before shipping) is a preview of the kind of mistake that gets more likely as a single file gets larger. If a feature area gets substantial enough (achievements, sharing, the sync logic), consider whether it's ready to be its own module.
 - `privacy-terms/index.html` keeps its own copies of a handful of component classes it borrows from `app.css`'s visual language (`.analytics-card`, `.section-title`, `.settings-section-title`, `.section-header` - used to give it the same "stack of cards with labels" structure as Settings and NovaWrapped, instead of the one-big-document-card layout it used to have). That's a deliberate, contained exception - full `app.css` isn't linked there because its global `body`/`h1`/`a` rules are tuned for the app shell and risk leaking onto this page's own layout in ways that are hard to verify without live testing. If any of those four classes change in `app.css`, this page's copies need updating too. `tokens.css` (the actual colors/palette) staying singular is what matters most - that's what caused the real sync bugs earlier.
+
+---
+
+## Unique usernames + Settings profile header revamp
+
+**1. Every account now reserves a unique username (implemented, client-side enforcement; security rules documented but not applied - see "Usernames & Firestore security rules" above).**
+
+- Email/password signup already had a username field on the Join form (`#authUsername`) but never checked it against anyone else's - two people could register the same name. It's now validated for format (3-20 characters, letters/numbers/underscores only, via `isValidUsernameFormat()`) and actually reserved: `handleSignUp()` does a quick `isUsernameAvailable()` read before creating the Firebase Auth account (fast-fail for the common case), then reserves it for real with `claimUsername()` - a Firestore transaction against a new `usernames/{lowercased-username}` collection, which is what actually closes the race window a plain read-then-write would leave open. If the transaction loses that race (someone else claimed it in the gap between the check and the transaction), signup rolls itself back - the just-created auth account is deleted via `user.delete()` - rather than leaving a half-set-up account with no valid username.
+- **Google sign-in never had a username step at all** - it silently took whatever name Google's OAuth profile supplied, with no uniqueness check. New `#chooseUsernameScreen` overlay (same tier/pattern as `#authScreen`/`#verifyScreen` - full-screen, blocking, `z-index: 1000`) is shown by `proceedToApp()` any time a signed-in account doesn't have a `username` on file yet - this covers both first-time Google sign-ins and any account that existed before this feature shipped. Pre-fills a suggestion from the Google display name/email as a starting point, but it's fully editable and goes through the exact same `isUsernameAvailable()`/`claimUsername()` path as signup. Can't be dismissed without submitting a valid, available username (no close button, no tap-outside-close) - the only way out is signing out instead.
+- Deleting an account (`deleteAllUserData()`) now also deletes that account's `usernames/{name}` reservation, so the name is freed for someone else to claim rather than being permanently squatted on by a deleted account.
+- `saveUserProfile()` only ever writes a `username` field to Firestore when `state.username` is actually set locally - guards against a call site that runs before the profile's loaded from Firestore accidentally writing `username: null` over an already-reserved name.
+
+**2. Settings' profile header now uses the same "hero-card" glass treatment as Home's identity card, instead of a plain flat row.** Previously `.settings-profile-row` was just an unstyled flex row (avatar + name) sitting directly under the "Settings" heading - visually flatter than everywhere else in the app. It's now wrapped in `.hero-card`/`.hero-top`/`.hero-profile` (the exact same classes Home's card uses, dark mode included for free) with a "Your Account" label above the name, matching Home's "Welcome"/time-of-day-greeting treatment above the username. `.settings-profile-row`'s old margin rule was repurposed into a new `.settings-hero-card` class (`margin: 20px 0 28px`) that supplies the spacing `.hero-card` itself doesn't have (Home relies on `.tab-content-wrapper`'s gap instead, which Settings doesn't use). All existing element IDs (`settingsAvatar`, `settingsName`, `settingsEmailSubtitle`) and the avatar-edit-badge pencil button were kept exactly as they were - `app.js` needed no changes for this part.
+
+Ran the established full validation sweep before shipping (JS syntax, CSS brace balance, HTML div balance, no duplicate IDs, every new `onclick` resolves to a real function) - all clean. Bumped `service-worker.js`'s `CACHE_NAME` (`v11` → `v12`) since `app.js`/`app.css`/`index.html` all changed this round.
