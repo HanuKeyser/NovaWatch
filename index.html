@@ -48,7 +48,6 @@
 
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/app.css">
-<link rel="stylesheet" href="styles/multi-library.css">
 </head>
 
 <body>
@@ -629,22 +628,6 @@
                         <button class="hero-pill-btn" id="notificationBtn" onclick="requestNotificationPermission()">Enable</button>
                     </div>
 
-                    <div class="settings-row settings-row-stacked">
-                        <div class="settings-row-top">
-                            <div class="settings-row-icon" style="background: var(--blue-gradient);">
-                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a3 3 0 1 0-2.83-4H15a3 3 0 0 0 0 6 2.99 2.99 0 0 0 1.17-.24l-6.34 3.7a3 3 0 1 0 0 3.08l6.34 3.7A3 3 0 1 0 18 16a2.99 2.99 0 0 0-1.17.24l-6.34-3.7a3.07 3.07 0 0 0 0-1.08l6.34-3.7c.35.15.75.24 1.17.24z"/></svg>
-                            </div>
-                            <div class="settings-row-text">
-                                <div class="settings-row-title">Library Sharing</div>
-                                <div class="settings-row-sub">Let others join your libraries with an invite code.</div>
-                            </div>
-                        </div>
-                        <div class="segmented-toggle">
-                            <button class="segmented-btn" id="librarySharingOffBtn" onclick="setLibrarySharingCapability(false)">Off</button>
-                            <button class="segmented-btn" id="librarySharingOnBtn" onclick="setLibrarySharingCapability(true)">On</button>
-                        </div>
-                    </div>
-
                     <div class="settings-row" style="cursor: pointer;" onclick="openAchievementsModal()">
                         <div class="settings-row-icon" style="background: var(--orange-gradient);">
                             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg>
@@ -677,16 +660,6 @@
             <div class="settings-section">
                 <div class="section-header"><div class="section-title settings-section-title">Account</div></div>
                 <div class="analytics-card settings-card settings-card-list">
-                    <button class="settings-action-row" onclick="closeSettingsSheet(); openLibrarySelectionScreen();">
-                        <div class="settings-row-icon" style="background: var(--blue-gradient);">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
-                        </div>
-                        <div class="settings-row-text">
-                            <div class="settings-row-title">Libraries</div>
-                            <div class="settings-row-sub" id="librariesRowSub">1 library</div>
-                        </div>
-                        <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
-                    </button>
                     <button class="settings-action-row" onclick="handleSignOut()">
                         <div class="settings-row-icon" style="background: var(--flat-blue);">
                             <svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -772,149 +745,6 @@
 </div>
 
 <!-- =====================================================
-     CHOOSE YOUR LIBRARY
-     Opened only from Settings > Libraries. One continuous background
-     (a photo pulled from the most recently added item across the
-     account, or a plain brand gradient if there's nothing to pull one
-     from yet) spanning most of the screen, fading into the page's own
-     background color - "Choose Your Library" and the grid sit directly
-     on top of that, not inside a separate card - see
-     renderLibrarySelectionScreen() in multi-library.js.
-================================================     -->
-<div id="libraryScreen" class="modal" onclick="closeLibraryScreenOutside(event)">
-    <div class="modal-sheet library-screen-sheet">
-        <div class="modal-header-nav">
-            <button class="close-button" onclick="closeLibrarySelectionScreen()" aria-label="Close">
-                <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M6 6l12 12"/>
-                    <path d="M18 6L6 18"/>
-                </svg>
-            </button>
-        </div>
-        <div id="libraryScreenBackdrop" class="library-screen-backdrop">
-            <img id="libraryScreenLogo" src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="library-screen-logo">
-        </div>
-        <div class="library-screen-body">
-            <h2 class="library-screen-title">Choose Your Library</h2>
-            <div id="libraryScreenGrid" class="library-select-grid"></div>
-        </div>
-    </div>
-</div>
-
-<!-- =====================================================
-     ADD LIBRARY
-================================================     -->
-<div id="addLibraryModal" class="modal modal-compact" onclick="closeAddLibraryModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
-        <div class="modal-header-nav">
-            <button class="close-button" onclick="closeAddLibraryModal()" aria-label="Close">
-                <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M6 6l12 12"/>
-                    <path d="M18 6L6 18"/>
-                </svg>
-            </button>
-        </div>
-        <div class="modal-content" style="padding-top: 60px;">
-            <h2 class="poster-picker-title">Add Library</h2>
-
-            <!-- Join only ever shows once library sharing is turned on in
-                 Settings (.library-sharing-gated) - while it's off, this
-                 whole tab bar is hidden and Create is the only option,
-                 same as before sharing existed at all. -->
-            <div class="segmented-toggle library-sharing-gated" style="display: none;">
-                <button class="segmented-btn active" id="addLibraryModeCreate" onclick="setAddLibraryMode('create')">Create</button>
-                <button class="segmented-btn" id="addLibraryModeJoin" onclick="setAddLibraryMode('join')">Join</button>
-            </div>
-
-            <div id="addLibraryCreatePane">
-                <div class="library-modal-avatar-row">
-                    <button id="addLibraryAvatarPreview" class="library-modal-avatar-preview" onclick="shuffleNewLibraryAvatar()" aria-label="Shuffle avatar"></button>
-                </div>
-                <input id="addLibraryNameInput" class="settings-text-input" type="text" placeholder="Library name" maxlength="30" autocomplete="off">
-                <button class="hero-pill-btn library-modal-submit" onclick="submitAddLibrary()">Create Library</button>
-            </div>
-
-            <div id="addLibraryJoinPane" style="display: none;">
-                <p class="library-owner-notice">Enter the invite code the library's owner shared with you.</p>
-                <input id="joinLibraryCodeInput" class="settings-text-input library-invite-code-input" type="text" placeholder="Invite code" maxlength="6" autocomplete="off" autocapitalize="characters">
-                <button class="hero-pill-btn library-modal-submit" onclick="submitJoinLibrary()">Join Library</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- =====================================================
-     EDIT LIBRARY (rename / change avatar / delete)
-================================================     -->
-<div id="editLibraryModal" class="modal modal-compact" onclick="closeEditLibraryModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
-        <div class="modal-header-nav">
-            <button class="close-button" onclick="closeEditLibraryModal()" aria-label="Close">
-                <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M6 6l12 12"/>
-                    <path d="M18 6L6 18"/>
-                </svg>
-            </button>
-        </div>
-        <div class="modal-content" style="padding-top: 60px;">
-            <h2 class="poster-picker-title">Edit Library</h2>
-            <p id="editLibraryOwnerNotice" class="library-owner-notice" style="display: none;">You joined this library - only its creator can rename it, change its avatar, or manage sharing.</p>
-            <input id="editLibraryNameInput" class="settings-text-input" type="text" placeholder="Library name" maxlength="30" autocomplete="off">
-            <div id="editLibraryAvatarGrid" class="avatar-picker-grid"></div>
-            <button id="editLibrarySaveBtn" class="hero-pill-btn library-modal-submit" onclick="submitEditLibrary()">Save Changes</button>
-
-            <!-- Owner-only, regardless of the account-level capability
-                 toggle - a non-owner member never sees or controls
-                 another account's sharing setting for their own library. -->
-            <div id="editLibrarySharingSection" class="library-sharing-gated library-edit-sharing-section">
-                <div class="section-header"><div class="section-title settings-section-title">Sharing</div></div>
-                <div class="segmented-toggle">
-                    <button class="segmented-btn" id="editLibrarySharingOffBtn" onclick="setEditLibrarySharing(false)">Off</button>
-                    <button class="segmented-btn" id="editLibrarySharingOnBtn" onclick="setEditLibrarySharing(true)">On</button>
-                </div>
-                <div id="editLibraryInviteCodeRow" class="library-invite-code-row" style="display: none;">
-                    <div class="library-invite-code-text">
-                        <div class="settings-row-sub">Invite code</div>
-                        <div id="editLibraryInviteCode" class="library-invite-code-value"></div>
-                    </div>
-                    <button class="hero-pill-btn" onclick="copyEditLibraryInviteCode()">Copy</button>
-                </div>
-            </div>
-
-            <button id="editLibraryDeleteBtn" class="settings-action-row danger library-modal-delete" onclick="handleDeleteLibraryFromEdit()">
-                <div class="settings-row-icon" style="background: var(--red-gradient);">
-                    <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                </div>
-                <div class="settings-row-text">
-                    <div class="settings-row-title">Delete Library</div>
-                </div>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- =====================================================
-     DELETE LIBRARY CONFIRMATION
-================================================     -->
-<div id="deleteLibraryModal" class="confirm-overlay" onclick="closeDeleteLibraryConfirmOutside(event)">
-    <div class="confirm-card">
-        <div class="confirm-icon-badge">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6M14 11v6"/>
-            </svg>
-        </div>
-        <div class="confirm-title" id="deleteLibraryTitle">Delete Library?</div>
-        <p class="confirm-message" id="deleteLibraryMessage">This will permanently remove this library and its watch history. This action cannot be undone.</p>
-        <div class="confirm-actions">
-            <button class="confirm-btn cancel" onclick="closeDeleteLibraryConfirm()">Cancel</button>
-            <button class="confirm-btn danger" id="deleteLibraryConfirmBtn" onclick="confirmDeleteLibrary()">Delete</button>
-        </div>
-    </div>
-</div>
-
-<!-- =====================================================
      DELETE ACCOUNT CONFIRMATION
 ================================================     -->
 <div id="deleteAccountModal" class="confirm-overlay" onclick="closeDeleteAccountModalOutside(event)">
@@ -942,6 +772,5 @@
 </div>
 
 <script src="scripts/app.js"></script>
-<script src="scripts/multi-library.js"></script>
 </body>
 </html>
