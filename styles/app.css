@@ -112,6 +112,17 @@ img {
     display: block;
 }
 
+/* Settings' own inner content wrapper reuses the exact same padding as
+   .page (Home/Discover/Library/Upcoming) - same "outer margin" everywhere
+   the person is - but as its own class rather than reusing .page itself:
+   showPage() does `querySelectorAll(".page").forEach(remove "active")`
+   globally on every tab switch, which would have permanently hidden
+   Settings' content (via .page's own display:none default) the next
+   time any tab changed while sharing that class. */
+.settings-page-content {
+    padding: 36px 18px 20px;
+}
+
 .tab-content-wrapper {
     display: flex;
     flex-direction: column;
@@ -613,16 +624,6 @@ img {
 
 .search-box input {
     width: 100%;
-    /* No explicit height/line-height - a fixed line-height that large
-       relative to the font size is what actually caused the caret to
-       render below the visible box instead of centered in it (a real,
-       separate bug from the native-decoration one below, introduced by
-       an earlier fix that forced line-height: 50px to match a fixed
-       height: 50px). Padding alone reaches the same ~50px total height
-       (border-box, so padding+border count toward it) while letting the
-       browser center a single line of text/caret using its own normal
-       line-height - the reliable way to vertically center input text
-       across browsers, rather than fighting the caret's own layout. */
     padding: 15px 46px 15px 48px;
     outline: none;
     background: var(--glass-sheen), var(--glass-chrome-fill);
@@ -634,34 +635,25 @@ img {
     font-size: 14px;
     box-shadow: var(--glass-chrome-shadow);
     transition: all 0.2s ease;
-    /* type="search" gets a native WebKit appearance (its own magnifying-
-       glass icon area + "x" cancel button) unless this is reset. Left
-       enabled, that native chrome fights the custom .search-icon/
-       .search-clear-btn drawn on top of it - which is why the custom
-       glass icon could end up hidden behind/under it, and why the text
-       cursor sat at the wrong horizontal position until the first
-       keystroke (WebKit only finalizes the input's internal layout,
-       decorations included, once there's actual content). Resetting
-       appearance and hiding the native decorations below removes that
-       conflict everywhere .search-box is used, not just here. */
+    /* A plain text input (see the HTML - type="text" + inputmode="search"),
+       not type="search". Two earlier attempts at fixing a persistent
+       caret-position bug on this input - resetting -webkit-appearance,
+       then removing a since-reintroduced-elsewhere line-height override -
+       both assumed CSS could fully normalize a type="search" input's
+       internal rendering, and neither actually held up on a real device.
+       type="search" gets special, WebKit-internal layout handling on iOS
+       that persists even with -webkit-appearance: none applied - CSS
+       resets don't reliably override it, which is why the bug kept
+       coming back after each attempted fix. Switching to a plain text
+       input sidesteps that whole class of bug at the source rather than
+       continuing to fight it - inputmode="search" alone is what gives
+       the on-screen keyboard its "search" return key, with none of
+       type="search"'s special internal treatment. The app's own
+       .search-icon/.search-clear-btn (not any native decoration) have
+       always been the only visible affordances anyway, so nothing about
+       the search UI itself changes. */
     -webkit-appearance: none;
     appearance: none;
-}
-
-/* Same reasoning as -webkit-appearance: none above - explicitly hides
-   every native WebKit decoration a type="search" input can grow
-   (magnifying-glass icon, results dropdown affordance, "x" cancel
-   button) so only the app's own .search-icon/.search-clear-btn ever
-   render, and so the input's internal box layout - and therefore the
-   caret position - is stable from the very first tap instead of
-   shifting once text is typed. */
-.search-box input::-webkit-search-decoration,
-.search-box input::-webkit-search-cancel-button,
-.search-box input::-webkit-search-results-button,
-.search-box input::-webkit-search-results-decoration {
-    -webkit-appearance: none;
-    appearance: none;
-    display: none;
 }
 
 .search-box input:focus {
@@ -2191,15 +2183,6 @@ html[data-theme="dark"] .modal-sheet-compact {
    then grouped, icon-led rows so it reads like a real settings screen
    instead of a flat list of controls.
 ========================================================= */
-/* Reuses .hero-card/.hero-top/.hero-profile wholesale (see HOME HERO
-   above) - this just supplies the margin that used to live on the old
-   flat .settings-profile-row, since .hero-card itself is margin-less
-   (Home relies on .tab-content-wrapper's gap instead, which Settings
-   doesn't have). */
-.settings-hero-card {
-    margin: 0 0 28px;
-}
-
 /* Wraps the display name + its pencil icon as one tappable row (opens
    #editDisplayNameModal) - reset to look like plain text, not a button,
    since visually it should read as part of the identity block, with the
@@ -2224,15 +2207,6 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .settings-name-edit:active {
     opacity: 0.6;
-}
-
-.settings-section {
-    margin-bottom: 24px;
-}
-
-.settings-section-title {
-    font-size: 15px;
-    letter-spacing: -0.2px;
 }
 
 .settings-card {
@@ -2906,6 +2880,18 @@ html[data-theme="dark"] .avatar-edit-badge {
 
 .auth-error.show {
     display: block;
+}
+
+/* .auth-field normally gets its spacing for free from .auth-form's own
+   flex `gap` (the auth screen, Choose Username screen) - but .confirm-
+   card (this modal's own parent) is a plain block container with no
+   gap, so the field here had 24px above it (from .confirm-message's own
+   margin-bottom) but sat flush against the buttons directly below, with
+   nothing between them at all. Scoped to .confirm-card specifically so
+   the auth screen's own already-tuned spacing is untouched. */
+.confirm-card .auth-field {
+    text-align: left;
+    margin-bottom: 20px;
 }
 
 /* Live "is this available?" feedback while typing a username (see
