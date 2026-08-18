@@ -161,6 +161,7 @@
                 oninput="clearChooseUsernameError()"
             >
             <div id="chooseUsernameError" class="auth-error"></div>
+            <div id="chooseUsernameStatus" class="username-check-status"></div>
         </div>
 
         <div class="auth-actions">
@@ -629,7 +630,11 @@
                         </button>
                         <div>
                             <div class="home-greeting">Your Account</div>
-                            <div class="home-name" id="settingsName">Guest</div>
+                            <button class="settings-name-edit" onclick="openEditDisplayNameModal()" aria-label="Edit display name">
+                                <span class="home-name" id="settingsName">Guest</span>
+                                <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            </button>
+                            <div class="home-subtitle" id="settingsUsernameSubtitle" style="display: none;"></div>
                             <div class="home-subtitle" id="settingsEmailSubtitle">Guest Account</div>
                         </div>
                     </div>
@@ -811,6 +816,38 @@
         <div class="confirm-actions">
             <button class="confirm-btn cancel" onclick="closeDeleteAccountModal()">Cancel</button>
             <button class="confirm-btn danger" id="confirmDeleteBtn" onclick="confirmDeleteAccount()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     EDIT DISPLAY NAME
+     Opened by tapping the name (or its pencil icon) in Settings' hero
+     card. Separate from the username - the username is the unique,
+     fixed, lowercase-only handle reserved at signup (see claimUsername),
+     while this display name is purely cosmetic, shown everywhere in the
+     UI instead of it, and can be changed to anything, anytime.
+================================================     -->
+<div id="editDisplayNameModal" class="confirm-overlay" onclick="closeEditDisplayNameModalOutside(event)">
+    <div class="confirm-card">
+        <button class="close-button" style="position: absolute; top: 12px; right: 12px;" onclick="closeEditDisplayNameModal()" aria-label="Close">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M6 6l12 12"/>
+                <path d="M18 6L6 18"/>
+            </svg>
+        </button>
+        <div class="confirm-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </div>
+        <div class="confirm-title">Display Name</div>
+        <p class="confirm-message">Shown across the app instead of your username - separate from it, and yours to change anytime.</p>
+        <div class="auth-field" style="margin-top: 2px; text-align: left;">
+            <input type="text" id="editDisplayNameInput" class="auth-input" placeholder="Display name" maxlength="30" autocomplete="off" enterkeyhint="done" onkeydown="handleEditDisplayNameKeydown(event)" oninput="clearEditDisplayNameError()">
+            <div id="editDisplayNameError" class="auth-error"></div>
+        </div>
+        <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="closeEditDisplayNameModal()">Cancel</button>
+            <button class="confirm-btn" id="saveDisplayNameBtn" style="background: var(--glass-sheen), var(--blue-gradient); color: white; box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);" onclick="saveDisplayName()">Save</button>
         </div>
     </div>
 </div>
