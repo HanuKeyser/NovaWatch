@@ -73,6 +73,11 @@ let state = {
     // so nothing reads them as undefined before that first runs.
     libraries: [],
     activeLibraryId: null,
+    // Account-level capability toggle (Settings > Preferences > Library
+    // Sharing) - off by default. While off, every share/join affordance
+    // in the app is hidden, regardless of any individual library's own
+    // sharingEnabled - see syncLibrarySharingUI() in multi-library.js.
+    librarySharingEnabled: false,
     profiles: [
         {
             id: "profile-guest",
@@ -944,7 +949,8 @@ async function saveUserProfile() {
                 profiles: state.profiles,
                 activeProfileId: state.activeProfileId,
                 region: state.region,
-                activeLibraryId: state.activeLibraryId
+                activeLibraryId: state.activeLibraryId,
+                librarySharingEnabled: state.librarySharingEnabled
             }, { merge: true });
         return true;
     } catch (err) {
@@ -2652,6 +2658,7 @@ if (auth) {
             state.library = [];
             state.libraries = [];
             state.activeLibraryId = null;
+            state.librarySharingEnabled = false;
             if (activeLibraryUnsubscribe) {
                 activeLibraryUnsubscribe();
                 activeLibraryUnsubscribe = null;
@@ -2787,7 +2794,8 @@ async function proceedToApp(user, authScreen, mainApp) {
                 }
                 
                 libraryLoaded = true;
-                renderLibrarySwitcherPill();
+                updateLibrariesSettingsRow();
+                syncLibrarySharingUI();
                 refreshActivePage();
 
                 // If this session was opened via a shared show/movie link,
