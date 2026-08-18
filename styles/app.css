@@ -620,46 +620,49 @@ img {
 .search-box {
     position: relative;
     width: 100%;
+    /* The glass/pill visual treatment (fill, blur, border, shadow) lives
+       here on the wrapper now - not on the <input> itself, and this is
+       the actual fix for a caret-position bug that survived two earlier,
+       differently-reasoned attempts (removing a forced line-height, then
+       dropping type="search" for type="text"). Both were sound fixes for
+       real, separate issues, but neither touched the one thing both
+       attempts had in common: backdrop-filter applied directly to the
+       text input. That's a known category of WebKit bug on iOS - a
+       text-editable element that needs its own compositing layer for a
+       blur effect can end up with the native caret rendered against
+       stale/incorrect layer coordinates, placing it somewhere other than
+       where the text actually is. Moving the blur to this
+       non-interactive wrapper and leaving the input's own background
+       transparent (see below) sidesteps that whole bug category rather
+       than continuing to try to work around WebKit's caret math for a
+       blurred input directly - the input never gets backdrop-filter
+       applied to it at all now, on this element or any state of it. */
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    border: 1px solid var(--glass-chrome-border);
+    border-radius: 999px;
+    box-shadow: var(--glass-chrome-shadow);
+    transition: all 0.2s ease;
+}
+
+.search-box:focus-within {
+    border-color: var(--blue);
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15), var(--glass-shadow-sm);
 }
 
 .search-box input {
     width: 100%;
     padding: 15px 46px 15px 48px;
     outline: none;
-    background: var(--glass-sheen), var(--glass-chrome-fill);
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
-    border: 1px solid var(--glass-chrome-border);
+    background: transparent;
+    border: none;
     border-radius: 999px;
     color: var(--text);
     font-size: 14px;
-    box-shadow: var(--glass-chrome-shadow);
-    transition: all 0.2s ease;
-    /* A plain text input (see the HTML - type="text" + inputmode="search"),
-       not type="search". Two earlier attempts at fixing a persistent
-       caret-position bug on this input - resetting -webkit-appearance,
-       then removing a since-reintroduced-elsewhere line-height override -
-       both assumed CSS could fully normalize a type="search" input's
-       internal rendering, and neither actually held up on a real device.
-       type="search" gets special, WebKit-internal layout handling on iOS
-       that persists even with -webkit-appearance: none applied - CSS
-       resets don't reliably override it, which is why the bug kept
-       coming back after each attempted fix. Switching to a plain text
-       input sidesteps that whole class of bug at the source rather than
-       continuing to fight it - inputmode="search" alone is what gives
-       the on-screen keyboard its "search" return key, with none of
-       type="search"'s special internal treatment. The app's own
-       .search-icon/.search-clear-btn (not any native decoration) have
-       always been the only visible affordances anyway, so nothing about
-       the search UI itself changes. */
     -webkit-appearance: none;
     appearance: none;
-}
-
-.search-box input:focus {
-    border-color: var(--blue);
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15), var(--glass-shadow-sm);
 }
 
 .search-icon {
@@ -1168,6 +1171,11 @@ img {
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 1);
     touch-action: pan-y;
     cursor: pointer;
+    /* Same missing-property fix as .season-button above - this card has
+       a swipe-to-remove gesture plus visible text content (title,
+       progress), both of which are exactly the combination that can
+       trigger iOS's long-press text-selection callout without this. */
+    -webkit-touch-callout: none;
     user-select: none;
     -webkit-user-select: none;
     transition: box-shadow 0.2s ease;
@@ -1978,29 +1986,51 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .season-selector {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     flex: 1;
     min-width: 0;
+    /* One shared "trough" background/border for the whole strip, instead
+       of each season pill carrying its own full glass treatment
+       (background + border + shadow). That per-pill approach was what
+       made several adjacent pills' individual shadows visually merge
+       into one continuous shadowed band underneath the whole row -
+       reading as "in a block" rather than as distinct buttons. This is
+       the exact same pattern .segmented-toggle already uses elsewhere in
+       the app (Light/Dark/Auto, TV/Movies) for the same kind of "row of
+       small buttons" control, which never had this problem - one shared
+       container, individual buttons transparent except when active. */
+    background: var(--surface-2);
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border-subtle);
 }
 
 .season-button {
     flex: 0 0 auto;
-    height: 40px;
+    height: 36px;
     padding: 0 16px;
-    border-radius: var(--radius-sm);
-    background: var(--glass-sheen), var(--surface);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 700;
-    box-shadow: var(--glass-shadow-sm);
+    /* user-select alone doesn't fully suppress iOS's long-press behavior
+       for an element whose visible content IS text (a season number/
+       label, exactly what these buttons are) - -webkit-touch-callout is
+       the separate property that actually stops the "select text" /
+       Copy-Look-Up-Share bubble from appearing on a long-press, which is
+       what a 600ms mark-season-watched hold was triggering instead of
+       (or alongside) the intended action. Same missing-property pattern
+       already fixed for posters (see .poster/.continue-poster etc.
+       below) - this one just hadn't been caught yet. */
+    -webkit-touch-callout: none;
     user-select: none;
     -webkit-user-select: none;
-    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease;
 }
 
 .season-button:active {
@@ -2010,7 +2040,6 @@ html[data-theme="dark"] .modal-sheet-compact {
 .season-button.active {
     background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
     color: white;
-    border-color: var(--blue);
     box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
@@ -3015,8 +3044,8 @@ html[data-theme="dark"] .stat {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
 }
 
-html[data-theme="dark"] .search-box input:focus {
-    background: rgba(255, 255, 255, 0.08);
+html[data-theme="dark"] .search-box:focus-within {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme="dark"] .bottom-nav {
