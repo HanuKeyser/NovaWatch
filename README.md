@@ -82,7 +82,7 @@ Until these are added in the console, uniqueness is real for any normal use of t
 - **Avatars** — 8 curated hosted images (not uploads — see the Firebase Spark note above). New accounts get one assigned at random; always changeable via the picker in Settings.
 - **Streaming region** — full ISO 3166-1 country list, drives which "where to watch" info TMDB/JustWatch returns.
 - **Release-date buffer** — TMDB dates are pinned to 08:00 UTC rather than raw midnight (`tmdbDateToISO()`), giving the periodic background sync a window to have actually pulled fresh data before anything's treated as released.
-- **Unique usernames** — every account reserves a unique username (see the Firebase plan section above for how uniqueness is enforced).
+- **Unique usernames** — every account reserves a unique, lowercase-only username (see the Firebase plan section above for how uniqueness is enforced). Separate from the freely-editable **display name** shown throughout the UI - see Settings, where both are shown together (`Display Name` / `@username`).
 
 ### Deliberately not built
 
@@ -272,3 +272,22 @@ Ran the established validation sweep (JS syntax, CSS brace balance, no duplicate
 - Enter/Return now chains between auth fields (username → email → password on Join, email → password on Sign In) instead of submitting from every field - matches each field's new `enterkeyhint` ("next"/"next"/"go"), so the on-screen keyboard button does the same thing physical Enter does. Only the last field in the active chain actually submits.
 
 Ran the established validation sweep (JS syntax, CSS brace balance, HTML div balance, no duplicate IDs, every new `onclick`/`oninput` resolves) - all clean. Bumped `service-worker.js`'s `CACHE_NAME` (`v13` → `v14`).
+
+---
+
+## Round: display name vs. username split, "nav bar glass" as the app-wide style, live username check (3 requests)
+
+**1. Username and display name split into two separate fields.** Previously the app conflated them - claiming a username also overwrote whatever was in `profiles[0].name`. Now:
+- `state.username` is the unique, fixed, lowercase-only handle - unchanged, still reserved via `claimUsername()`.
+- `state.profiles[0].name` is a separate, freely-editable **display name**, shown everywhere in the UI (`updateHomeUI()` now reads this as its primary source, falling back to Firebase Auth's own `displayName` only in the brief window before the profile doc has loaded - previously it was the other way around).
+- New **Edit Display Name** flow: tapping the name (or its pencil icon) in Settings' hero card opens `#editDisplayNameModal` (same `.confirm-card` pattern as Delete Account), which saves straight to `profiles[0].name` via `saveUserProfile()` - no format restriction beyond non-empty, since it's cosmetic only, not a unique handle.
+- Settings now shows both: the display name (large, editable) and a secondary `@username` line underneath (`settingsUsernameSubtitle`), same idea as most social apps.
+- At signup/username-claim time, the display name still defaults to the username chosen (a reasonable starting point), but `submitChosenUsername()` (the Google sign-in / legacy-account path) now only applies that default if `profiles[0].name` isn't already set - claiming a username on an account that already had a real display name (e.g. a Google account's actual name) no longer clobbers it.
+
+**2. The bottom nav bar's glass treatment is now the app's main visual language, not a one-off pushed further than everywhere else.** Previously the shared "chrome" tokens (`--glass-chrome-fill`, `--glass-chrome-blur`, `--glass-chrome-border`, `--glass-chrome-shadow`) and `--surface`/`--surface-2`/`--surface-3` were deliberately kept a notch more opaque/bordered than `.bottom-nav`'s own bespoke recipe, out of caution around reintroducing legibility bugs from earlier dark-mode rounds. That caution's been superseded by this request - `tokens.css`'s shared tokens (light and dark) now mirror the nav bar's actual numbers: much lower fill opacity, heavier blur+saturation (`blur(70-72px) saturate(220-280%)`, vs. the old `blur(60-64px) saturate(180-240%)`), and a far softer border (`--glass-border` roughly halved in opacity) instead of a defined ring. Since most of the app's glass surfaces already read from these tokens, the change cascades automatically to `.search-box`, `.toast`, pill buttons, `.auth-input`, and more. The handful of surfaces that hardcode their own values instead of using the tokens were updated by hand to match: `.hero-card`, `.analytics-card`, `.confirm-card`, `.auth-overlay-card`, and `.modal-sheet-compact` (light and dark variants of each). `.hero-card` keeps its own blue tint (a deliberate identity choice, not part of the transparency system) but is now just as translucent as everything else. The nav bar itself (`.bottom-nav`) is untouched - it's still the reference point everything else now matches, not something that needed to change.
+
+**3. Small user-friendliness tweaks:**
+- Live "is this username available?" feedback added to the Choose Username screen (`wireUsernameAvailabilityCheck()`) - debounced 500ms after typing stops, shows "Checking availability...", then a green "Username is available" or red "Username is already taken" line. Purely informational - `claimUsername()`'s transaction at actual submit time is still what enforces it, since availability can change again in the gap between typing and submitting. Scoped to this screen only for now, not the Join form's own username field, which doesn't have a status slot in its current compact two-column layout - the submit-time check there is unchanged.
+- `.settings-name-edit` (the new tappable display-name row in Settings) is a small pencil-icon affordance - worth a look if it ever feels hard to tap precisely on a small screen, since its hit area is currently just the text+icon's own bounds.
+
+Ran the established validation sweep (JS syntax, CSS/tokens.css brace balance, HTML div balance, no duplicate IDs, every `onclick`/`oninput` resolves to a real function) - all clean. Bumped `service-worker.js`'s `CACHE_NAME` (`v14` → `v15`).
