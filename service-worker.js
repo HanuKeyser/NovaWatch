@@ -15,7 +15,7 @@
 // enable is registration.showNotification() working reliably while the
 // service worker is active (e.g. app open in a background tab).
 
-const CACHE_NAME = "novawatch-shell-v14";
+const CACHE_NAME = "novawatch-shell-v11";
 
 self.addEventListener("install", (event) => {
     // self.registration.scope is the actual folder this worker controls
@@ -33,9 +33,7 @@ self.addEventListener("install", (event) => {
         appShellUrl,
         appShellUrl + "styles/tokens.css",
         appShellUrl + "styles/app.css",
-        appShellUrl + "styles/multi-library.css",
-        appShellUrl + "scripts/app.js",
-        appShellUrl + "scripts/multi-library.js"
+        appShellUrl + "scripts/app.js"
     ];
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
@@ -60,9 +58,7 @@ self.addEventListener("fetch", (event) => {
     const isShellAsset = [
         "styles/tokens.css",
         "styles/app.css",
-        "styles/multi-library.css",
-        "scripts/app.js",
-        "scripts/multi-library.js"
+        "scripts/app.js"
     ].some((path) => event.request.url.endsWith(path));
 
     // Only ever serve from cache as a fallback when the network fails - for
