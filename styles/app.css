@@ -2041,7 +2041,25 @@ html[data-theme="dark"] .modal-sheet-compact {
 .season-button.active {
     background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
     color: white;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    /* Two-layer elevation (a tight contact shadow + a softer, wider
+       ambient glow) instead of one flat shadow - the same "real depth"
+       language the app's own --glass-chrome-shadow token already uses
+       elsewhere, rather than inventing a new treatment. Paired with a
+       faint inset ring (matches .segmented-btn.active's own active-pill
+       polish) and a slight permanent scale-up, so the selected season
+       reads as genuinely lifted off the row - not just recolored - which
+       is what actually made it feel premium versus the previous flat
+       single-shadow version. */
+    box-shadow:
+        0 2px 6px rgba(0, 102, 204, 0.28),
+        0 10px 22px rgba(0, 102, 204, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    transform: scale(1.03);
+}
+
+.season-button.active:active {
+    transform: scale(0.97);
 }
 
 .episode {
