@@ -454,21 +454,6 @@ img {
     opacity: 0.8;
 }
 
-.new-episode-badge {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    z-index: 3;
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: var(--danger);
-    color: white;
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
-
 .card-title {
     margin-top: 8px;
     font-size: 12px;
@@ -628,8 +613,17 @@ img {
 
 .search-box input {
     width: 100%;
-    height: 50px;
-    padding: 0 46px 0 48px;
+    /* No explicit height/line-height - a fixed line-height that large
+       relative to the font size is what actually caused the caret to
+       render below the visible box instead of centered in it (a real,
+       separate bug from the native-decoration one below, introduced by
+       an earlier fix that forced line-height: 50px to match a fixed
+       height: 50px). Padding alone reaches the same ~50px total height
+       (border-box, so padding+border count toward it) while letting the
+       browser center a single line of text/caret using its own normal
+       line-height - the reliable way to vertically center input text
+       across browsers, rather than fighting the caret's own layout. */
+    padding: 15px 46px 15px 48px;
     outline: none;
     background: var(--glass-sheen), var(--glass-chrome-fill);
     backdrop-filter: var(--glass-chrome-blur);
@@ -638,7 +632,6 @@ img {
     border-radius: 999px;
     color: var(--text);
     font-size: 14px;
-    line-height: 50px;
     box-shadow: var(--glass-chrome-shadow);
     transition: all 0.2s ease;
     /* type="search" gets a native WebKit appearance (its own magnifying-
@@ -646,7 +639,7 @@ img {
        enabled, that native chrome fights the custom .search-icon/
        .search-clear-btn drawn on top of it - which is why the custom
        glass icon could end up hidden behind/under it, and why the text
-       cursor sat at the wrong vertical position until the first
+       cursor sat at the wrong horizontal position until the first
        keystroke (WebKit only finalizes the input's internal layout,
        decorations included, once there's actual content). Resetting
        appearance and hiding the native decorations below removes that
@@ -836,7 +829,14 @@ img {
     flex: 0 0 66px;
     width: 66px;
     height: 94px;
-    border-radius: 14px;
+    /* Was a hardcoded 14px - every other poster thumbnail in the app
+       (Library grid, Discover carousel, Continue Watching, Upcoming)
+       used a different radius each, so the same conceptual "poster
+       thumbnail" visibly changed shape depending which tab it was on.
+       Unified to --radius-lg, which tokens.css already documented as
+       the intended value for exactly this ("posters, continue-card")
+       but this rule (and a couple of others) never actually used it. */
+    border-radius: var(--radius-lg);
     object-fit: cover;
     background: var(--surface-2);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
@@ -1011,7 +1011,9 @@ img {
     width: 66px;
     height: 94px;
     overflow: hidden;
-    border-radius: 14px;
+    /* Unified with the rest of the app's poster thumbnails - see the
+       comment on .search-card-poster above. */
+    border-radius: var(--radius-lg);
     background: var(--surface-2);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
 }
@@ -1187,7 +1189,9 @@ img {
     flex: 0 0 80px;
     width: 80px;
     height: 116px;
-    border-radius: 16px;
+    /* Unified with the rest of the app's poster thumbnails - see the
+       comment on .search-card-poster above. */
+    border-radius: var(--radius-lg);
     object-fit: cover;
     background: var(--surface-2);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
@@ -2025,19 +2029,6 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .episode-up-next {
     background: rgba(0, 102, 204, 0.06);
-}
-
-.episode-up-next-badge {
-    display: inline-block;
-    margin-right: 6px;
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: var(--blue);
-    color: white;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.4px;
-    vertical-align: middle;
 }
 
 .episode-main {
