@@ -625,8 +625,37 @@ img {
     border-radius: 999px;
     color: var(--text);
     font-size: 14px;
+    line-height: 50px;
     box-shadow: var(--glass-chrome-shadow);
     transition: all 0.2s ease;
+    /* type="search" gets a native WebKit appearance (its own magnifying-
+       glass icon area + "x" cancel button) unless this is reset. Left
+       enabled, that native chrome fights the custom .search-icon/
+       .search-clear-btn drawn on top of it - which is why the custom
+       glass icon could end up hidden behind/under it, and why the text
+       cursor sat at the wrong vertical position until the first
+       keystroke (WebKit only finalizes the input's internal layout,
+       decorations included, once there's actual content). Resetting
+       appearance and hiding the native decorations below removes that
+       conflict everywhere .search-box is used, not just here. */
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Same reasoning as -webkit-appearance: none above - explicitly hides
+   every native WebKit decoration a type="search" input can grow
+   (magnifying-glass icon, results dropdown affordance, "x" cancel
+   button) so only the app's own .search-icon/.search-clear-btn ever
+   render, and so the input's internal box layout - and therefore the
+   caret position - is stable from the very first tap instead of
+   shifting once text is typed. */
+.search-box input::-webkit-search-decoration,
+.search-box input::-webkit-search-cancel-button,
+.search-box input::-webkit-search-results-button,
+.search-box input::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
 }
 
 .search-box input:focus {
@@ -641,6 +670,8 @@ img {
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
+    z-index: 1;
+    pointer-events: none;
 }
 
 .search-clear-btn {
@@ -658,6 +689,7 @@ img {
     width: 26px;
     height: 26px;
     border-radius: 50%;
+    z-index: 1;
 }
 
 .search-clear-btn:hover {
@@ -2145,10 +2177,12 @@ html[data-theme="dark"] .modal-sheet-compact {
    then grouped, icon-led rows so it reads like a real settings screen
    instead of a flat list of controls.
 ========================================================= */
-.settings-profile-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+/* Reuses .hero-card/.hero-top/.hero-profile wholesale (see HOME HERO
+   above) - this just supplies the margin that used to live on the old
+   flat .settings-profile-row, since .hero-card itself is margin-less
+   (Home relies on .tab-content-wrapper's gap instead, which Settings
+   doesn't have). */
+.settings-hero-card {
     margin: 20px 0 28px;
 }
 
@@ -2621,7 +2655,14 @@ html[data-theme="dark"] .avatar-edit-badge {
 /* =========================================================
    DEDICATED AUTHENTICATION OVERLAY
 ========================================================= */
-#authScreen {
+/* #authScreen, #verifyScreen, and #chooseUsernameScreen are mutually
+   exclusive full-screen gates (sign in/join, then email verification,
+   then - if needed - a unique username) that never show at once, so
+   they share one set of layout rules rather than three copies drifting
+   apart over time. */
+#authScreen,
+#verifyScreen,
+#chooseUsernameScreen {
     position: fixed;
     inset: 0;
     z-index: 1000;
@@ -2633,30 +2674,9 @@ html[data-theme="dark"] .avatar-edit-badge {
 }
 
 /* Blur backdrop overlay */
-#authScreen::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    z-index: -1;
-}
-
-/* Same treatment as #authScreen above - shares its layout rules rather
-   than the two drifting apart over time, since they're mutually exclusive
-   full-screen gates that never show at once. */
-#verifyScreen {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: var(--bg-mesh);
-    display: none; /* Hidden by default, controlled via JS */
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-
-#verifyScreen::before {
+#authScreen::before,
+#verifyScreen::before,
+#chooseUsernameScreen::before {
     content: '';
     position: absolute;
     inset: 0;
