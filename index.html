@@ -66,8 +66,8 @@
 
         <div class="auth-form">
             <div class="auth-row">
-                <input type="text" id="authUsername" class="auth-input" placeholder="Username" style="display:none;" onkeydown="handleAuthKeydown(event)">
-                <input type="email" id="authEmail" class="auth-input" placeholder="Email address" onkeydown="handleAuthKeydown(event)">
+                <input type="text" id="authUsername" class="auth-input" placeholder="username" style="display:none;" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" enterkeyhint="next" onkeydown="handleAuthKeydown(event)">
+                <input type="email" id="authEmail" class="auth-input" placeholder="Email address" autocomplete="email" enterkeyhint="next" onkeydown="handleAuthKeydown(event)">
             </div>
             <div class="auth-field">
 <input
@@ -75,6 +75,8 @@
     id="authPassword"
     class="auth-input"
     placeholder="Password"
+    autocomplete="current-password"
+    enterkeyhint="go"
     oninput="clearPasswordError()"
     onkeydown="handleAuthKeydown(event)"
 >
@@ -142,15 +144,19 @@
     <div class="auth-overlay-card">
         <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch Logo" class="auth-logo">
         <h1 class="auth-title">Choose a username</h1>
-        <p class="auth-subtitle">Pick a unique username for your account. Letters, numbers, and underscores only.</p>
+        <p class="auth-subtitle">Pick a unique username for your account. Lowercase letters, numbers, dots, and underscores only.</p>
 
         <div class="auth-field">
             <input
                 type="text"
                 id="chooseUsernameInput"
                 class="auth-input"
-                placeholder="Username"
+                placeholder="username"
                 autocomplete="off"
+                autocapitalize="none"
+                autocorrect="off"
+                spellcheck="false"
+                enterkeyhint="go"
                 onkeydown="handleChooseUsernameKeydown(event)"
                 oninput="clearChooseUsernameError()"
             >
@@ -199,7 +205,7 @@
             <circle cx="11" cy="11" r="7"/>
             <path d="M20 20l-4-4"/>
         </svg>
-        <input id="onlineSearchInput" type="search" placeholder="Search for TV Shows & Movies..." autocomplete="off">
+        <input id="onlineSearchInput" type="search" placeholder="Search for TV Shows & Movies..." autocomplete="off" enterkeyhint="search">
         <button class="search-clear-btn" type="button" onclick="clearSearch('onlineSearchInput')" aria-label="Clear search">
             <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
         </button>
@@ -230,7 +236,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="tvLibrarySearchInput" type="search" placeholder="Search TV shows library..." autocomplete="off">
+                <input id="tvLibrarySearchInput" type="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -248,7 +254,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="movieLibrarySearchInput" type="search" placeholder="Search movies library..." autocomplete="off">
+                <input id="movieLibrarySearchInput" type="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -607,14 +613,11 @@
             </button>
         </div>
 
-        <div class="modal-content" style="padding-top: 60px;">
-            <h2 class="poster-picker-title">Settings</h2>
-
-            <!-- Profile header - same "hero-card" glass treatment as Home's
-                 identity card (see .hero-card) instead of a plain flat row,
-                 so Settings' own top-level identity moment reads as the
-                 same premium surface as the rest of the app rather than a
-                 bare list starting point. -->
+        <div class="modal-content" style="padding-top: 52px;">
+            <!-- No redundant "Settings" title here - the hero-card below
+                 (same identity treatment as Home's) is the header now,
+                 matching how Home itself has no page title above its own
+                 hero-card either. -->
             <div class="hero-card settings-hero-card">
                 <div class="hero-top">
                     <div class="hero-profile">
@@ -767,7 +770,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="regionSearchInput" type="search" placeholder="Search countries..." autocomplete="off">
+                <input id="regionSearchInput" type="search" placeholder="Search countries..." autocomplete="off" enterkeyhint="search">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('regionSearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
