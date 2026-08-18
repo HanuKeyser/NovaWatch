@@ -679,6 +679,24 @@ document.addEventListener("DOMContentLoaded", () => {
     populateRegionOptions();
     checkTodaysReleases();
 
+    // The installed PWA's manifest uses launch_handler.client_mode:
+    // "navigate-existing" (see manifest.json) - reusing the already-open
+    // window instead of opening a new one when the app icon is tapped
+    // again. That's good (no duplicate windows), but it means normal
+    // page-load logic never re-runs in that case: auth state hasn't
+    // changed, so onAuthStateChanged/proceedToApp - the thing that
+    // otherwise puts the app on Home - never fires either, leaving
+    // whichever tab was open before still showing. The Launch Handler
+    // API's launchQueue exists specifically for this: its consumer
+    // fires on every launch, including a reused-window one, so this is
+    // what actually makes "opening NovaWatch always lands on Home" true
+    // for an already-running installed app, not just a fresh load.
+    if ("launchQueue" in window) {
+        window.launchQueue.setConsumer(() => {
+            showPage("home");
+        });
+    }
+
     // Catches the moment something crosses into "released today" for
     // anyone who leaves the app open across midnight, without needing a
     // network call.
@@ -934,17 +952,181 @@ async function saveItem(item) {
 async function saveUserProfile() {
     try {
         if (!auth || !auth.currentUser || !db) return false;
+        const payload = {
+            profiles: state.profiles,
+            activeProfileId: state.activeProfileId,
+            region: state.region
+        };
+        // Only ever written once state.username is actually known - a
+        // blind `username: state.username || null` here would overwrite
+        // (i.e. wipe) an already-reserved username on any call site that
+        // runs before the profile's been loaded into state yet.
+        if (state.username) payload.username = state.username;
         await db.collection("users")
             .doc(auth.currentUser.uid)
-            .set({
-                profiles: state.profiles,
-                activeProfileId: state.activeProfileId,
-                region: state.region
-            }, { merge: true });
+            .set(payload, { merge: true });
         return true;
     } catch (err) {
         console.error("Firestore user profile save FAILED", err);
         return false;
+    }
+}
+
+/* =========================================================
+   USERNAMES
+   Every account gets a unique, reserved username - either chosen at
+   signup (the Join form's username field, see handleSignUp) or, for
+   Google sign-in and any pre-existing account from before this was
+   required, via the blocking #chooseUsernameScreen (see
+   showChooseUsernameScreen/submitChosenUsername below).
+
+   Reservation is a top-level `usernames/{lowercased-username}` doc
+   (`{uid, username}`) - a separate collection rather than a field on
+   `users/{uid}`, so checking/claiming a name never needs to know who
+   already owns it. Stored lowercased for a case-insensitive uniqueness
+   check (so "Alex" and "alex" can't both be taken); the doc itself keeps
+   the original casing the person typed for display.
+
+   isUsernameAvailable() is a plain read - fast, good enough for instant
+   UI feedback, but NOT what actually prevents two people claiming the
+   same name at once (a plain read-then-write has a race window).
+   claimUsername() is the real enforcement: a Firestore transaction that
+   re-reads the doc and only writes if it's still free (or already owned
+   by this same uid, so re-running it for an already-claimed name is a
+   harmless no-op). Every caller must be ready for claimUsername() to
+   throw and handle the conflict - see handleSignUp/submitChosenUsername.
+========================================================= */
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
+
+function isValidUsernameFormat(username) {
+    return USERNAME_REGEX.test(username);
+}
+
+async function isUsernameAvailable(username) {
+    if (!db) return true; // Best-effort if Firestore isn't configured.
+    const doc = await db.collection("usernames").doc(username.toLowerCase()).get();
+    return !doc.exists;
+}
+
+async function claimUsername(uid, username) {
+    const ref = db.collection("usernames").doc(username.toLowerCase());
+    await db.runTransaction(async (tx) => {
+        const doc = await tx.get(ref);
+        if (doc.exists && doc.data().uid !== uid) {
+            throw new Error("USERNAME_TAKEN");
+        }
+        tx.set(ref, { uid: uid, username: username });
+    });
+}
+
+/* =========================================================
+   CHOOSE USERNAME SCREEN
+   A full-screen blocking overlay, same tier as #authScreen/#verifyScreen -
+   shown whenever a signed-in account doesn't have a reserved username on
+   file yet (triggered from proceedToApp's profile load below).
+========================================================= */
+function showChooseUsernameScreen(user) {
+    const screen = document.getElementById("chooseUsernameScreen");
+    if (!screen) return;
+    screen.style.display = "flex";
+    const input = document.getElementById("chooseUsernameInput");
+    if (input) {
+        // Pre-filled as a starting suggestion from their Google name/email
+        // - still fully editable, and still has to pass the exact same
+        // availability check as anything else typed in here.
+        const suggestion = (user.displayName || (user.email ? user.email.split('@')[0] : ""))
+            .replace(/[^a-zA-Z0-9_]/g, "")
+            .slice(0, 20);
+        input.value = suggestion;
+        setTimeout(() => input.focus(), 50);
+    }
+}
+
+function hideChooseUsernameScreen() {
+    const screen = document.getElementById("chooseUsernameScreen");
+    if (screen) screen.style.display = "none";
+}
+
+function clearChooseUsernameError() {
+    const errEl = document.getElementById("chooseUsernameError");
+    if (errEl) {
+        errEl.textContent = "";
+        errEl.classList.remove("show");
+    }
+    const input = document.getElementById("chooseUsernameInput");
+    if (input) input.classList.remove("input-error");
+}
+
+function showChooseUsernameError(message) {
+    const errEl = document.getElementById("chooseUsernameError");
+    if (errEl) {
+        errEl.textContent = message;
+        errEl.classList.add("show");
+    }
+    const input = document.getElementById("chooseUsernameInput");
+    if (input) input.classList.add("input-error");
+}
+
+function handleChooseUsernameKeydown(event) {
+    if (event.key === "Enter") submitChosenUsername();
+}
+
+async function submitChosenUsername() {
+    if (!auth || !auth.currentUser) return;
+
+    const input = document.getElementById("chooseUsernameInput");
+    const username = input ? input.value.trim() : "";
+
+    if (!username) {
+        showChooseUsernameError("Please enter a username.");
+        return;
+    }
+
+    if (!isValidUsernameFormat(username)) {
+        showChooseUsernameError("3-20 characters: letters, numbers, and underscores only.");
+        return;
+    }
+
+    const btn = document.getElementById("chooseUsernameBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving...";
+    }
+
+    try {
+        const available = await isUsernameAvailable(username);
+        if (!available) {
+            showChooseUsernameError("That username is already taken.");
+            return;
+        }
+
+        await claimUsername(auth.currentUser.uid, username);
+        await auth.currentUser.updateProfile({ displayName: username });
+
+        if (!state.profiles || state.profiles.length === 0) {
+            state.profiles = [{ id: "profile-main", name: username, initials: username.charAt(0).toUpperCase(), avatarId: randomAvatarId() }];
+        } else {
+            state.profiles[0].name = username;
+            state.profiles[0].initials = username.charAt(0).toUpperCase();
+        }
+        state.username = username;
+        await saveUserProfile();
+
+        hideChooseUsernameScreen();
+        updateHomeUI();
+        showToast("Username saved!", "success");
+    } catch (err) {
+        // A transaction conflict (someone else claimed it a moment ago)
+        // lands here same as any other failure - re-check-and-retry is
+        // on the person, not automatic, since the name they wanted is
+        // simply gone either way.
+        console.error("Username claim FAILED", err);
+        showChooseUsernameError("That username was just taken. Try another.");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Continue";
+        }
     }
 }
 
@@ -1124,6 +1306,11 @@ async function handleSignUp() {
         return;
     }
 
+    if (!isValidUsernameFormat(username)) {
+        showToast("Usernames must be 3-20 characters: letters, numbers, and underscores only.", "error");
+        return;
+    }
+
     if (!email) {
         showToast("Please enter your email address.", "error");
         return;
@@ -1148,10 +1335,37 @@ async function handleSignUp() {
     }
 
     try {
+        // Quick preflight check so an already-taken username is caught
+        // before an auth account even exists, in the common (non-race)
+        // case. This alone doesn't stop two people claiming the same
+        // name at the exact same moment - the transaction below does.
+        const available = await isUsernameAvailable(username);
+        if (!available) {
+            showToast("That username is already taken. Please choose another.", "error");
+            return;
+        }
+
         const userCredential = await auth.createUserWithEmailAndPassword(
             email,
             password
         );
+
+        // Reserve the username now that there's a uid to attach it to.
+        // If someone else claimed it in the gap between the check above
+        // and here, back the whole signup out - a half-created account
+        // with no valid username isn't a state worth leaving behind.
+        try {
+            await claimUsername(userCredential.user.uid, username);
+        } catch (claimErr) {
+            console.error("Username claim FAILED", claimErr);
+            try {
+                await userCredential.user.delete();
+            } catch (deleteErr) {
+                console.error("Rollback after failed username claim also failed:", deleteErr);
+            }
+            showToast("That username was just taken by someone else. Please choose another.", "error");
+            return;
+        }
 
         await userCredential.user.updateProfile({
             displayName: username
@@ -1168,6 +1382,7 @@ async function handleSignUp() {
             state.profiles[0].name = username;
             state.profiles[0].initials = username.charAt(0).toUpperCase();
         }
+        state.username = username;
 
         await saveUserProfile();
 
@@ -1204,6 +1419,7 @@ async function handleSignOut() {
     try {
         await auth.signOut();
         state.library = [];
+        hideChooseUsernameScreen();
         refreshActivePage();
         showToast("Signed out successfully.", "success");
     } catch (err) {
@@ -1353,6 +1569,22 @@ async function deleteAllUserData(uid) {
 
     await deleteCollection("library");
     await deleteCollection("archivedShows");
+
+    // Free up the reserved username so someone else can claim it -
+    // otherwise a deleted account would permanently squat on the name.
+    // Guarded to only delete a reservation that's actually this uid's
+    // own, in case state.username is ever stale.
+    if (state.username) {
+        const usernameRef = db.collection("usernames").doc(state.username.toLowerCase());
+        try {
+            const usernameDoc = await usernameRef.get();
+            if (usernameDoc.exists && usernameDoc.data().uid === uid) {
+                await usernameRef.delete();
+            }
+        } catch (err) {
+            console.warn("Couldn't release reserved username on account deletion:", err);
+        }
+    }
 
     await db.collection("users").doc(uid).delete().catch(() => {});
 }
@@ -2651,6 +2883,7 @@ if (auth) {
             await proceedToApp(user, authScreen, mainApp);
         } else {
             hideVerifyScreen();
+            hideChooseUsernameScreen();
 
             // User is logged out: Show Auth Screen, Hide Main App
             authScreen.style.display = "flex";
@@ -2752,6 +2985,17 @@ async function proceedToApp(user, authScreen, mainApp) {
                         await saveUserProfile();
                     }
                     syncRegionUI();
+
+                    // Every account needs a reserved, unique username.
+                    // Google sign-in never asks for one up front (that
+                    // only happens in the Join form's own username
+                    // field), and accounts created before this was
+                    // required won't have one on file either - gate on
+                    // it here rather than silently keeping whatever
+                    // display name Google/Firebase happened to supply.
+                    if (!state.username) {
+                        showChooseUsernameScreen(user);
+                    }
                 })();
 
                 const libraryPromise = (async () => {
@@ -4146,10 +4390,11 @@ function createCard(item, upcomingShowIds = null) {
         <div class="card" onclick="handleCardClick(event, '${item.id}')" data-id="${item.id}">
             <div class="poster"
                  oncontextmenu="return false;"
-                 onmousedown="startPosterPress('${item.id}', '${item.type}')"
+                 onmousedown="startPosterPress('${item.id}', '${item.type}', event)"
                  onmouseup="endPosterPress()"
                  onmouseleave="endPosterPress()"
-                 ontouchstart="startPosterPress('${item.id}', '${item.type}')"
+                 ontouchstart="startPosterPress('${item.id}', '${item.type}', event)"
+                 ontouchmove="movePosterPress(event)"
                  ontouchend="endPosterPress()"
                  ontouchcancel="endPosterPress()">
                 ${hasPoster ? `
@@ -5030,7 +5275,8 @@ function renderEpisodesList(container) {
                             onmousedown="startSeasonPress(${s})" 
                             onmouseup="endSeasonPress()" 
                             onmouseleave="endSeasonPress()"
-                            ontouchstart="startSeasonPress(${s})" 
+                            ontouchstart="startSeasonPress(${s}, event)" 
+                            ontouchmove="moveSeasonPress(event)"
                             ontouchend="endSeasonPress()" 
                             ontouchcancel="endSeasonPress()"
                             onclick="handleSeasonClick(event, ${s})">
@@ -5109,14 +5355,34 @@ function renderEpisodesList(container) {
 ========================================================= */
 let seasonPressTimer = null;
 let isLongPress = false;
+let seasonPressStartX = 0;
+let seasonPressStartY = 0;
 
-function startSeasonPress(seasonNumber) {
+function startSeasonPress(seasonNumber, event) {
     isLongPress = false;
+    const touch = event && event.touches && event.touches[0];
+    seasonPressStartX = touch ? touch.clientX : 0;
+    seasonPressStartY = touch ? touch.clientY : 0;
     seasonPressTimer = setTimeout(() => {
         isLongPress = true;
         toggleEntireSeasonWatched(seasonNumber);
         if (navigator.vibrate) navigator.vibrate(50);
     }, 600);
+}
+
+// The season strip scrolls horizontally - without this, swiping between
+// seasons with a finger that lingers 600ms (easy to do mid-swipe) could
+// fire "mark whole season watched" instead of just switching seasons.
+// Same fix, same reasoning as movePosterPress() above.
+function moveSeasonPress(event) {
+    if (!seasonPressTimer) return;
+    const touch = event && event.touches && event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - seasonPressStartX;
+    const dy = touch.clientY - seasonPressStartY;
+    if (Math.hypot(dx, dy) > POSTER_PRESS_MOVE_THRESHOLD) {
+        endSeasonPress();
+    }
 }
 
 function endSeasonPress() {
@@ -5143,17 +5409,44 @@ function handleSeasonClick(event, seasonNumber) {
    poster/backdrop TMDB has for that title - same 600ms long-press
    pattern as the season selector above, including the click-suppression
    so the long-press doesn't also open the details modal underneath it.
+
+   Movement cancellation: the original version only ever cleared the
+   timer on touchend/touchcancel/mouseup - never on movement - so
+   scrolling the library with a finger that lingered on a poster for
+   600ms (easy to do mid-scroll, especially right as a scroll gesture
+   starts or during momentum) would pop the picker open in the middle of
+   scrolling. movePosterPress() now cancels the pending long-press the
+   moment the touch moves more than a few pixels from where it started,
+   the same "was this actually a hold, or a drag/scroll" distinction the
+   nav bar's drag-to-switch gesture already makes (see DRAG_THRESHOLD).
 ========================================================= */
 let posterPressTimer = null;
 let isPosterLongPress = false;
+let posterPressStartX = 0;
+let posterPressStartY = 0;
+const POSTER_PRESS_MOVE_THRESHOLD = 10;
 
-function startPosterPress(itemId, type) {
+function startPosterPress(itemId, type, event) {
     isPosterLongPress = false;
+    const touch = event && event.touches && event.touches[0];
+    posterPressStartX = touch ? touch.clientX : 0;
+    posterPressStartY = touch ? touch.clientY : 0;
     posterPressTimer = setTimeout(() => {
         isPosterLongPress = true;
         if (navigator.vibrate) navigator.vibrate(50);
         openChangePosterPicker(itemId, type);
     }, 600);
+}
+
+function movePosterPress(event) {
+    if (!posterPressTimer) return;
+    const touch = event && event.touches && event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - posterPressStartX;
+    const dy = touch.clientY - posterPressStartY;
+    if (Math.hypot(dx, dy) > POSTER_PRESS_MOVE_THRESHOLD) {
+        endPosterPress();
+    }
 }
 
 function endPosterPress() {
