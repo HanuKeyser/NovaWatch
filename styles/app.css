@@ -1508,6 +1508,15 @@ html[data-theme="dark"] .modal-sheet-compact {
     max-height: 100%;
     margin: 0;
     overflow-y: auto;
+    /* Without this, iOS Safari falls back to a much less performant,
+       non-hardware-accelerated scrolling implementation for an inner
+       scrollable div (as opposed to the page/body itself, which always
+       scrolls natively) - the classic cause of a scrollable area that
+       feels stiff, stutters, or genuinely freezes for a moment before
+       "catching up". Every full-screen modal (Settings, show/episode
+       details, Achievements, NovaWrapped, the picker modals) scrolls via
+       this one shared class, so this single fix covers all of them. */
+    -webkit-overflow-scrolling: touch;
     /* Soft top-lit sheen (light "entering" from the top edge) layered over
        the SAME --bg-mesh every other surface in the app sits on (Home,
        Discover, etc. via <body>) - previously this was a flat frosted
@@ -1804,6 +1813,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     display: flex;
     gap: 12px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;
 }
 
@@ -1970,6 +1980,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     display: flex;
     gap: 8px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     flex: 1;
     min-width: 0;
 }
@@ -2412,6 +2423,10 @@ html[data-theme="dark"] .modal-sheet-compact {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* Same reasoning as .modal-sheet - a long scrollable list (every
+       ISO 3166-1 country) is exactly the kind of inner scroll area that
+       needs this for smooth hardware-accelerated scrolling on iOS. */
+    -webkit-overflow-scrolling: touch;
 }
 
 .avatar-edit-wrap {
@@ -2704,6 +2719,8 @@ html[data-theme="dark"] .avatar-edit-badge {
     max-width: 400px;
     max-height: 100%;
     overflow-y: auto;
+    /* Same reasoning as .modal-sheet above. */
+    -webkit-overflow-scrolling: touch;
     background: var(--surface);
     backdrop-filter: blur(66px) saturate(270%);
     -webkit-backdrop-filter: blur(66px) saturate(270%);
