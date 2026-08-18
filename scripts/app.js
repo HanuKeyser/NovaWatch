@@ -663,6 +663,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    // Enforces lowercase-only, [a-z0-9._] usernames live as the person
+    // types, on both places a username is ever entered (signup's Join
+    // form and the Choose Username screen) - see sanitizeUsernameInput().
+    ['authUsername', 'chooseUsernameInput'].forEach(id => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.addEventListener("input", () => sanitizeUsernameInput(input));
+    });
+
     // Filters the region picker's rows as you type - separate from the
     // has-text toggle above, which only handles the clear button's visibility.
     const regionSearchInput = document.getElementById("regionSearchInput");
@@ -996,10 +1005,19 @@ async function saveUserProfile() {
    harmless no-op). Every caller must be ready for claimUsername() to
    throw and handle the conflict - see handleSignUp/submitChosenUsername.
 ========================================================= */
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
+const USERNAME_REGEX = /^[a-z0-9._]{3,20}$/;
 
 function isValidUsernameFormat(username) {
     return USERNAME_REGEX.test(username);
+}
+
+// Lowercases and strips any character outside [a-z0-9._] as the person
+// types, on any input using the "username-input" marker class - so
+// usernames are enforced as lowercase-only live, not just rejected with
+// an error after the fact. See the DOMContentLoaded wiring below.
+function sanitizeUsernameInput(input) {
+    const cleaned = input.value.toLowerCase().replace(/[^a-z0-9._]/g, "");
+    if (cleaned !== input.value) input.value = cleaned;
 }
 
 async function isUsernameAvailable(username) {
@@ -1033,9 +1051,13 @@ function showChooseUsernameScreen(user) {
     if (input) {
         // Pre-filled as a starting suggestion from their Google name/email
         // - still fully editable, and still has to pass the exact same
-        // availability check as anything else typed in here.
+        // availability check as anything else typed in here. Lowercased
+        // and filtered the same way sanitizeUsernameInput() enforces live
+        // typing, so the suggestion itself is never something the person
+        // couldn't have typed themselves.
         const suggestion = (user.displayName || (user.email ? user.email.split('@')[0] : ""))
-            .replace(/[^a-zA-Z0-9_]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9._]/g, "")
             .slice(0, 20);
         input.value = suggestion;
         setTimeout(() => input.focus(), 50);
@@ -1083,7 +1105,7 @@ async function submitChosenUsername() {
     }
 
     if (!isValidUsernameFormat(username)) {
-        showChooseUsernameError("3-20 characters: letters, numbers, and underscores only.");
+        showChooseUsernameError("3-20 characters: lowercase letters, numbers, dots, and underscores only.");
         return;
     }
 
@@ -1169,6 +1191,16 @@ function setAuthMode(mode) {
         actionBtn.onclick = mode === 'signup' ? handleSignUp : handleSignIn;
     }
 
+    // The password field is shared between both modes (toggled via the
+    // same input) - autocomplete="new-password" vs "current-password"
+    // is what tells a password manager whether to offer generating/
+    // saving a new password or filling the existing one, so it has to
+    // switch with the mode rather than being set once and forgotten.
+    const passwordInput = document.getElementById("authPassword");
+    if (passwordInput) {
+        passwordInput.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
+    }
+
     clearPasswordError();
 }
 
@@ -1178,9 +1210,30 @@ function setAuthMode(mode) {
 // for free, and #authSignInBtn's onclick is already kept pointed at
 // whichever handler is currently active by setAuthMode above, so this
 // just triggers that same button rather than duplicating the mode logic.
+// Enter advances to the next field instead of always submitting - Join
+// mode chains username -> email -> password, Sign In chains email ->
+// password; only the last field in whichever chain is active actually
+// submits. Matches each field's enterkeyhint ("next"/"next"/"go" - see
+// the HTML) so the on-screen keyboard's own action button does the same
+// thing the physical Enter key does.
 function handleAuthKeydown(event) {
     if (event.key !== 'Enter') return;
     event.preventDefault();
+
+    const fieldOrder = currentAuthMode === 'signup'
+        ? ['authUsername', 'authEmail', 'authPassword']
+        : ['authEmail', 'authPassword'];
+    const currentIndex = fieldOrder.indexOf(event.target.id);
+    const nextField = currentIndex >= 0 ? fieldOrder[currentIndex + 1] : null;
+
+    if (nextField) {
+        const nextEl = document.getElementById(nextField);
+        if (nextEl) {
+            nextEl.focus();
+            return;
+        }
+    }
+
     const btn = document.getElementById("authSignInBtn");
     if (btn && !btn.disabled) btn.click();
 }
@@ -1307,7 +1360,7 @@ async function handleSignUp() {
     }
 
     if (!isValidUsernameFormat(username)) {
-        showToast("Usernames must be 3-20 characters: letters, numbers, and underscores only.", "error");
+        showToast("Usernames must be 3-20 characters: lowercase letters, numbers, dots, and underscores only.", "error");
         return;
     }
 
@@ -4046,19 +4099,42 @@ function initNavBarDragToSwitch() {
             // easing defined on .nav-indicator itself) now that the raw
             // 1:1 tracking is done - this is what animates the pill's
             // final settle, for both the success path below and the
-            // released-outside-any-button fallback.
+            // released-outside-the-bar fallback.
             indicator.style.transition = "";
 
-            // The single, authoritative hit-test - computed fresh, right
-            // now, from the exact release coordinates. This is what fixes
-            // both "reverts to the original tab" and "lands on the wrong
-            // tab": there's no throttled/stale state to be wrong here,
-            // just one direct check of what's actually under the finger
-            // at the exact moment it lifts.
-            const hit = document.elementFromPoint(e.clientX, e.clientY);
-            const releaseButton = hit ? hit.closest(".nav-button") : null;
+            // Nearest-button snapping, not a strict "is the release point
+            // literally inside a button's own box" hit-test. The previous
+            // version used document.elementFromPoint(), which only counts
+            // as a hit when the finger is precisely over a .nav-button
+            // element - releasing in the small gaps BETWEEN buttons (easy
+            // to do with a thumb, especially mid-swipe, since there's a
+            // real gap plus the bar's own padding around each button) fell
+            // through to "outside any button" and reverted, even though
+            // the release was clearly closer to one tab than any other.
+            // This is what "doesn't switch unless you're fully on the
+            // tab" actually was. Picking whichever button's horizontal
+            // center the release point is nearest to - as long as the
+            // release is still within the bar's own bounds at all -
+            // matches how native tab bars feel: close enough commits, it
+            // isn't all-or-nothing pixel precision.
+            const navRect = nav.getBoundingClientRect();
+            const withinBar = e.clientX >= navRect.left && e.clientX <= navRect.right
+                && e.clientY >= navRect.top && e.clientY <= navRect.bottom;
 
-            if (releaseButton && nav.contains(releaseButton)) {
+            let releaseButton = null;
+            if (withinBar) {
+                let closestDist = Infinity;
+                nav.querySelectorAll(".nav-button").forEach((btn) => {
+                    const r = btn.getBoundingClientRect();
+                    const dist = Math.abs(e.clientX - (r.left + r.width / 2));
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        releaseButton = btn;
+                    }
+                });
+            }
+
+            if (releaseButton) {
                 e.preventDefault();
                 suppressNextClick = true;
                 clearTimeout(suppressClickTimer);
@@ -4072,8 +4148,9 @@ function initNavBarDragToSwitch() {
                 const targetPage = releaseButton.id.replace(/^nav/, "").toLowerCase();
                 showPage(targetPage);
             } else {
-                // Released outside any button - snap back to wherever the
-                // actually-active tab is, undoing the live preview.
+                // Released outside the bar entirely - snap back to
+                // wherever the actually-active tab is, undoing the live
+                // preview.
                 updateNavIndicator(true);
             }
         }
@@ -4175,8 +4252,14 @@ function setUpcomingFilter(filter) {
 function renderHomeTab() {
     updateHomeUI();
 
-    const totalShows = state.library.filter(i => i.type !== 'movie').length;
-    const totalMovies = state.library.filter(i => i.type === 'movie').length;
+    // Only counts shows/movies that have actually been watched - these
+    // two used to just count everything sitting in the library
+    // (added-but-unwatched included), which inflated the tiles above
+    // what "Viewing Analytics" should mean. Episodes below was already
+    // correct (filtered to watchedEps) - these two are now consistent
+    // with it.
+    const totalShows = state.library.filter(i => i.type !== 'movie' && i.episodes && i.episodes.some(ep => ep.watched)).length;
+    const totalMovies = state.library.filter(i => i.type === 'movie' && i.watched).length;
     
     let totalWatchedEpisodes = 0;
     let totalMinutes = 0;
