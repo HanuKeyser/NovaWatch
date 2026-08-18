@@ -1,204 +1,76 @@
 /* =========================================================
    MULTI-LIBRARY
-   Styles for the header library switcher, the "Choose Your Library"
-   screen, and the Add/Edit/Delete Library modals - see multi-library.js
-   for the logic that renders into these. Kept in its own file, same
-   reasoning as app.js/multi-library.js: everything this feature needs
-   lives in one place instead of scattered across the main stylesheet.
-   Reuses the app's existing design tokens throughout (tokens.css) so
-   nothing here can drift out of sync with the rest of the app's light/
-   dark palette.
+   Styles for the "Choose Your Library" screen and the Add/Edit/Delete
+   Library modals - see multi-library.js for the logic that renders into
+   these. Switching/managing libraries is reached only through Settings
+   > Libraries (openLibrarySelectionScreen()) - there is no persistent
+   switcher elsewhere in the app. Kept in its own file, same reasoning
+   as app.js/multi-library.js: everything this feature needs lives in
+   one place instead of scattered across the main stylesheet. Reuses the
+   app's existing design tokens throughout (tokens.css) so nothing here
+   can drift out of sync with the rest of the app's light/dark palette.
 ========================================================= */
-
-/* =========================================================
-   HEADER SWITCHER PILL
-   Floating glass capsule, same visual language as .bottom-nav (see
-   app.css) but much smaller and pinned to the top instead of the
-   bottom. Only shown once an account actually has more than one
-   library - see renderLibrarySwitcherPill() in multi-library.js.
-========================================================= */
-.library-header-bar {
-    position: fixed;
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 90;
-    display: flex;
-    justify-content: center;
-}
-
-.library-switcher-pill {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 38px;
-    padding: 0 16px;
-    max-width: 62vw;
-    border-radius: 999px;
-    background:
-        radial-gradient(120px 60px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
-        var(--glass-sheen),
-        rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(48px) saturate(220%);
-    -webkit-backdrop-filter: blur(48px) saturate(220%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), 0 18px 36px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 750;
-}
-
-.library-switcher-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.library-switcher-pill .icon-small {
-    flex-shrink: 0;
-    width: 15px;
-    height: 15px;
-    transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.library-switcher-pill.open .icon-small {
-    transform: rotate(180deg);
-}
-
-.library-switcher-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%) translateY(-6px) scale(0.96);
-    transform-origin: top center;
-    width: max-content;
-    min-width: 200px;
-    max-width: 78vw;
-    padding: 8px;
-    border-radius: var(--radius-lg);
-    background: var(--glass-sheen), rgba(248, 250, 252, 0.92);
-    backdrop-filter: blur(40px) saturate(200%);
-    -webkit-backdrop-filter: blur(40px) saturate(200%);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.library-switcher-menu.open {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0) scale(1);
-}
-
-.library-switcher-option {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 10px 10px;
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 650;
-    text-align: left;
-}
-
-.library-switcher-option:active {
-    background: var(--surface-2);
-}
-
-.library-switcher-option span {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.library-switcher-option.active {
-    color: var(--blue);
-}
-
-.library-switcher-option .icon-small {
-    width: 16px;
-    height: 16px;
-    color: var(--blue);
-    flex-shrink: 0;
-}
-
-.library-switcher-option-avatar {
-    width: 28px;
-    height: 28px;
-    flex-shrink: 0;
-    border-radius: var(--radius-xs);
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(150deg, #6babff 0%, var(--blue-light) 45%, var(--blue) 100%);
-    color: white;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.library-switcher-manage {
-    margin-top: 4px;
-    padding-top: 12px;
-    border-top: 1px solid var(--glass-border-subtle);
-    color: var(--blue);
-}
-
-html[data-theme="dark"] .library-switcher-pill {
-    background:
-        radial-gradient(120px 60px at 18% -10%, rgba(255, 255, 255, 0.12), transparent 65%),
-        var(--glass-sheen),
-        rgba(255, 255, 255, 0.06);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 18px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-html[data-theme="dark"] .library-switcher-menu {
-    background: var(--glass-sheen), rgba(28, 28, 30, 0.92);
-}
-
-/* .page already has top padding for general breathing room (see
-   app.css) - this adds just enough extra to clear the switcher pill
-   above it, since the pill is fixed/floating and would otherwise
-   overlap the first few pixels of whichever tab is showing. Applied
-   unconditionally rather than only while the bar is visible, since a
-   sudden layout shift the moment a second library gets added would be
-   more jarring than a little extra empty space above Home for
-   single-library accounts. */
-.page {
-    padding-top: calc(78px + env(safe-area-inset-top, 0px));
-}
 
 /* =========================================================
    "CHOOSE YOUR LIBRARY" SCREEN
+   One continuous surface (matching the reference design), not a bounded
+   image header sitting above a separate content card: a tall background
+   (photo or brand gradient, set on the whole modal-sheet's first child)
+   that fades into the page's own flat background color, with the title
+   and grid floating directly on top of that fade rather than inside
+   their own opaque panel.
 ========================================================= */
 #libraryScreen {
     z-index: 260;
 }
 
-/* Taller than the 240px .modal-backdrop-header default (see app.css) -
-   this screen's image is the dominant visual, not a supporting header
-   for a title next to it, closer to a third-to-half of the viewport
-   like the reference design rather than a slim strip. background-image
-   is set from JS (renderLibrarySelectionScreen()) to the most recent
-   item's backdrop across the account; the gradient/logo fallback below
-   is what shows through until there's any watch data to pull one from. */
+/* overflow-x hidden here (rather than on .modal-sheet generally) because
+   this is the one screen in the app with a background element sized in
+   vh against a sheet that itself scrolls - keeps that combination from
+   ever being able to introduce a horizontal scrollbar. */
+.library-screen-sheet {
+    overflow-x: hidden;
+}
+
+/* Tall and dominant, closer to the reference's proportions than a
+   supporting header strip - background-image is set from JS
+   (renderLibrarySelectionScreen()) to the most recently added item's
+   backdrop/poster across the account; the gradient fallback below is
+   what shows through until there's any watch data to pull one from. */
 .library-screen-backdrop {
-    height: 46vh;
-    min-height: 320px;
-    max-height: 460px;
+    position: relative;
+    width: 100%;
+    height: 68vh;
+    min-height: 460px;
+    max-height: 620px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
     background-color: var(--blue);
     background-image: linear-gradient(160deg, var(--blue-light) 0%, var(--blue) 55%, var(--blue-dark) 100%);
 }
 
-.library-screen-hero-title {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    padding-bottom: 8px;
+/* The fade itself - resolves to a fully solid, flat color well before
+   the box's own bottom edge (85%), so .library-screen-body below can
+   butt straight up against it with only a small cosmetic overlap rather
+   than needing to reach far up into a still-transparent zone to avoid a
+   hard seam. Hardcoded to the same flat colors html/html[data-theme] use
+   as their own base background (see tokens.css) rather than a token,
+   since neither is exposed as a plain reusable value on its own -
+   --bg-mesh is the full multi-gradient composite, not just its base
+   color in isolation. */
+.library-screen-backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(243, 244, 249, 0) 0%, rgba(243, 244, 249, 0) 22%, #F3F4F9 85%, #F3F4F9 100%);
+}
+
+html[data-theme="dark"] .library-screen-backdrop::after {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 22%, #000000 85%, #000000 100%);
 }
 
 /* Only actually visible while the gradient fallback above is showing -
@@ -206,15 +78,28 @@ html[data-theme="dark"] .library-switcher-menu {
    being covered. Kept fairly subtle (small, semi-transparent) since it's
    standing in for empty content, not meant to read as a hero logo. */
 .library-screen-logo {
-    width: 56px;
-    height: 56px;
+    position: relative;
+    z-index: 1;
+    width: 60px;
+    height: 60px;
     border-radius: var(--radius-lg);
     opacity: 0.9;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
 }
 
-.library-screen-content {
-    padding-top: 4px;
+.library-screen-body {
+    position: relative;
+    z-index: 2;
+    margin-top: -20px;
+    padding: 0 22px 40px;
+}
+
+.library-screen-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    text-align: center;
+    color: var(--text);
 }
 
 .library-select-grid {
@@ -346,4 +231,58 @@ html[data-theme="dark"] .library-switcher-menu {
 
 .library-modal-delete {
     margin-top: 24px;
+}
+
+/* =========================================================
+   SHARING (Settings toggle, Edit Library's sharing section, the invite
+   code chip, and the Add Library modal's Create/Join tabs)
+========================================================= */
+.library-owner-notice {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin-top: 8px;
+    margin-bottom: 4px;
+}
+
+.library-edit-sharing-section {
+    margin-top: 24px;
+}
+
+.library-edit-sharing-section .section-header {
+    margin-bottom: 10px;
+}
+
+.library-invite-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+}
+
+.library-invite-code-value {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: var(--text);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.library-invite-code-input {
+    text-align: center;
+    letter-spacing: 4px;
+    font-size: 18px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.library-invite-code-input::placeholder {
+    letter-spacing: normal;
+    font-weight: 500;
+    text-transform: none;
 }
