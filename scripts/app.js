@@ -831,6 +831,26 @@ function formatDate(date) {
     }).format(new Date(date));
 }
 
+// The 08:00 UTC anchor tmdbDateToISO() stores isn't a real, TMDB-sourced
+// premiere time - TMDB only ever provides a release DATE, never a time.
+// It's a synthetic buffer, picked so the periodic background sync has a
+// window to have actually run before anything's treated as released (see
+// tmdbDateToISO above). Showing it converted to the person's own local
+// time is what was asked for, but it's worth remembering this reflects
+// that internal buffer, not a minute-accurate premiere time verified by
+// TMDB or the streaming platform itself. Deliberately does NOT pin
+// timeZone to UTC the way formatDate() above does - that's the whole
+// point here (matching the user's own region/local time), unlike the
+// date, which stays anchored to UTC on purpose so the calendar day never
+// drifts a day earlier/later for someone in a very negative UTC offset.
+function formatReleaseTime(date) {
+    if (!date) return "";
+    return new Intl.DateTimeFormat("en-ZA", {
+        hour: "numeric",
+        minute: "2-digit"
+    }).format(new Date(date));
+}
+
 function getCountdown(date) {
     if (!date) return "TBA";
     const days = daysUntil(date);
@@ -4570,7 +4590,7 @@ function createUpcomingCard(data) {
             <div class="upcoming-info">
                 <div class="upcoming-title">${escapeHTML(data.title)}</div>
                 <div class="upcoming-date">${escapeHTML(data.subtitle)}</div>
-                <div class="upcoming-date">${formatDate(data.date)}</div>
+                <div class="upcoming-date">${formatDate(data.date)} &bull; ${formatReleaseTime(data.date)}</div>
                 <div class="upcoming-countdown">${getCountdown(data.date)}</div>
             </div>
         </div>
@@ -5474,6 +5494,7 @@ function updateModalContent() {
         const nextEp = getNextUnwatchedEpisode(currentItem);
         const nextLabel = nextEp ? `S${nextEp.season} E${nextEp.number}` : 'Up to Date';
         const prog = getTVProgress(currentItem);
+        const hasReleasedUnwatched = (currentItem.episodes || []).some(ep => !ep.watched && isReleased(ep.releaseDate));
 
         actionsHTML = `
             <div class="modal-actions-row movie-actions-grid">
@@ -5495,6 +5516,13 @@ function updateModalContent() {
                     ${isAdded ? 'In Library' : 'Add to Library'}
                 </button>
             </div>
+            ${hasReleasedUnwatched ? `
+                <div style="margin-top: 10px;">
+                    <button class="action-button" style="width: 100%;" onclick="markAllReleasedEpisodesWatched()">
+                        Mark All Released Episodes Watched
+                    </button>
+                </div>
+            ` : ''}
         `;
     }
 
@@ -5989,6 +6017,36 @@ async function toggleEntireSeasonWatched(seasonNumber) {
     });
 
     showToast(`Season ${seasonNumber} marked as ${anyUnwatched ? 'Watched' : 'Unwatched'}`, "success");
+    await saveItem(currentItem);
+    updateModalContent();
+    refreshActivePage();
+}
+
+// Same idea as toggleEntireSeasonWatched above, scaled to the whole show
+// instead of just the selected season - only ever touches released
+// episodes (unaired ones always stay unwatched), and only marks forward
+// to watched (unlike the season version, this has no "unwatch everything"
+// direction - a whole-show catch-up action isn't the natural place to
+// also offer a whole-show un-watch). Consistent with the rest of the
+// app's watch-marking actions (Next: SxEy, the season long-press), this
+// acts immediately without a confirmation step, since watched status is
+// always reversible per-episode afterward.
+async function markAllReleasedEpisodesWatched() {
+    if (!currentItem || !currentItem.episodes) return;
+    if (!isCurrentItemInLibrary()) {
+        showToast("Add this to your library first.", "error");
+        return;
+    }
+
+    const toMark = currentItem.episodes.filter(ep => !ep.watched && isReleased(ep.releaseDate));
+    if (toMark.length === 0) {
+        showToast("Already up to date.", "success");
+        return;
+    }
+
+    toMark.forEach(ep => setEpisodeWatched(ep, true));
+
+    showToast(`Marked ${toMark.length} episode${toMark.length === 1 ? '' : 's'} watched.`, "success");
     await saveItem(currentItem);
     updateModalContent();
     refreshActivePage();
