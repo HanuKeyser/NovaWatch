@@ -202,7 +202,7 @@ function renderAvatarInto(el, initial) {
     const avatar = getSelectedAvatar();
     if (avatar) {
         el.style.background = '';
-        el.innerHTML = `<img src="${avatar.src}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">`;
+        el.innerHTML = `<img src="${avatar.src}" alt="Avatar" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">`;
     } else {
         el.style.background = '';
         el.textContent = initial;
@@ -215,7 +215,7 @@ function renderAvatarPickerGrid() {
     const currentId = state.profiles && state.profiles[0] ? state.profiles[0].avatarId : null;
     grid.innerHTML = AVATAR_OPTIONS.map(avatar => `
         <button class="avatar-picker-option ${avatar.id === currentId ? 'selected' : ''}" onclick="selectAvatar('${avatar.id}')" aria-label="Select avatar">
-            <img src="${avatar.src}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+            <img src="${avatar.src}" alt="Avatar" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
         </button>
     `).join('');
 }
@@ -571,6 +571,21 @@ function escapeHTML(str) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+// Requests a smaller TMDB image size for small on-screen thumbnails than
+// the size actually stored on the item (poster/backdrop URLs are stored
+// at w500/w780 because that same stored value is also used in bigger
+// contexts, like the details modal's hero image). A ~126px-wide library
+// grid card or an 80px-wide Continue Watching poster doesn't need
+// anywhere near that much source resolution - this is a real bandwidth
+// and decode-time saving, multiplied across every poster/still on screen
+// at once in Library/Continue Watching/Upcoming/episode lists. Falls
+// back to the URL unchanged for anything that isn't a recognizable TMDB
+// image URL (a custom-picked poster could in principle point elsewhere).
+function tmdbThumb(url, size) {
+    if (!url) return url;
+    return url.replace(/\/t\/p\/(w\d+|original)\//, `/t/p/${size}/`);
 }
 
 let toastActionHandler = null;
@@ -2856,7 +2871,7 @@ function renderWatchOnSection(item) {
         chipsHTML += `
             <div class="watch-provider-chip" title="${escapeHTML(p.name)}">
                 ${p.logo
-                    ? `<img class="watch-provider-logo" src="${p.logo}" alt="${escapeHTML(p.name)}" loading="lazy">`
+                    ? `<img class="watch-provider-logo" src="${p.logo}" alt="${escapeHTML(p.name)}" loading="lazy" decoding="async">`
                     : `<div class="watch-provider-logo watch-provider-fallback">${escapeHTML((p.name || '?').charAt(0))}</div>`
                 }
                 <span class="watch-provider-name">${escapeHTML(p.name)}</span>
@@ -3444,7 +3459,7 @@ function renderSearchResults(results) {
         return `
             <div class="search-card" onclick="openSearchResultDetails(${item.id}, '${currentSearchType}')">
                 ${posterUrl ? 
-                    `<img src="${posterUrl}" class="search-card-poster" alt="${escapeHTML(title)}" draggable="false" loading="lazy" onerror="this.style.display='none'">` :
+                    `<img src="${posterUrl}" class="search-card-poster" alt="${escapeHTML(title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">` :
                     `<div class="search-card-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${escapeHTML(title)}</div>`
                 }
                 <div class="search-card-info">
@@ -3854,16 +3869,6 @@ function getCurrentSeasonForShow(show) {
     if (watchedSeasons.length > 0) return Math.max(...watchedSeasons);
 
     return availableSeasons[0];
-}
-
-// True if a show has a released episode from the last 7 days that hasn't
-// been watched yet — the signal behind the small "NEW" badge on its card.
-function hasRecentUnwatchedEpisode(show) {
-    if (!show.episodes) return false;
-    return show.episodes.some(ep => {
-        if (ep.watched || !ep.releaseDate || !isReleased(ep.releaseDate)) return false;
-        return daysUntil(ep.releaseDate) >= -7;
-    });
 }
 
 function getUpcomingItems(filterType = null) {
@@ -4502,11 +4507,6 @@ function renderCategoryBlock(title, items, upcomingShowIds = null) {
 function createCard(item, upcomingShowIds = null) {
     const hasPoster = item.poster && item.poster.trim() !== "";
 
-    // A small "NEW" badge for shows with a released-but-unwatched episode
-    // from the last week — a quick visual cue of what's fresh without
-    // having to open anything.
-    const isNew = item.type !== 'movie' && hasRecentUnwatchedEpisode(item);
-
     let progressBarHTML = '';
     if (item.type !== 'movie') {
         const prog = getTVProgress(item);
@@ -4543,12 +4543,11 @@ function createCard(item, upcomingShowIds = null) {
                  ontouchend="endPosterPress()"
                  ontouchcancel="endPosterPress()">
                 ${hasPoster ? `
-                    <img src="${item.poster}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
                 ` : `
                     <div class="poster-placeholder">${placeholderIcon}</div>
                 `}
-                ${isNew ? `<div class="new-episode-badge">NEW</div>` : ''}
                 ${progressBarHTML}
             </div>
         </div>
@@ -4562,7 +4561,7 @@ function createUpcomingCard(data) {
         <div class="upcoming-card" onclick="openDetails('${data.item.id}')">
             <div class="upcoming-poster">
                 ${hasPoster ? `
-                    <img src="${data.item.poster}" alt="${escapeHTML(data.title)}" draggable="false" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <img src="${tmdbThumb(data.item.poster, 'w342')}" alt="${escapeHTML(data.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="upcoming-poster-placeholder" style="display: none;">${escapeHTML(data.title)}</div>
                 ` : `
                     <div class="upcoming-poster-placeholder">${escapeHTML(data.title)}</div>
@@ -4624,7 +4623,7 @@ function continuePlaceholderIcon(type) {
 function createContinueCard(type, item, episode) {
     const hasPoster = item.poster && item.poster.trim() !== "";
     const posterHTML = hasPoster
-        ? `<img src="${item.poster}" class="continue-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" onerror="this.style.display='none'">`
+        ? `<img src="${tmdbThumb(item.poster, 'w342')}" class="continue-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
         : `<div class="continue-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${continuePlaceholderIcon(type)}</div>`;
 
     // The meta line and description surface the *episode's* own info for TV
@@ -5572,12 +5571,12 @@ function renderEpisodesList(container) {
                         <div class="episode-main">
                             <div class="episode-left">
                                 ${hasStill ? `
-                                    <img src="${ep.still}" class="episode-still" alt="${escapeHTML(ep.title)}" loading="lazy">
+                                    <img src="${tmdbThumb(ep.still, 'w300')}" class="episode-still" alt="${escapeHTML(ep.title)}" loading="lazy" decoding="async">
                                 ` : `
                                     <div class="episode-still" style="display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--text-muted); text-align:center;">S${ep.season}E${ep.number}</div>
                                 `}
                                 <div class="episode-info">
-                                    <div class="episode-title">${isUpNext ? '<span class="episode-up-next-badge">UP NEXT</span>' : ''}E${ep.number} • ${escapeHTML(ep.title)}</div>
+                                    <div class="episode-title">E${ep.number} • ${escapeHTML(ep.title)}</div>
                                     <div class="episode-overview">${escapeHTML(ep.overview)}</div>
                                     <div class="episode-meta">
                                         ${ep.runtime || '45 min'} &bull; ${dateStr} &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${ep.watched ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
