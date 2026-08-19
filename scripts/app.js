@@ -990,12 +990,55 @@ async function fetchTVmazeJSON(url) {
 // Empty map (not an error, not a rejected promise) for anything that
 // doesn't resolve to real data - see the file-level comment above for why
 // that's a deliberate, load-bearing design choice, not an oversight.
+// TVmaze's own schedule object ({days:["Thursday"], time:"20:00"}) is
+// already part of the same show lookup fetchTVmazeEpisodeAirtimes makes
+// anyway - no extra request needed. Turns it into a readable line like
+// "New episodes every Thursday at 9:00 PM", converted to the viewer's
+// own local time using the network's own timezone (falls back to
+// Eastern, the most common US network timezone, if TVmaze doesn't have
+// one for this show) via today's date as a reference instant - a
+// recurring weekly time has no single date to anchor to the way a
+// specific episode's airtime does, so "today" is what resolves the
+// correct CURRENT UTC offset for display (this can be off by an hour
+// during the week or so around a DST transition, an accepted trade-off
+// for a "roughly when to expect it" line rather than a precise
+// timestamp).
+function formatTVmazeSchedule(show) {
+    const schedule = show && show.schedule;
+    if (!schedule || !Array.isArray(schedule.days) || schedule.days.length === 0 || !schedule.time) return null;
+
+    const [hour, minute] = schedule.time.split(':').map(Number);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+    const timezone = (show.network && show.network.country && show.network.country.timezone)
+        || (show.webChannel && show.webChannel.country && show.webChannel.country.timezone)
+        || "America/New_York";
+
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const anchorMs = getTimezoneAnchorUTC(dateStr, timezone, hour, minute, -5);
+    const localTime = new Intl.DateTimeFormat("en-ZA", { hour: "numeric", minute: "2-digit" }).format(new Date(anchorMs));
+
+    const daysLabel = schedule.days.length === 1 ? `${schedule.days[0]}s` : schedule.days.join('/');
+
+    return `New episodes every ${daysLabel} at ${localTime}`;
+}
+
 async function fetchTVmazeEpisodeAirtimes(tvdbId) {
     const airtimes = new Map();
+    // Attached directly onto the Map itself (rather than changing this
+    // function's return shape to a bigger object) so every existing
+    // .get() call at each of the 3 places this function is used keeps
+    // working completely unchanged - only the couple of spots that
+    // actually want the schedule line need to know this property
+    // exists at all.
+    airtimes.scheduleText = null;
     if (!tvdbId) return airtimes;
 
     const show = await fetchTVmazeJSON(`https://api.tvmaze.com/lookup/shows?thetvdb=${tvdbId}`);
     if (!show || !show.id) return airtimes;
+
+    airtimes.scheduleText = formatTVmazeSchedule(show);
 
     const episodes = await fetchTVmazeJSON(`https://api.tvmaze.com/shows/${show.id}/episodes`);
     if (!Array.isArray(episodes)) return airtimes;
@@ -2540,6 +2583,7 @@ async function refreshItemFromTMDBInternal(item) {
                     const newRating = (typeof movieData.vote_average === 'number' && movieData.vote_average > 0)
                         ? movieData.vote_average.toFixed(1)
                         : (item.rating || '');
+                    const newCollectionName = movieData.belongs_to_collection ? movieData.belongs_to_collection.name : (item.collectionName || null);
 
                     if (
                         item.title !== newTitle ||
@@ -2550,7 +2594,8 @@ async function refreshItemFromTMDBInternal(item) {
                         item.runtime !== newRuntime ||
                         item.releaseDate !== newReleaseDate ||
                         item.status !== newStatus ||
-                        item.rating !== newRating
+                        item.rating !== newRating ||
+                        (item.collectionName || null) !== newCollectionName
                     ) {
                         item.title = newTitle;
                         item.year = newYear;
@@ -2561,6 +2606,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.releaseDate = newReleaseDate;
                         item.status = newStatus;
                         item.rating = newRating;
+                        item.collectionName = newCollectionName;
 
                         await saveItem(item);
                         changed = true;
@@ -2739,6 +2785,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.numberOfEpisodes = newEpisodeCount;
                         item.nextEpisodeAirDate = newNextAirDate;
                         item.isBroadcastNetwork = isBroadcast;
+                        item.weeklySchedule = tvmazeAirtimes.scheduleText;
 
                         await saveItem(item);
                         changed = true;
@@ -2754,11 +2801,13 @@ async function refreshItemFromTMDBInternal(item) {
                 const providersChanged = JSON.stringify(item.watchProviders || []) !== JSON.stringify(availability.providers);
                 const cinemaChanged = !!item.inCinemas !== !!availability.inCinemas;
                 const linkChanged = (item.watchLink || '') !== (availability.link || '');
+                const ratingChanged = (item.contentRating || '') !== (availability.contentRating || '');
 
-                if (providersChanged || cinemaChanged || linkChanged) {
+                if (providersChanged || cinemaChanged || linkChanged || ratingChanged) {
                     item.watchProviders = availability.providers;
                     item.inCinemas = availability.inCinemas;
                     item.watchLink = availability.link;
+                    item.contentRating = availability.contentRating;
                     await saveItem(item);
                     changed = true;
                 }
@@ -3022,14 +3071,51 @@ async function selectRegion(newRegion) {
     // and newly-added items use it immediately.
 }
 
+// Content rating (PG-13, TV-MA, etc.) is a separate per-region TMDB
+// endpoint - not part of the base movie/show detail response, the same
+// way watch/providers isn't. Tries the viewer's own region first (same
+// getUserRegion() used everywhere else content is region-specific),
+// falls back to US since that's the rating convention most universally
+// recognized even outside the US, rather than showing nothing at all
+// for a region TMDB doesn't have data for.
+async function fetchContentRating(tmdbId, mediaType) {
+    try {
+        if (mediaType === 'movie') {
+            const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}/release_dates?api_key=${TMDB_API_KEY}`);
+            const data = await res.json();
+            const entries = data.results || [];
+            const regionEntry = entries.find(e => e.iso_3166_1 === getUserRegion()) || entries.find(e => e.iso_3166_1 === 'US') || null;
+            const dates = regionEntry ? (regionEntry.release_dates || []) : [];
+            const withCert = dates.find(d => d.certification && d.certification.trim() !== '');
+            return withCert ? withCert.certification : '';
+        } else {
+            const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/content_ratings?api_key=${TMDB_API_KEY}`);
+            const data = await res.json();
+            const entries = data.results || [];
+            const regionEntry = entries.find(e => e.iso_3166_1 === getUserRegion()) || entries.find(e => e.iso_3166_1 === 'US') || null;
+            return (regionEntry && regionEntry.rating) ? regionEntry.rating : '';
+        }
+    } catch (err) {
+        console.error('Error fetching content rating:', err);
+        return '';
+    }
+}
+
 async function fetchWatchAvailability(tmdbId, type) {
-    const availability = { providers: [], inCinemas: false, link: '' };
+    const availability = { providers: [], inCinemas: false, link: '', contentRating: '' };
     if (!tmdbId) return availability;
 
     const mediaType = type === 'movie' ? 'movie' : 'tv';
 
     try {
-        const res = await fetch(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}/watch/providers?api_key=${TMDB_API_KEY}`);
+        // Content rating fetched alongside (not after) the providers
+        // request, so it doesn't add its own sequential delay on top of
+        // an already-network-bound function.
+        const [res, contentRating] = await Promise.all([
+            fetch(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}/watch/providers?api_key=${TMDB_API_KEY}`),
+            fetchContentRating(tmdbId, mediaType)
+        ]);
+        availability.contentRating = contentRating;
         const data = await res.json();
         if (!res.ok) {
             console.warn(`TMDB watch/providers request failed (${res.status}):`, data?.status_message || data);
@@ -3187,10 +3273,17 @@ async function loadWatchAvailability(item) {
     item.watchProviders = availability.providers;
     item.inCinemas = availability.inCinemas;
     item.watchLink = availability.link;
+    item.contentRating = availability.contentRating;
 
     // Only re-render if the modal is still showing this same item
     if (currentItem === item) {
         renderWatchOnSection(item);
+        // Content rating lives in the modal's metadata line, not the
+        // watch-on section renderWatchOnSection() covers - re-running the
+        // full render is what actually surfaces it once it's arrived,
+        // same "fill in behind the already-open modal" pattern episodes
+        // already use.
+        updateModalContent();
     }
 }
 
@@ -3812,6 +3905,7 @@ async function openSearchResultDetails(tmdbId, type) {
                 releaseDate: movieData.release_date ? tmdbDateToISO(movieData.release_date) : new Date().toISOString(),
                 status: movieData.status || '',
                 rating: (typeof movieData.vote_average === 'number' && movieData.vote_average > 0) ? movieData.vote_average.toFixed(1) : '',
+                collectionName: movieData.belongs_to_collection ? movieData.belongs_to_collection.name : null,
                 isPreview: true,
                 watched: false,
                 lastWatchedAt: null
@@ -3880,6 +3974,8 @@ async function openSearchResultDetails(tmdbId, type) {
         loadWatchAvailability(currentItem);
 
         let episodes = [];
+        let tvmazeAirtimes = new Map();
+        tvmazeAirtimes.scheduleText = null;
 
         if (showData.seasons && showData.seasons.length > 0) {
             const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -3890,7 +3986,7 @@ async function openSearchResultDetails(tmdbId, type) {
             );
 
             const seasonsData = await Promise.all(seasonPromises);
-            const tvmazeAirtimes = await tvmazeAirtimesPromise;
+            tvmazeAirtimes = await tvmazeAirtimesPromise;
 
             seasonsData.forEach(seasonData => {
                 if (seasonData && seasonData.episodes) {
@@ -3920,6 +4016,7 @@ async function openSearchResultDetails(tmdbId, type) {
         if (currentItem && currentItem.id === previewId) {
             currentItem.episodes = episodes;
             currentItem.episodesLoading = false;
+            currentItem.weeklySchedule = tvmazeAirtimes.scheduleText;
             scrollToNextEpisodeOnRender = true;
             updateModalContent();
         }
@@ -3976,7 +4073,9 @@ async function importMediaData(id, type, buttonElement) {
                 addedAt: new Date().toISOString(),
                 watchProviders: availability.providers,
                 inCinemas: availability.inCinemas,
-                watchLink: availability.link
+                watchLink: availability.link,
+                contentRating: availability.contentRating,
+                collectionName: movieData.belongs_to_collection ? movieData.belongs_to_collection.name : null
             };
 
             state.library.push(newMovie);
@@ -4022,6 +4121,7 @@ async function importMediaData(id, type, buttonElement) {
 
             let episodes = [];
             let tvmazeAirtimes = new Map();
+            tvmazeAirtimes.scheduleText = null;
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -4095,13 +4195,15 @@ async function importMediaData(id, type, buttonElement) {
                     ? (tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) || tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
                     : null,
                 isBroadcastNetwork: isBroadcast,
+                weeklySchedule: tvmazeAirtimes.scheduleText,
                 isFinished: false,
                 isStopped: archivedShow ? !!archivedShow.isStopped : false,
                 addedAt: new Date().toISOString(),
                 episodes: episodes,
                 watchProviders: availability.providers,
                 inCinemas: availability.inCinemas,
-                watchLink: availability.link
+                watchLink: availability.link,
+                contentRating: availability.contentRating
             };
 
             state.library.push(newShow);
@@ -5724,6 +5826,9 @@ function updateModalContent() {
     let metaHTML = "";
 
     const ratingHTML = currentItem.rating ? `<span>•</span><span>★ ${escapeHTML(currentItem.rating)}</span>` : '';
+    // Boxed badge rather than plain bulleted text - see .content-rating-badge.
+    // Shown for both movies and TV, since fetchContentRating() covers both.
+    const contentRatingHTML = currentItem.contentRating ? `<span>•</span><span class="content-rating-badge">${escapeHTML(currentItem.contentRating)}</span>` : '';
 
     if (currentItem.type === 'movie') {
         const releaseDateStr = currentItem.releaseDate ? formatDateWithReleaseTime(currentItem.releaseDate) : 'TBA';
@@ -5735,6 +5840,7 @@ function updateModalContent() {
             <span>${currentItem.runtime || '120 min'}</span>
             <span>•</span>
             <span>${releaseDateStr}</span>
+            ${contentRatingHTML}
             ${ratingHTML}
         `;
         if (currentItem.watched) {
@@ -5758,12 +5864,28 @@ function updateModalContent() {
             <span>•</span>
             <span>${prog.watched}/${prog.total} Episodes Watched (${prog.percentage}%)</span>
             ${statusHTML}
+            ${contentRatingHTML}
             ${ratingHTML}
             ${rewatchHTML}
         `;
     }
 
     document.getElementById("modalMeta").innerHTML = metaHTML;
+
+    // Whichever of the two applies (a show's weekly schedule, or a
+    // movie's collection/franchise) - never both, since one's TV-only
+    // and the other's movie-only. Hidden entirely when there's nothing
+    // to show, rather than an empty line taking up space.
+    const extraInfoEl = document.getElementById("modalExtraInfo");
+    let extraInfoHTML = '';
+    if (currentItem.type === 'tv' && currentItem.weeklySchedule) {
+        extraInfoHTML = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>${escapeHTML(currentItem.weeklySchedule)}</span>`;
+    } else if (currentItem.type === 'movie' && currentItem.collectionName) {
+        extraInfoHTML = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16"/><path d="M9 4v16"/></svg><span>Part of ${escapeHTML(currentItem.collectionName)}</span>`;
+    }
+    extraInfoEl.innerHTML = extraInfoHTML;
+    extraInfoEl.style.display = extraInfoHTML ? 'flex' : 'none';
+
     renderWatchOnSection(currentItem);
     document.getElementById("modalDescription").textContent = currentItem.description;
 
