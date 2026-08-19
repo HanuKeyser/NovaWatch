@@ -952,9 +952,74 @@ const US_BROADCAST_NETWORKS = [
 // network, something genuinely obscure) falls back to the midnight-
 // Pacific streaming anchor, which is the safer default for content this
 // list doesn't specifically recognize.
+// Corporate ownership overlaps make simple network-name matching alone
+// unsafe for a real chunk of major streaming platforms: Disney owns ABC,
+// Freeform, FX, FXX, and National Geographic (all in the broadcast/cable
+// list above); Paramount+ owns CBS; Peacock owns NBC, USA Network,
+// Bravo, and Syfy; Max owns TNT and TBS; Hulu is Disney-owned too. A
+// streaming Original can plausibly get tagged in TMDB's own network data
+// with one of its corporate siblings even though it only actually
+// streams on the platform itself, at the platform's own midnight-
+// Pacific schedule, not any sibling's broadcast timeslot - this is the
+// confirmed root cause of Disney+ specifically showing wrong times
+// despite the platform never being intended to match as broadcast.
+// Checked FIRST, before US_BROADCAST_NETWORKS below, so a co-listed
+// corporate sibling can never override the platform a show actually
+// streams on.
+const PRIORITY_STREAMING_PLATFORMS = [
+    "Netflix", "Disney+", "Hulu", "Max", "HBO Max", "Apple TV+",
+    "Paramount+", "Peacock", "Amazon", "Amazon Prime Video",
+    "Amazon Video", "Crunchyroll"
+];
+
 function isBroadcastNetworkShow(networks) {
     if (!networks || !Array.isArray(networks)) return false;
+    if (networks.some(n => n && PRIORITY_STREAMING_PLATFORMS.includes(n.name))) {
+        return false;
+    }
     return networks.some(n => n && US_BROADCAST_NETWORKS.includes(n.name));
+}
+
+// A SECOND, independent signal, on top of isBroadcastNetworkShow() above -
+// TMDB's `networks` field mainly tracks the ORIGINATING/PRODUCING network,
+// which for a show co-produced by a cable network but distributed
+// internationally through a streaming app can list ONLY the producing
+// network, with no mention of the streaming platform at all. A real,
+// confirmed case: FX's "The Shards" - produced by FX (correctly matches
+// US_BROADCAST_NETWORKS), watched via Disney+ internationally, but with
+// no "Disney+" entry in `networks` for the PRIORITY_STREAMING_PLATFORMS
+// check above to catch - there's nothing to prioritize over "FX" in the
+// first place, since Disney+ was never listed there at all. Checking the
+// viewer's own CONFIRMED watch-provider data (the same TMDB endpoint the
+// "Watch On" section already uses) closes that gap: if a known streaming
+// platform is confirmed to actually carry this title in the viewer's own
+// region, that's treated as authoritative over `networks`, regardless of
+// what network produced it. Only called when isBroadcastNetworkShow()
+// already returned true (see the 3 TV fetch sites) - shows already
+// excluded by the networks check don't need this extra request. Fails
+// soft (false) on any error, same as every other TVmaze/TMDB call here -
+// never blocks or breaks an add/sync.
+const KNOWN_STREAMING_PROVIDER_NAMES = [
+    "netflix", "disney plus", "disney+", "hulu", "max", "hbo max",
+    "apple tv plus", "apple tv+", "paramount plus", "paramount+",
+    "peacock", "amazon prime video", "amazon video", "crunchyroll"
+];
+
+async function isConfirmedOnStreamingPlatform(tmdbId, mediaType) {
+    try {
+        const res = await fetch(`https://api.themoviedb.org/3/${mediaType}/${tmdbId}/watch/providers?api_key=${TMDB_API_KEY}`);
+        const data = await res.json();
+        const results = data.results || {};
+        const regionData = results[getUserRegion()] || results.US;
+        if (!regionData) return false;
+        const flatrate = regionData.flatrate || [];
+        return flatrate.some(p => {
+            const name = (p && p.provider_name || "").toLowerCase();
+            return KNOWN_STREAMING_PROVIDER_NAMES.some(known => name.includes(known));
+        });
+    } catch (err) {
+        return false;
+    }
 }
 
 // TVMAZE TRUST MODEL: only ever use TVmaze's per-episode airtime for a
@@ -2705,14 +2770,20 @@ async function refreshItemFromTMDBInternal(item) {
                     // approximation instead of the midnight-Pacific streaming
                     // default, since it isn't a streaming-style all-at-once drop.
                     // Only ever a fallback now, for whatever TVmaze below doesn't
-                    // have real airtime data for.
-                    const isBroadcast = isBroadcastNetworkShow(showData.networks);
+                    // have real airtime data for. isBroadcastByNetwork is the
+                    // network-name check alone; the extra watch-provider cross-
+                    // check (see isConfirmedOnStreamingPlatform) below only runs
+                    // when this is true, and can still override it to false.
+                    const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
                     // Kicked off alongside the season fetches below (not awaited
                     // until they're all needed together) so a slow-but-not-failing
                     // TVmaze lookup never adds sequential latency on top of TMDB's
                     // own season requests - see fetchTVmazeEpisodeAirtimes() for
                     // why this can never actually fail the sync either way.
                     const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
+                    const streamingConfirmedPromise = isBroadcastByNetwork
+                        ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
+                        : Promise.resolve(false);
 
                     let newEpisodes = [];
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -2736,6 +2807,8 @@ async function refreshItemFromTMDBInternal(item) {
 
                     const seasonsData = await Promise.all(seasonPromises);
                     const tvmazeAirtimes = await tvmazeAirtimesPromise;
+                    const streamingConfirmed = await streamingConfirmedPromise;
+                    const isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
                     // BUG FIX: this used to only check `if (seasonData && seasonData.episodes)`
                     // and otherwise silently skip the season entirely - meaning a single
                     // season's fetch failing (still possible even with the retry above)
@@ -4032,8 +4105,16 @@ async function openSearchResultDetails(tmdbId, type) {
         // fetches below rather than adding its own sequential delay -
         // the modal below still opens immediately either way, this only
         // affects how accurate the episode air dates are once they load.
-        const isBroadcast = isBroadcastNetworkShow(showData.networks);
+        // isBroadcastByNetwork is used for the initial nextEpisodeAirDate
+        // placeholder below (before the streaming-provider cross-check can
+        // resolve, without delaying the modal opening) - the corrected,
+        // final isBroadcast (see isConfirmedOnStreamingPlatform) is what
+        // actually gets used once episodes load in below.
+        const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
         const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
+        const streamingConfirmedPromise = isBroadcastByNetwork
+            ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
+            : Promise.resolve(false);
 
         currentItem = {
             id: previewId,
@@ -4044,13 +4125,13 @@ async function openSearchResultDetails(tmdbId, type) {
             poster: showData.poster_path ? `https://image.tmdb.org/t/p/w500${showData.poster_path}` : "",
             backdrop: showData.backdrop_path ? `https://image.tmdb.org/t/p/w780${showData.backdrop_path}` : "",
             description: showData.overview || "No description available.",
-            releaseDate: showData.first_air_date ? tmdbDateToISO(showData.first_air_date, isBroadcast) : null,
+            releaseDate: showData.first_air_date ? tmdbDateToISO(showData.first_air_date, isBroadcastByNetwork) : null,
             status: showData.status || '',
             rating: (typeof showData.vote_average === 'number' && showData.vote_average > 0) ? showData.vote_average.toFixed(1) : '',
             numberOfSeasons: (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : null,
             numberOfEpisodes: (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : null,
-            nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date) ? tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast) : null,
-            isBroadcastNetwork: isBroadcast,
+            nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date) ? tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcastByNetwork) : null,
+            isBroadcastNetwork: isBroadcastByNetwork,
             isFinished: false,
             isStopped: false,
             isPreview: true,
@@ -4070,6 +4151,7 @@ async function openSearchResultDetails(tmdbId, type) {
         let episodes = [];
         let tvmazeAirtimes = new Map();
         tvmazeAirtimes.scheduleText = null;
+        let isBroadcast = isBroadcastByNetwork;
 
         if (showData.seasons && showData.seasons.length > 0) {
             const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -4081,6 +4163,8 @@ async function openSearchResultDetails(tmdbId, type) {
 
             const seasonsData = await Promise.all(seasonPromises);
             tvmazeAirtimes = await tvmazeAirtimesPromise;
+            const streamingConfirmed = await streamingConfirmedPromise;
+            isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
 
             seasonsData.forEach(seasonData => {
                 if (seasonData && seasonData.episodes) {
@@ -4196,8 +4280,11 @@ async function importMediaData(id, type, buttonElement) {
             }
             // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC(). Kicked
             // off now, awaited below alongside the season fetches.
-            const isBroadcast = isBroadcastNetworkShow(showData.networks);
+            const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
             const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
+            const streamingConfirmedPromise = isBroadcastByNetwork
+                ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
+                : Promise.resolve(false);
 
             // A previous removal may have archived this exact show's watch
             // history (see removeLibraryItem) under this same slug - check
@@ -4216,6 +4303,7 @@ async function importMediaData(id, type, buttonElement) {
             let episodes = [];
             let tvmazeAirtimes = new Map();
             tvmazeAirtimes.scheduleText = null;
+            let isBroadcast = isBroadcastByNetwork;
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -4227,6 +4315,8 @@ async function importMediaData(id, type, buttonElement) {
                 
                 const seasonsData = await Promise.all(seasonPromises);
                 tvmazeAirtimes = await tvmazeAirtimesPromise;
+                const streamingConfirmed = await streamingConfirmedPromise;
+                isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
 
                 seasonsData.forEach(seasonData => {
                     if (seasonData && seasonData.episodes) {
@@ -4541,7 +4631,27 @@ function showPage(page, subType = null, focusSearch = false) {
         }
     }
     if (page === "home") renderHomeTab();
-    if (page === "upcoming") renderUpcomingTab();
+    if (page === "upcoming") {
+        renderUpcomingTab();
+        // Upcoming was showing stale release times: opening a show's own
+        // details modal already triggers a fresh per-item TMDB/TVmaze
+        // refresh (refreshOpenItemFromTMDB), which correctly updates
+        // that ONE show - but Upcoming aggregates episodes across the
+        // WHOLE library, and every other show's data still only refreshes
+        // on the periodic 20-minute cycle otherwise. Since checking
+        // Upcoming is specifically when accurate timing matters most,
+        // trigger the same full sync used by that periodic cycle right
+        // now instead of waiting - but only if it hasn't already run
+        // recently (2 minutes), so switching to this tab repeatedly
+        // doesn't re-fetch the whole library every single time. Runs in
+        // the background; checkLibraryForUpdates() itself calls
+        // refreshActivePage() if anything actually changed, so the tab
+        // updates in place once fresher data comes back.
+        const lastCheck = getLastLibraryCheck();
+        if (!lastCheck || (now() - lastCheck) > 2 * 60 * 1000) {
+            checkLibraryForUpdates();
+        }
+    }
 }
 
 // Slides the shared glass capsule under whichever nav button is active,
