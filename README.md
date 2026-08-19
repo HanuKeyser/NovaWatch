@@ -37,6 +37,7 @@ Live at `https://www.novawatch.site/`. Mobile-first by design — no desktop/tab
 - **Firestore** — the only backend; no server of NovaWatch's own
 - **TMDB API** — search, metadata, episode/season data, recommendations
 - **JustWatch (via TMDB)** — streaming availability by region
+- **TVmaze API** — real per-episode airtimes for TV, where available (see Upcoming below); scoped narrowly to just that one field, never used for search, metadata, or anything else
 
 ### Firebase plan
 
@@ -62,6 +63,8 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 **Discover → For You** — TMDB `/recommendations` seeded from your library, ranked by cross-seed hit count then TMDB score. Falls back to plain Trending when the library's empty for that content type.
 
 **Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it).
+
+**Upcoming** — everything in the library that hasn't released yet, with a countdown and a release date/time, converted to the viewer's own timezone. For TV episodes, a real airtime from TVmaze is used when one's available (matched to the show via the TheTVDB ID TMDB itself exposes) — genuinely accurate to that show's own schedule, not a guess. When there's no TVmaze match, timing falls back to inferred convention instead: midnight Pacific time for streaming platforms (Netflix, Disney+, Hulu, etc.), or 8pm Eastern for the handful of major US broadcast networks (NBC, ABC, CBS, FOX, The CW, PBS) — detected from TMDB's own network data for the show. Movies always use the streaming/Pacific convention, since TVmaze doesn't cover them. Whichever source ends up being used is what actually gates when something leaves Upcoming and starts counting as watchable elsewhere in the app (Continue Watching, marking episodes watched, etc.), not just a rough "today" check.
 
 **Viewing Analytics** (Home) — total watch time (including rewatch passes) and counts of watched movies/shows/episodes.
 
