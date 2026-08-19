@@ -1988,7 +1988,28 @@ html[data-theme="dark"] .modal-sheet-compact {
     display: flex;
     gap: 8px;
     overflow-x: auto;
+    /* Explicit, not left to default - setting only overflow-x to a
+       non-visible value (auto) makes browsers compute overflow-y as
+       non-visible too if left unset, which was clipping this row in
+       both directions at once: the active button's own shadow/glow and
+       its permanent slight scale-up (see .season-button.active below)
+       had no vertical room and were getting cut off at the row's own
+       edge, and the row itself could pick up a faint vertical
+       scroll/pan area even though nothing here is meant to scroll
+       vertically at all - together, that's what read as "you can
+       scroll up and down" and the active button "not looking good" -
+       both the same root cause, not two separate bugs. */
+    overflow-y: visible;
+    /* Small vertical breathing room for the same reason - the active
+       pill needs room to actually show its scale-up/shadow, not sit
+       exactly flush with the row's own box. */
+    padding: 4px 2px;
     -webkit-overflow-scrolling: touch;
+    /* Tells the browser this row only ever pans horizontally, so a
+       swipe that's even slightly vertical isn't ambiguously captured
+       here instead of passed through to the modal's own vertical
+       scroll behind it. */
+    touch-action: pan-x;
     flex: 1;
     min-width: 0;
     /* No shared "trough" background/border on this row anymore - each
@@ -2356,12 +2377,33 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: var(--surface-2);
 }
 
+/* Non-interactive rows (currently just Version) reuse .settings-action-row
+   purely for its layout/divider - .settings-action-row + .settings-action-row
+   is a class selector, so it still applies the divider between this and a
+   real action row regardless of the .static modifier. This just cancels
+   the :active press-highlight, since touch devices can flash that on any
+   element under a finger, not just real buttons - without this a row that
+   does nothing on tap would still visually imply it does. */
+.settings-action-row.static:active {
+    background: transparent;
+}
+
 .settings-action-row + .settings-action-row {
     border-top: 1px solid var(--glass-border-subtle);
 }
 
 .settings-action-row.danger .settings-row-title {
     color: var(--danger);
+}
+
+/* Static value shown at the end of an info row (currently just the app
+   version) - same idea as .settings-row-chevron's trailing position, but
+   text instead of an icon, and never implies the row is tappable. */
+.settings-row-value {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
 }
 
 .settings-row-chevron {
