@@ -883,27 +883,47 @@ function getPacificMidnightUTC(dateStr) {
     return getTimezoneAnchorUTC(dateStr, "America/Los_Angeles", 0, 0, -8);
 }
 
-// Broadcast networks (NBC, ABC, CBS, FOX, The CW, PBS) don't work like
-// streaming - there's no single drop moment, episodes air at a specific
-// advertised timeslot that varies show to show, and TMDB doesn't give us
-// that per-show slot. 8 PM EASTERN is the earliest/most common US
-// primetime start - a real, deliberate approximation of "some time
-// during the primetime block", not a claim of the exact minute a
-// specific show actually airs. Better than treating every network show
-// as a midnight-Pacific streaming drop (which it isn't), but still not
-// minute-accurate the way it is for streaming.
+// Broadcast AND cable networks both work the same way for this purpose -
+// neither is a streaming-style all-at-once drop, both air on a fixed
+// weekly schedule at a specific advertised timeslot that varies show to
+// show, and TMDB doesn't give us that per-show slot for either kind. 8 PM
+// EASTERN is the earliest/most common US primetime start - a real,
+// deliberate approximation of "some time during the primetime block",
+// not a claim of the exact minute a specific show actually airs. Better
+// than treating a scheduled network show as a midnight-Pacific streaming
+// drop (which it isn't, broadcast or cable), but still not minute-
+// accurate the way it is for streaming - and for anything on this list,
+// this is only ever the FALLBACK now, used when TVmaze doesn't have a
+// real airtime for that episode (see fetchTVmazeEpisodeAirtimes above).
 function getBroadcastPrimetimeUTC(dateStr) {
     return getTimezoneAnchorUTC(dateStr, "America/New_York", 20, 0, -5);
 }
 
-const US_BROADCAST_NETWORKS = ["NBC", "ABC", "CBS", "FOX", "The CW", "PBS"];
+// Named/kept as "broadcast" for compatibility with the isBroadcastNetwork
+// field already persisted on existing library items (renaming it would
+// silently lose that stored value for every show already added, until
+// the next sync) - despite the name, this list covers major US CABLE
+// networks too, not just the original 6 broadcast ones. A cable show
+// that only ever got the earlier broadcast-only list would fall through
+// to the midnight-Pacific streaming default, which is just as wrong for
+// scheduled cable programming as it was for broadcast.
+const US_BROADCAST_NETWORKS = [
+    // Broadcast
+    "NBC", "ABC", "CBS", "FOX", "The CW", "PBS",
+    // Major scheduled cable
+    "AMC", "FX", "FXX", "USA Network", "TNT", "TBS", "Bravo",
+    "Discovery", "A&E", "Lifetime", "Syfy", "Comedy Central",
+    "MTV", "VH1", "E!", "History", "National Geographic",
+    "Freeform", "Nickelodeon", "Cartoon Network", "Adult Swim",
+    "HBO", "Showtime", "Starz", "Paramount Network"
+];
 
 // TMDB's /tv/{id} response includes a `networks` array by default (no
-// append_to_response needed) - this just checks it against the handful
-// of major US broadcast networks. Anything not on this list (a streaming
-// original, a cable network, a show from outside the US) falls back to
-// the midnight-Pacific streaming anchor, which is the safer default for
-// content this list doesn't specifically recognize.
+// append_to_response needed) - this just checks it against the list
+// above. Anything not on it (a streaming original, an international
+// network, something genuinely obscure) falls back to the midnight-
+// Pacific streaming anchor, which is the safer default for content this
+// list doesn't specifically recognize.
 function isBroadcastNetworkShow(networks) {
     if (!networks || !Array.isArray(networks)) return false;
     return networks.some(n => n && US_BROADCAST_NETWORKS.includes(n.name));
@@ -1424,6 +1444,13 @@ async function submitChosenUsername() {
             state.profiles[0].name = username;
             state.profiles[0].initials = username.charAt(0).toUpperCase();
         }
+        // Defensive - proceedToApp already assigns one for a first-time
+        // Google sign-in before this screen is ever shown, but this
+        // covers any account that somehow reached here without one
+        // (e.g. one created before that fix existed).
+        if (state.profiles && state.profiles[0] && !state.profiles[0].avatarId) {
+            state.profiles[0].avatarId = randomAvatarId();
+        }
         state.username = username;
         await saveUserProfile();
 
@@ -1733,6 +1760,19 @@ async function handleSignUp() {
         } else {
             state.profiles[0].name = username;
             state.profiles[0].initials = username.charAt(0).toUpperCase();
+            // state.profiles always already has a default guest profile
+            // by this point (set up before sign-in), so this branch is
+            // actually the one that runs for every real signup - the one
+            // above is effectively dead code. Without this, a brand new
+            // account's avatarId stayed null (the guest default),
+            // getSelectedAvatar() had nothing to return, and
+            // renderAvatarInto() fell back to showing initials instead
+            // of one of the 8 curated avatars - not just on first paint,
+            // permanently, since nothing else in the app ever assigns
+            // one afterward on its own.
+            if (!state.profiles[0].avatarId) {
+                state.profiles[0].avatarId = randomAvatarId();
+            }
         }
         state.username = username;
 
@@ -3354,6 +3394,14 @@ async function proceedToApp(user, authScreen, mainApp) {
                         if (user.displayName && state.profiles && state.profiles[0]) {
                             state.profiles[0].name = user.displayName;
                             state.profiles[0].initials = initial;
+                        }
+                        // Same missing-avatarId gap as the email/password
+                        // signup path (see handleSignUp) - without this, a
+                        // first-time Google sign-in kept the guest default's
+                        // null avatarId forever, falling back to initials
+                        // instead of one of the 8 curated avatars.
+                        if (state.profiles && state.profiles[0] && !state.profiles[0].avatarId) {
+                            state.profiles[0].avatarId = randomAvatarId();
                         }
                         state.region = detectDefaultRegion();
                         await saveUserProfile();
@@ -5348,6 +5396,11 @@ async function saveDisplayName() {
         } else {
             state.profiles[0].name = name;
             state.profiles[0].initials = name.charAt(0).toUpperCase();
+            // Defensive, same as the other profile-creation call sites -
+            // covers any account that still somehow has no avatarId set.
+            if (!state.profiles[0].avatarId) {
+                state.profiles[0].avatarId = randomAvatarId();
+            }
         }
         await saveUserProfile();
 
