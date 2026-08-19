@@ -799,7 +799,15 @@ function getTimeOfDayGreeting() {
 // the displayed day earlier/later depending on where the user is).
 function getDateOnlyParts(value) {
     const d = new Date(value);
-    return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate() };
+    // Local (not UTC) calendar day - this must match the reference frame
+    // getLocalTodayParts() below uses, since daysUntil() compares the
+    // two directly. Extracting the UTC day here while comparing against
+    // a local "today" was a real bug: for any timezone ahead of UTC (a
+    // release at, say, 2pm UTC is already the next calendar day in a
+    // timezone like SAST or NZST), the countdown could be off by a full
+    // day - the same category of "different reference frames silently
+    // disagreeing" bug as formatDateWithReleaseTime() used to have.
+    return { y: d.getFullYear(), m: d.getMonth(), d: d.getDate() };
 }
 
 function getLocalTodayParts() {
@@ -1061,15 +1069,28 @@ async function fetchTVmazeEpisodeAirtimes(tvdbId) {
 // and the network itself call the air date, instead of showing one day
 // later than it should. See formatDateWithReleaseTime() below, which is
 // what actually decides which zone to pass based on the item.
+// timeZone defaults to UTC - correct for movies and streaming TV, since
+// their anchor (see tmdbDateToISO/getPacificMidnightUTC) always lands
+// within the same UTC calendar day as the date TMDB reported. A
+// broadcast show's 8pm-Eastern anchor does NOT (it crosses into the next
+// UTC day - 8pm ET is after midnight UTC) - passing "America/New_York"
+// here for THAT specific case keeps the displayed date matching what
+// TMDB and the network itself call the air date, instead of showing one
+// day later than it should. Pass null/undefined explicitly to omit the
+// timeZone option entirely, which makes Intl fall back to the runtime's
+// own local timezone - see formatDateWithReleaseTime() below for why
+// that's what actually needs to happen when a time is being shown
+// alongside this date.
 function formatDate(date, timeZone = "UTC") {
     if (!date) return "TBA";
-    return new Intl.DateTimeFormat("en-ZA", {
+    const options = {
         weekday: "short",
         day: "numeric",
         month: "short",
-        year: "numeric",
-        timeZone
-    }).format(new Date(date));
+        year: "numeric"
+    };
+    if (timeZone) options.timeZone = timeZone;
+    return new Intl.DateTimeFormat("en-ZA", options).format(new Date(date));
 }
 
 // getPacificMidnightUTC()/tmdbDateToISO() above anchor this to midnight
@@ -1098,16 +1119,28 @@ function formatReleaseTime(date) {
 // Used everywhere a release date is shown outside the Upcoming tab
 // itself, which always shows both since everything listed there is, by
 // definition, still upcoming.
-// isBroadcastNetwork should be passed for a TV item known to air on one
-// of the US broadcast networks (item.isBroadcastNetwork, set when it was
-// added/synced - see isBroadcastNetworkShow()) - this is what keeps the
-// displayed DATE correct for those (see formatDate() above), separate
-// from the TIME already using the right zone either way.
-function formatDateWithReleaseTime(date, isBroadcastNetwork = false) {
+//
+// Date and time are now BOTH shown in the viewer's own local timezone -
+// a real bug lived here before: the date used to be pinned to the
+// network's own timezone (America/New_York for broadcast, UTC
+// otherwise) while formatReleaseTime() below has always shown the time
+// in the viewer's own local zone. Those are two different reference
+// frames, and they can disagree about which calendar day a moment falls
+// on - e.g. an 8pm-Eastern Thursday episode is already past midnight UTC
+// (Friday), so a viewer several hours ahead of Eastern time would have
+// seen "Thu, 20 Aug ... 2:00 AM", where that 2:00 AM was actually early
+// Friday in their own timezone, not Thursday. Anchoring both pieces to
+// the SAME frame (the viewer's own local time) is what actually fixes
+// that - they now always describe the exact same real-world moment,
+// guaranteed. The trade-off: for a viewer in a timezone far enough
+// behind the source network's own (rare in practice), the displayed
+// date could now be a day earlier than what TMDB/the network call it -
+// a real, accepted trade-off, and a much smaller and rarer one than
+// showing an internally-contradictory date and time to most viewers.
+function formatDateWithReleaseTime(date) {
     if (!date) return "TBA";
-    const dateTimeZone = isBroadcastNetwork ? "America/New_York" : "UTC";
-    if (isReleased(date)) return formatDate(date, dateTimeZone);
-    return `${formatDate(date, dateTimeZone)} \u2022 ${formatReleaseTime(date)}`;
+    if (isReleased(date)) return formatDate(date, null);
+    return `${formatDate(date, null)} \u2022 ${formatReleaseTime(date)}`;
 }
 
 function getCountdown(date) {
@@ -4986,7 +5019,7 @@ function createUpcomingCard(data) {
             <div class="upcoming-info">
                 <div class="upcoming-title">${escapeHTML(data.title)}</div>
                 <div class="upcoming-date">${escapeHTML(data.subtitle)}</div>
-                <div class="upcoming-date">${formatDate(data.date, data.item.isBroadcastNetwork ? "America/New_York" : "UTC")} &bull; ${formatReleaseTime(data.date)}</div>
+                <div class="upcoming-date">${formatDate(data.date, null)} &bull; ${formatReleaseTime(data.date)}</div>
                 <div class="upcoming-countdown">${getCountdown(data.date)}</div>
             </div>
         </div>
@@ -6010,7 +6043,7 @@ function renderEpisodesList(container) {
             ${seasonEpisodes.map(ep => {
                 const hasStill = ep.still && ep.still.trim() !== "";
                 const released = isReleased(ep.releaseDate);
-                const dateStr = formatDateWithReleaseTime(ep.releaseDate, currentItem.isBroadcastNetwork);
+                const dateStr = formatDateWithReleaseTime(ep.releaseDate);
                 const watchedText = !released ? "Not Released" : (ep.watched ? "Watched" : "Unwatched");
                 const watchedColor = !released ? "var(--text-muted)" : (ep.watched ? "var(--success)" : "var(--danger)");
                 const isUpNext = nextEp && nextEp.id === ep.id;
@@ -6533,7 +6566,7 @@ function refreshEpisodeModalMeta() {
         <span>•</span>
         <span>${currentEpisode.runtime || '45 min'}</span>
         <span>•</span>
-        <span>${formatDateWithReleaseTime(currentEpisode.releaseDate, currentItem.isBroadcastNetwork)}</span>
+        <span>${formatDateWithReleaseTime(currentEpisode.releaseDate)}</span>
         ${(currentEpisode.watched && isCurrentItemInLibrary()) ? `
             <span>•</span>
             <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${currentEpisode.id}')">Rewatched \u00d7${currentEpisode.rewatchCount || 0}</span>
