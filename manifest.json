@@ -2,6 +2,7 @@
   "name": "NovaWatch",
   "short_name": "NovaWatch",
   "description": "Track what you watch and get release alerts for upcoming movies and TV episodes.",
+  "version": "1.0.0",
   "id": "/",
   "start_url": ".",
   "scope": ".",
