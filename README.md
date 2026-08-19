@@ -37,7 +37,7 @@ Live at `https://www.novawatch.site/`. Mobile-first by design — no desktop/tab
 - **Firestore** — the only backend; no server of NovaWatch's own
 - **TMDB API** — search, metadata, episode/season data, recommendations
 - **JustWatch (via TMDB)** — streaming availability by region
-- **TVmaze API** — real per-episode airtimes for TV, where available (see Upcoming below); scoped narrowly to just that one field, never used for search, metadata, or anything else
+- **TVmaze API** — real per-episode airtimes and each show's weekly schedule for TV, where available (see Upcoming below); scoped narrowly to those two things, never used for search, metadata, or anything else
 
 ### Firebase plan
 
@@ -64,7 +64,13 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it).
 
-**Upcoming** — everything in the library that hasn't released yet, with a countdown and a release date/time, converted to the viewer's own timezone. For TV episodes, a real airtime from TVmaze is used when one's available (matched to the show via the TheTVDB ID TMDB itself exposes) — genuinely accurate to that show's own schedule, not a guess. When there's no TVmaze match, timing falls back to inferred convention instead: midnight Pacific time for streaming platforms (Netflix, Disney+, Hulu, etc.), or 8pm Eastern for the handful of major US broadcast networks (NBC, ABC, CBS, FOX, The CW, PBS) — detected from TMDB's own network data for the show. Movies always use the streaming/Pacific convention, since TVmaze doesn't cover them. Whichever source ends up being used is what actually gates when something leaves Upcoming and starts counting as watchable elsewhere in the app (Continue Watching, marking episodes watched, etc.), not just a rough "today" check.
+**Upcoming** — everything in the library that hasn't released yet, with a countdown and a release date/time, converted to the viewer's own timezone. For TV episodes, a real airtime from TVmaze is used when one's available (matched to the show via the TheTVDB ID TMDB itself exposes) — genuinely accurate to that show's own schedule, not a guess. When there's no TVmaze match, timing falls back to inferred convention instead: midnight Pacific time for streaming platforms (Netflix, Disney+, Hulu, etc.), or 8pm Eastern for major US broadcast and cable networks (NBC, ABC, CBS, FOX, The CW, PBS, plus ~25 major cable networks like AMC, FX, USA, TNT, HBO, Showtime) — detected from TMDB's own network data for the show. Movies always use the streaming/Pacific convention, since TVmaze doesn't cover them. Whichever source ends up being used is what actually gates when something leaves Upcoming and starts counting as watchable elsewhere in the app (Continue Watching, marking episodes watched, etc.), not just a rough "today" check.
+
+**Content rating** — PG-13, TV-MA, etc., shown as a badge in the details modal for both movies and TV shows. Fetched from a separate per-region TMDB endpoint (`release_dates` for movies, `content_ratings` for TV), tried in the viewer's own streaming region first, falling back to US.
+
+**Collection/franchise info** — for movies that TMDB has flagged as belonging to a collection (e.g. "Part of The Dark Knight Collection"), shown in the details modal. Movie-only; TV doesn't have an equivalent concept in TMDB.
+
+**Weekly schedule** — for an ongoing TV show with an active broadcast/cable schedule, a line like "New episodes every Thursday at 9:00 PM" in the details modal, converted to the viewer's local time. Sourced from the same TVmaze lookup used for per-episode airtimes, so it doesn't cost an extra request.
 
 **Viewing Analytics** (Home) — total watch time (including rewatch passes) and counts of watched movies/shows/episodes.
 
