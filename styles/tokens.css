@@ -82,9 +82,12 @@
     --red-gradient: linear-gradient(135deg, #ff6961, #ff3b30);
     --green-gradient: linear-gradient(135deg, #34d472, #1fa851);
 
-    --text: #1d1d1f;
-    --text-secondary: #424245;
-    --text-muted: #86868b;
+    /* Pure black/white, not a near-black/near-white or a gray - text
+       colors here are literally #000/#fff, both light and dark mode
+       (see the dark-mode override below), no in-between shades at all. */
+    --text: #000000;
+    --text-secondary: #000000;
+    --text-muted: #000000;
 
     --border: rgba(0, 0, 0, 0.08);
 
@@ -148,9 +151,11 @@ html[data-theme="dark"] {
     --red-gradient: linear-gradient(135deg, #ff6961, #ff453a);
     --green-gradient: linear-gradient(135deg, #30d158, #26a648);
 
-    --text: #f5f5f7;
-    --text-secondary: #c7c7cc;
-    --text-muted: #8e8e93;
+    /* Same pure black/white rule as light mode - #fff here, not a
+       near-white or a gray, for all three text tiers. */
+    --text: #ffffff;
+    --text-secondary: #ffffff;
+    --text-muted: #ffffff;
 
     --border: rgba(255, 255, 255, 0.1);
 
