@@ -740,11 +740,16 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Catches the moment something crosses into "released today" for
-    // anyone who leaves the app open across midnight, without needing a
-    // network call.
+    // Catches the moment something crosses into "released" for anyone who
+    // leaves the app open across it, without needing a network call -
+    // isReleased() is now an exact timestamp check (see above), so this
+    // also re-renders whichever tab is open, not just the notification
+    // check, so Upcoming/Continue Watching/Home actually reflect the
+    // change within this window instead of staying stale until the next
+    // navigation or data sync happens to touch them.
     setInterval(() => {
         checkTodaysReleases();
+        refreshActivePage();
     }, 5 * 60 * 1000);
 
     // Automatic background TMDB sync: keeps every library item's metadata
@@ -803,9 +808,11 @@ function getLocalTodayParts() {
 }
 
 // Whole calendar days between a stored release date and the viewer's local
-// "today" — this is what drives both isReleased() and the countdown, so a
-// user in any timezone sees the same day TMDB reported, just measured
-// against their own local calendar.
+// "today" - used for the countdown display ("Tomorrow", "In 3 days") only.
+// Deliberately NOT what gates whether something is actually released (see
+// isReleased() below, which does an exact timestamp check instead) - this
+// is allowed to be an approximation since a friendly countdown doesn't
+// need hour-level precision the way "is it actually out yet" does.
 function daysUntil(date) {
     const r = getDateOnlyParts(date);
     const releaseLocalMidnight = new Date(r.y, r.m, r.d);
@@ -814,46 +821,206 @@ function daysUntil(date) {
     return Math.round((releaseLocalMidnight.getTime() - todayLocalMidnight.getTime()) / 86400000);
 }
 
+// The actual release gate - true once the real release instant (00:00
+// Pacific time on the release date, per getPacificMidnightUTC/
+// tmdbDateToISO above) has passed for THIS viewer, in their own
+// timezone. This used to just compare calendar days in the viewer's
+// local time, which meant something could show as "released" as much as
+// a full day before it had actually dropped anywhere for anyone east of
+// Pacific time (or, less obviously, still show as unreleased for a
+// while after it actually had for anyone west of it) - an exact instant
+// comparison is correct for every timezone at once, not tied to
+// whichever one happens to be closest to Pacific.
 function isReleased(date) {
     if (!date) return true;
-    return daysUntil(date) <= 0;
+    return Date.now() >= new Date(date).getTime();
 }
 
 // TMDB gives date-only strings (e.g. "2026-08-14"), which JS would
-// otherwise parse as UTC midnight. Pinning to 08:00 UTC instead gives
-// NovaWatch's periodic background sync a buffer window to have actually
-// pulled fresh episode/show/movie info from TMDB before anything here
-// gets treated as released, rather than the exact instant the calendar
-// day rolls over (when TMDB's own data for that release may not be
-// fully populated yet).
-function tmdbDateToISO(dateStr) {
-    if (!dateStr) return null;
-    return new Date(`${dateStr}T08:00:00Z`).toISOString();
+// otherwise parse as UTC midnight - not when content actually becomes
+// available. Generalized so it can anchor to any wall-clock time in any
+// IANA timezone on a given date (see getPacificMidnightUTC/
+// getBroadcastPrimetimeUTC below, which are just this called with
+// specific arguments) - DST-aware via Intl's own timezone database
+// rather than this hardcoding an offset or guessing at DST date ranges.
+function getTimezoneAnchorUTC(dateStr, timeZone, hour, minute, fallbackOffsetHours) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+
+    // Formatted at noon UTC on the target date (not the anchor time
+    // itself) specifically to stay safely clear of the DST transition
+    // instant, which lands in the very early morning local time - using
+    // noon avoids ever landing exactly on that boundary and reading the
+    // wrong side of it.
+    const referenceInstant = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    const offsetPart = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        timeZoneName: "longOffset"
+    }).formatToParts(referenceInstant).find(p => p.type === "timeZoneName");
+
+    // Falls back to a fixed standard-time (non-DST) offset if the browser
+    // doesn't support "longOffset" (older WebKit) or the parse ever comes
+    // back in an unexpected shape - wrong for roughly half the year (DST
+    // season) but still a real anchor in the right timezone, not an
+    // unrelated fixed UTC time.
+    let offsetHours = fallbackOffsetHours;
+    const match = offsetPart && offsetPart.value.match(/GMT([+-])(\d{2}):(\d{2})/);
+    if (match) {
+        const sign = match[1] === "-" ? -1 : 1;
+        offsetHours = sign * (parseInt(match[2], 10) + parseInt(match[3], 10) / 60);
+    }
+
+    // A wall-clock time in a timezone at UTC offset X corresponds to
+    // (that time - X) in UTC - e.g. Pacific at UTC-8 means 00:00 PT =
+    // 08:00 UTC; Eastern at UTC-4 means 20:00 ET = 00:00 UTC next day.
+    return Date.UTC(year, month - 1, day, hour, minute, 0) - offsetHours * 3600000;
 }
 
-function formatDate(date) {
+// The real-world convention most STREAMING platforms (Netflix, Disney+,
+// Hulu, etc.) actually use: everything drops at once, at midnight
+// Pacific. This is the default anchor for anything that isn't a US
+// broadcast network show (see isBroadcastNetworkShow below).
+function getPacificMidnightUTC(dateStr) {
+    return getTimezoneAnchorUTC(dateStr, "America/Los_Angeles", 0, 0, -8);
+}
+
+// Broadcast networks (NBC, ABC, CBS, FOX, The CW, PBS) don't work like
+// streaming - there's no single drop moment, episodes air at a specific
+// advertised timeslot that varies show to show, and TMDB doesn't give us
+// that per-show slot. 8 PM EASTERN is the earliest/most common US
+// primetime start - a real, deliberate approximation of "some time
+// during the primetime block", not a claim of the exact minute a
+// specific show actually airs. Better than treating every network show
+// as a midnight-Pacific streaming drop (which it isn't), but still not
+// minute-accurate the way it is for streaming.
+function getBroadcastPrimetimeUTC(dateStr) {
+    return getTimezoneAnchorUTC(dateStr, "America/New_York", 20, 0, -5);
+}
+
+const US_BROADCAST_NETWORKS = ["NBC", "ABC", "CBS", "FOX", "The CW", "PBS"];
+
+// TMDB's /tv/{id} response includes a `networks` array by default (no
+// append_to_response needed) - this just checks it against the handful
+// of major US broadcast networks. Anything not on this list (a streaming
+// original, a cable network, a show from outside the US) falls back to
+// the midnight-Pacific streaming anchor, which is the safer default for
+// content this list doesn't specifically recognize.
+function isBroadcastNetworkShow(networks) {
+    if (!networks || !Array.isArray(networks)) return false;
+    return networks.some(n => n && US_BROADCAST_NETWORKS.includes(n.name));
+}
+
+function tmdbDateToISO(dateStr, isBroadcastNetwork) {
+    if (!dateStr) return null;
+    const anchorMs = isBroadcastNetwork
+        ? getBroadcastPrimetimeUTC(dateStr)
+        : getPacificMidnightUTC(dateStr);
+    return new Date(anchorMs).toISOString();
+}
+
+/* =========================================================
+   TVMAZE - REAL PER-EPISODE AIRTIMES
+   TMDB only ever gives a release DATE, never a time, so
+   getPacificMidnightUTC()/getBroadcastPrimetimeUTC() above are always an
+   approximation from real-world convention, not a verified time for any
+   individual show. TVmaze's own episode data includes a real `airstamp`
+   per episode - an actual scheduled airtime, not a guess - so it's used
+   here as a strictly-better-when-available replacement for that
+   approximation, matched to the show TMDB already gave us via the
+   TheTVDB ID TMDB itself exposes (see external_ids on the /tv/{id}
+   fetches below), never by matching titles.
+
+   Scoped narrowly on purpose: TVmaze is ONLY ever asked for airtimes.
+   Nothing from it - its own poster, summary, episode titles - is stored
+   anywhere. It can't create a duplicate show (it's never used to search
+   for or add anything, only consulted for a show TMDB already gave us)
+   and can't leave duplicate data behind (the only thing read out of its
+   response is one timestamp per episode).
+
+   Fails soft, always: no tvdb_id, no TVmaze match, a slow response, a
+   network error, a malformed response - every one of these just means an
+   empty result, and every caller already treats "no TVmaze airtime for
+   this episode" as "use the TMDB-based approximation instead", exactly
+   as if TVmaze had never been consulted. A TVmaze outage can never break
+   adding or syncing a show.
+========================================================= */
+const TVMAZE_LOOKUP_TIMEOUT_MS = 5000;
+
+// A plain fetch has no built-in timeout - without this, an unresponsive
+// TVmaze could hang a show-add/sync indefinitely rather than falling
+// back promptly. Never throws: any failure (abort, network error, a
+// non-OK response) resolves to null, which every call site below already
+// treats as "nothing to use, fall back".
+async function fetchTVmazeJSON(url) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TVMAZE_LOOKUP_TIMEOUT_MS);
+    try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// Returns a Map of "s{season}e{number}" -> real airstamp (a full, already-
+// correct ISO instant - TVmaze resolves the show's own timezone itself,
+// no conversion needed the way the TMDB-only approximation requires).
+// Empty map (not an error, not a rejected promise) for anything that
+// doesn't resolve to real data - see the file-level comment above for why
+// that's a deliberate, load-bearing design choice, not an oversight.
+async function fetchTVmazeEpisodeAirtimes(tvdbId) {
+    const airtimes = new Map();
+    if (!tvdbId) return airtimes;
+
+    const show = await fetchTVmazeJSON(`https://api.tvmaze.com/lookup/shows?thetvdb=${tvdbId}`);
+    if (!show || !show.id) return airtimes;
+
+    const episodes = await fetchTVmazeJSON(`https://api.tvmaze.com/shows/${show.id}/episodes`);
+    if (!Array.isArray(episodes)) return airtimes;
+
+    episodes.forEach(ep => {
+        if (ep && ep.airstamp && typeof ep.season === 'number' && typeof ep.number === 'number') {
+            airtimes.set(`s${ep.season}e${ep.number}`, ep.airstamp);
+        }
+    });
+
+    return airtimes;
+}
+
+// timeZone defaults to UTC - correct for movies and streaming TV, since
+// their anchor (see tmdbDateToISO/getPacificMidnightUTC) always lands
+// within the same UTC calendar day as the date TMDB reported. A
+// broadcast show's 8pm-Eastern anchor does NOT (it crosses into the next
+// UTC day - 8pm ET is after midnight UTC) - passing "America/New_York"
+// here for those is what keeps the displayed date matching what TMDB
+// and the network itself call the air date, instead of showing one day
+// later than it should. See formatDateWithReleaseTime() below, which is
+// what actually decides which zone to pass based on the item.
+function formatDate(date, timeZone = "UTC") {
     if (!date) return "TBA";
     return new Intl.DateTimeFormat("en-ZA", {
         weekday: "short",
         day: "numeric",
         month: "short",
         year: "numeric",
-        timeZone: "UTC" // dates are calendar-only; keep the day TMDB reported, don't let it drift with local tz
+        timeZone
     }).format(new Date(date));
 }
 
-// The 08:00 UTC anchor tmdbDateToISO() stores isn't a real, TMDB-sourced
-// premiere time - TMDB only ever provides a release DATE, never a time.
-// It's a synthetic buffer, picked so the periodic background sync has a
-// window to have actually run before anything's treated as released (see
-// tmdbDateToISO above). Showing it converted to the person's own local
-// time is what was asked for, but it's worth remembering this reflects
-// that internal buffer, not a minute-accurate premiere time verified by
-// TMDB or the streaming platform itself. Deliberately does NOT pin
-// timeZone to UTC the way formatDate() above does - that's the whole
-// point here (matching the user's own region/local time), unlike the
-// date, which stays anchored to UTC on purpose so the calendar day never
-// drifts a day earlier/later for someone in a very negative UTC offset.
+// getPacificMidnightUTC()/tmdbDateToISO() above anchor this to midnight
+// Pacific time - the real-world convention most streaming platforms
+// actually use, not an arbitrary buffer. TMDB itself still only ever
+// reports a release DATE, never a time, so this is "midnight Pacific,
+// converted to the viewer's own timezone" rather than a platform-
+// verified minute-accurate premiere time - accurate to the convention,
+// not confirmed per-title. Deliberately does NOT pin timeZone to UTC the
+// way formatDate() does - that's the whole point here (showing the
+// viewer's own local time), unlike the date, which stays anchored to UTC
+// so the calendar day matches what TMDB/marketing actually reported,
+// rather than potentially shifting a day earlier for a viewer west of
+// Pacific time (rare, but a real edge case this trade-off accepts).
 function formatReleaseTime(date) {
     if (!date) return "";
     return new Intl.DateTimeFormat("en-ZA", {
@@ -862,11 +1029,35 @@ function formatReleaseTime(date) {
     }).format(new Date(date));
 }
 
+// Shows just the date for something already released - the exact release
+// TIME only matters while something hasn't dropped yet (useful for
+// knowing when to check back), not once it's been available for a while.
+// Used everywhere a release date is shown outside the Upcoming tab
+// itself, which always shows both since everything listed there is, by
+// definition, still upcoming.
+// isBroadcastNetwork should be passed for a TV item known to air on one
+// of the US broadcast networks (item.isBroadcastNetwork, set when it was
+// added/synced - see isBroadcastNetworkShow()) - this is what keeps the
+// displayed DATE correct for those (see formatDate() above), separate
+// from the TIME already using the right zone either way.
+function formatDateWithReleaseTime(date, isBroadcastNetwork = false) {
+    if (!date) return "TBA";
+    const dateTimeZone = isBroadcastNetwork ? "America/New_York" : "UTC";
+    if (isReleased(date)) return formatDate(date, dateTimeZone);
+    return `${formatDate(date, dateTimeZone)} \u2022 ${formatReleaseTime(date)}`;
+}
+
 function getCountdown(date) {
     if (!date) return "TBA";
-    const days = daysUntil(date);
+    // isReleased() is the precise gate (see above) - checked first so
+    // this never says "Available now" a few hours early just because
+    // daysUntil()'s calendar-day math alone would call it "today", nor
+    // keeps counting down after the real release instant has actually
+    // passed.
+    if (isReleased(date)) return "Available now";
 
-    if (days <= 0) return "Available now";
+    const days = daysUntil(date);
+    if (days <= 0) return "Today";
     if (days === 1) return "Tomorrow";
     if (days <= 7) return `In ${days} days`;
     if (days <= 13) return "Next week";
@@ -2336,9 +2527,22 @@ async function refreshItemFromTMDBInternal(item) {
                     }
                 } else {
                     // TV Shows: refresh show-level metadata AND the full episode/season list.
-                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
                     const showData = await res.json();
                     if (!showData || !showData.seasons) return { changed: false, failed: false };
+                    // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC() - a
+                    // broadcast show's episodes anchor to a primetime-Eastern
+                    // approximation instead of the midnight-Pacific streaming
+                    // default, since it isn't a streaming-style all-at-once drop.
+                    // Only ever a fallback now, for whatever TVmaze below doesn't
+                    // have real airtime data for.
+                    const isBroadcast = isBroadcastNetworkShow(showData.networks);
+                    // Kicked off alongside the season fetches below (not awaited
+                    // until they're all needed together) so a slow-but-not-failing
+                    // TVmaze lookup never adds sequential latency on top of TMDB's
+                    // own season requests - see fetchTVmazeEpisodeAirtimes() for
+                    // why this can never actually fail the sync either way.
+                    const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
 
                     let newEpisodes = [];
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -2361,6 +2565,7 @@ async function refreshItemFromTMDBInternal(item) {
                     const seasonPromises = validSeasons.map(season => fetchSeason(season.season_number));
 
                     const seasonsData = await Promise.all(seasonPromises);
+                    const tvmazeAirtimes = await tvmazeAirtimesPromise;
                     // BUG FIX: this used to only check `if (seasonData && seasonData.episodes)`
                     // and otherwise silently skip the season entirely - meaning a single
                     // season's fetch failing (still possible even with the retry above)
@@ -2378,8 +2583,15 @@ async function refreshItemFromTMDBInternal(item) {
                         const seasonData = seasonsData[i];
                         if (seasonData && seasonData.episodes) {
                             seasonData.episodes.forEach(ep => {
+                                const epId = `s${seasonData.season_number}e${ep.episode_number}`;
+                                // A real TVmaze airstamp, when there is one, replaces
+                                // the TMDB-date-only approximation outright rather
+                                // than being blended with it - it's an actual
+                                // scheduled airtime, not something that needs the
+                                // approximation as a starting point.
+                                const tvmazeAirstamp = tvmazeAirtimes.get(epId);
                                 newEpisodes.push({
-                                    id: `s${seasonData.season_number}e${ep.episode_number}`,
+                                    id: epId,
                                     season: seasonData.season_number,
                                     number: ep.episode_number,
                                     title: ep.name || `Episode ${ep.episode_number}`,
@@ -2388,7 +2600,7 @@ async function refreshItemFromTMDBInternal(item) {
                                     runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
                                     watched: false,
                                     watchedAt: null,
-                                    releaseDate: ep.air_date ? tmdbDateToISO(ep.air_date) : new Date().toISOString()
+                                    releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString())
                                 });
                             });
                         } else if (item.episodes && item.episodes.length > 0) {
@@ -2448,7 +2660,7 @@ async function refreshItemFromTMDBInternal(item) {
                     const newPoster = item.customPoster ? item.poster : (showData.poster_path ? `https://image.tmdb.org/t/p/w500${showData.poster_path}` : item.poster);
                     const newBackdrop = item.customBackdrop ? item.backdrop : (showData.backdrop_path ? `https://image.tmdb.org/t/p/w780${showData.backdrop_path}` : item.backdrop);
                     const newDescription = showData.overview || item.description;
-                    const newReleaseDate = showData.first_air_date ? tmdbDateToISO(showData.first_air_date) : item.releaseDate;
+                    const newReleaseDate = showData.first_air_date ? tmdbDateToISO(showData.first_air_date, isBroadcast) : item.releaseDate;
                     const newStatus = showData.status || item.status || '';
                     const newRating = (typeof showData.vote_average === 'number' && showData.vote_average > 0)
                         ? showData.vote_average.toFixed(1)
@@ -2456,7 +2668,7 @@ async function refreshItemFromTMDBInternal(item) {
                     const newSeasonCount = (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : item.numberOfSeasons;
                     const newEpisodeCount = (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : item.numberOfEpisodes;
                     const newNextAirDate = (showData.next_episode_to_air && showData.next_episode_to_air.air_date)
-                        ? tmdbDateToISO(showData.next_episode_to_air.air_date)
+                        ? (tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) || tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
                         : null;
 
                     const metadataChanged = (
@@ -2486,6 +2698,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.numberOfSeasons = newSeasonCount;
                         item.numberOfEpisodes = newEpisodeCount;
                         item.nextEpisodeAirDate = newNextAirDate;
+                        item.isBroadcastNetwork = isBroadcast;
 
                         await saveItem(item);
                         changed = true;
@@ -3570,7 +3783,7 @@ async function openSearchResultDetails(tmdbId, type) {
         // fill episodes in behind it. Fetching every season is the slow
         // part (one request per season) and previously blocked the modal
         // from appearing at all until every single one had returned.
-        const showRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
+        const showRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
         const showData = await showRes.json();
 
         if (!showRes.ok || !showData || !showData.id) {
@@ -3578,6 +3791,13 @@ async function openSearchResultDetails(tmdbId, type) {
         }
 
         const previewId = `preview-tv-${showData.id}`;
+        // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC(). Kicked
+        // off here (not awaited yet) so it resolves alongside the season
+        // fetches below rather than adding its own sequential delay -
+        // the modal below still opens immediately either way, this only
+        // affects how accurate the episode air dates are once they load.
+        const isBroadcast = isBroadcastNetworkShow(showData.networks);
+        const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
 
         currentItem = {
             id: previewId,
@@ -3588,12 +3808,13 @@ async function openSearchResultDetails(tmdbId, type) {
             poster: showData.poster_path ? `https://image.tmdb.org/t/p/w500${showData.poster_path}` : "",
             backdrop: showData.backdrop_path ? `https://image.tmdb.org/t/p/w780${showData.backdrop_path}` : "",
             description: showData.overview || "No description available.",
-            releaseDate: showData.first_air_date ? tmdbDateToISO(showData.first_air_date) : null,
+            releaseDate: showData.first_air_date ? tmdbDateToISO(showData.first_air_date, isBroadcast) : null,
             status: showData.status || '',
             rating: (typeof showData.vote_average === 'number' && showData.vote_average > 0) ? showData.vote_average.toFixed(1) : '',
             numberOfSeasons: (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : null,
             numberOfEpisodes: (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : null,
-            nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date) ? tmdbDateToISO(showData.next_episode_to_air.air_date) : null,
+            nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date) ? tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast) : null,
+            isBroadcastNetwork: isBroadcast,
             isFinished: false,
             isStopped: false,
             isPreview: true,
@@ -3621,12 +3842,15 @@ async function openSearchResultDetails(tmdbId, type) {
             );
 
             const seasonsData = await Promise.all(seasonPromises);
+            const tvmazeAirtimes = await tvmazeAirtimesPromise;
 
             seasonsData.forEach(seasonData => {
                 if (seasonData && seasonData.episodes) {
                     seasonData.episodes.forEach(ep => {
+                        const epId = `s${seasonData.season_number}e${ep.episode_number}`;
+                        const tvmazeAirstamp = tvmazeAirtimes.get(epId);
                         episodes.push({
-                            id: `s${seasonData.season_number}e${ep.episode_number}`,
+                            id: epId,
                             season: seasonData.season_number,
                             number: ep.episode_number,
                             title: ep.name || `Episode ${ep.episode_number}`,
@@ -3635,7 +3859,7 @@ async function openSearchResultDetails(tmdbId, type) {
                             runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
                             watched: false,
                             watchedAt: null,
-                            releaseDate: ep.air_date ? tmdbDateToISO(ep.air_date) : new Date().toISOString()
+                            releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString())
                         });
                     });
                 }
@@ -3718,7 +3942,7 @@ async function importMediaData(id, type, buttonElement) {
 
         } else {
             const availabilityPromise = fetchWatchAvailability(id, 'tv');
-            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}`);
+            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
             const showData = await showRes.json();
 
             if (!showRes.ok || !showData || !showData.id || !showData.name) {
@@ -3729,6 +3953,10 @@ async function importMediaData(id, type, buttonElement) {
             if (state.library.some(s => s.id === slug || s.tmdbId === showData.id)) {
                 return;
             }
+            // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC(). Kicked
+            // off now, awaited below alongside the season fetches.
+            const isBroadcast = isBroadcastNetworkShow(showData.networks);
+            const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
 
             // A previous removal may have archived this exact show's watch
             // history (see removeLibraryItem) under this same slug - check
@@ -3745,6 +3973,7 @@ async function importMediaData(id, type, buttonElement) {
             }
 
             let episodes = [];
+            let tvmazeAirtimes = new Map();
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
@@ -3755,12 +3984,15 @@ async function importMediaData(id, type, buttonElement) {
                 );
                 
                 const seasonsData = await Promise.all(seasonPromises);
-                
+                tvmazeAirtimes = await tvmazeAirtimesPromise;
+
                 seasonsData.forEach(seasonData => {
                     if (seasonData && seasonData.episodes) {
                         seasonData.episodes.forEach(ep => {
+                            const epId = `s${seasonData.season_number}e${ep.episode_number}`;
+                            const tvmazeAirstamp = tvmazeAirtimes.get(epId);
                             episodes.push({
-                                id: `s${seasonData.season_number}e${ep.episode_number}`,
+                                id: epId,
                                 season: seasonData.season_number,
                                 number: ep.episode_number,
                                 title: ep.name || `Episode ${ep.episode_number}`,
@@ -3769,7 +4001,7 @@ async function importMediaData(id, type, buttonElement) {
                                 runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
                                 watched: false,
                                 watchedAt: null,
-                                releaseDate: ep.air_date ? tmdbDateToISO(ep.air_date) : new Date().toISOString()
+                                releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString())
                             });
                         });
                     }
@@ -3806,12 +4038,15 @@ async function importMediaData(id, type, buttonElement) {
                 poster: showData.poster_path ? `https://image.tmdb.org/t/p/w500${showData.poster_path}` : "",
                 backdrop: showData.backdrop_path ? `https://image.tmdb.org/t/p/w780${showData.backdrop_path}` : "",
                 description: showData.overview || "No description available.",
-                releaseDate: showData.first_air_date ? tmdbDateToISO(showData.first_air_date) : null,
+                releaseDate: showData.first_air_date ? tmdbDateToISO(showData.first_air_date, isBroadcast) : null,
                 status: showData.status || '',
                 rating: (typeof showData.vote_average === 'number' && showData.vote_average > 0) ? showData.vote_average.toFixed(1) : '',
                 numberOfSeasons: (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : null,
                 numberOfEpisodes: (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : null,
-                nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date) ? tmdbDateToISO(showData.next_episode_to_air.air_date) : null,
+                nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date)
+                    ? (tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) || tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
+                    : null,
+                isBroadcastNetwork: isBroadcast,
                 isFinished: false,
                 isStopped: archivedShow ? !!archivedShow.isStopped : false,
                 addedAt: new Date().toISOString(),
@@ -4601,7 +4836,7 @@ function createUpcomingCard(data) {
             <div class="upcoming-info">
                 <div class="upcoming-title">${escapeHTML(data.title)}</div>
                 <div class="upcoming-date">${escapeHTML(data.subtitle)}</div>
-                <div class="upcoming-date">${formatDate(data.date)} &bull; ${formatReleaseTime(data.date)}</div>
+                <div class="upcoming-date">${formatDate(data.date, data.item.isBroadcastNetwork ? "America/New_York" : "UTC")} &bull; ${formatReleaseTime(data.date)}</div>
                 <div class="upcoming-countdown">${getCountdown(data.date)}</div>
             </div>
         </div>
@@ -5438,7 +5673,7 @@ function updateModalContent() {
     const ratingHTML = currentItem.rating ? `<span>•</span><span>★ ${escapeHTML(currentItem.rating)}</span>` : '';
 
     if (currentItem.type === 'movie') {
-        const releaseDateStr = currentItem.releaseDate ? formatDate(currentItem.releaseDate) : 'TBA';
+        const releaseDateStr = currentItem.releaseDate ? formatDateWithReleaseTime(currentItem.releaseDate) : 'TBA';
         metaHTML = `
             <span>${currentItem.year || 'N/A'}</span>
             <span>•</span>
@@ -5599,8 +5834,8 @@ function renderEpisodesList(container) {
         <div class="episodes-list">
             ${seasonEpisodes.map(ep => {
                 const hasStill = ep.still && ep.still.trim() !== "";
-                const dateStr = formatDate(ep.releaseDate);
                 const released = isReleased(ep.releaseDate);
+                const dateStr = formatDateWithReleaseTime(ep.releaseDate, currentItem.isBroadcastNetwork);
                 const watchedText = !released ? "Not Released" : (ep.watched ? "Watched" : "Unwatched");
                 const watchedColor = !released ? "var(--text-muted)" : (ep.watched ? "var(--success)" : "var(--danger)");
                 const isUpNext = nextEp && nextEp.id === ep.id;
@@ -6123,7 +6358,7 @@ function refreshEpisodeModalMeta() {
         <span>•</span>
         <span>${currentEpisode.runtime || '45 min'}</span>
         <span>•</span>
-        <span>${formatDate(currentEpisode.releaseDate)}</span>
+        <span>${formatDateWithReleaseTime(currentEpisode.releaseDate, currentItem.isBroadcastNetwork)}</span>
         ${(currentEpisode.watched && isCurrentItemInLibrary()) ? `
             <span>•</span>
             <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${currentEpisode.id}')">Rewatched \u00d7${currentEpisode.rewatchCount || 0}</span>
