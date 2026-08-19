@@ -291,6 +291,7 @@ img {
     color: var(--text);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 .year-nav-btn:disabled {
@@ -538,11 +539,23 @@ img {
     border-color: var(--flat-blue);
 }
 
-.poster-picker-item.selected::after {
+.poster-picker-item::after {
+    /* Always present (not just when .selected) so there's something to
+       transition FROM - a ::after pseudo-element that's only created
+       once .selected matches (via content: '' only appearing on that
+       rule) has no prior state to animate between, so the highlight
+       used to just pop in instantly. Toggling opacity instead of
+       creating/destroying the box is what makes it fade. */
     content: '';
     position: absolute;
     inset: 0;
     background: rgba(0, 136, 255, 0.15);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.poster-picker-item.selected::after {
+    opacity: 1;
 }
 
 .poster-picker-item img {
@@ -601,6 +614,7 @@ img {
     font-size: 13px;
     font-weight: 700;
     box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.15s ease;
 }
 
 .empty-state-cta:active {
@@ -691,6 +705,7 @@ img {
     height: 26px;
     border-radius: 50%;
     z-index: 1;
+    transition: color 0.15s ease, background 0.15s ease;
 }
 
 .search-clear-btn:hover {
@@ -724,7 +739,9 @@ img {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 700;
-    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease;
+    /* box-shadow added - same missing-property gap as .segmented-btn/
+       .season-button had: .active changes it without it being animated. */
+    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease, box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .search-type-btn:active {
@@ -777,7 +794,10 @@ img {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 700;
-    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease;
+    /* box-shadow added - same gap as .season-button had: .active changes
+       it (none -> a real shadow) but it wasn't in this list, so it used
+       to snap in instantly while background/color faded smoothly. */
+    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease, box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .segmented-btn:active {
@@ -893,6 +913,7 @@ img {
     justify-content: center;
     box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     flex-shrink: 0;
+    transition: transform 0.15s ease;
 }
 
 .search-add-btn:active {
@@ -1639,6 +1660,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     font-size: 13.5px;
     font-weight: 700;
     box-shadow: 0 8px 18px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: transform 0.15s ease;
 }
 
 .header-done-btn:active {
@@ -1746,6 +1768,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     border-radius: var(--radius-sm);
     font-size: 14px;
     font-weight: 700;
+    transition: transform 0.15s ease;
 }
 
 .confirm-btn.cancel {
@@ -1981,6 +2004,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     justify-content: center;
     text-align: center;
     box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s ease;
 }
 
 .action-button:active {
@@ -2094,7 +2118,13 @@ html[data-theme="dark"] .modal-sheet-compact {
     -webkit-touch-callout: none;
     user-select: none;
     -webkit-user-select: none;
-    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease;
+    /* Was missing border-color and box-shadow here, even though
+       .season-button.active changes both - background/color/transform
+       animated smoothly on selection, but the border and the inset
+       highlight snapped in instantly, which is exactly what an
+       inconsistent, "not smooth" transition looks like: some of the
+       change animates, some of it doesn't, at the same moment. */
+    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .season-button:active {
@@ -2131,6 +2161,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     box-shadow: none;
     border-radius: var(--radius-md);
     cursor: pointer;
+    transition: opacity 0.15s ease;
 }
 
 .episode:active {
@@ -2199,6 +2230,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     text-decoration: underline;
     text-decoration-color: rgba(71, 146, 255, 0.4);
     text-underline-offset: 2px;
+    transition: opacity 0.15s ease;
 }
 
 .rewatch-count-tap:active {
@@ -2314,6 +2346,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     gap: 6px;
     color: inherit;
     text-align: left;
+    transition: opacity 0.15s ease;
 }
 
 .settings-name-edit .icon-small {
@@ -2409,6 +2442,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     text-align: left;
     background: transparent;
     border-radius: var(--radius-md);
+    transition: background 0.15s ease;
 }
 
 .settings-action-row:active {
@@ -2471,6 +2505,11 @@ html[data-theme="dark"] .modal-sheet-compact {
     font-weight: 700;
     text-align: center;
     box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    /* Was missing entirely - :active below changes transform with
+       nothing to animate it, so the press feedback snapped instead of
+       the same smooth scale-down every other pressable pill in the app
+       already has. */
+    transition: transform 0.15s ease;
 }
 
 .hero-pill-btn:active {
@@ -2505,6 +2544,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     color: var(--text);
     border-bottom: 1px solid var(--border);
     cursor: pointer;
+    transition: background 0.15s ease;
 }
 
 .region-option-row:last-child {
@@ -2620,12 +2660,21 @@ html[data-theme="dark"] .avatar-edit-badge {
     transform: scale(0.94);
 }
 
-.avatar-picker-option.selected::after {
+.avatar-picker-option::after {
+    /* Same fix as .poster-picker-item::after above - always present so
+       there's something to transition FROM, opacity toggled instead of
+       the box being created/destroyed via .selected alone. */
     content: '';
     position: absolute;
     inset: -3px;
     border-radius: calc(var(--radius-lg) + 3px);
     border: 3px solid var(--blue);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.avatar-picker-option.selected::after {
+    opacity: 1;
 }
 
 .large-avatar {
@@ -2653,6 +2702,7 @@ html[data-theme="dark"] .avatar-edit-badge {
        common case now. */
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.4);
     flex-shrink: 0;
+    transition: transform 0.15s ease;
 }
 
 .home-greeting {
@@ -2750,6 +2800,7 @@ html[data-theme="dark"] .avatar-edit-badge {
     border-radius: var(--radius-sm);
     color: var(--text);
     font-size: 13px;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .auth-input:focus {
@@ -3004,6 +3055,7 @@ html[data-theme="dark"] .avatar-edit-badge {
     font-weight: 800;
     letter-spacing: -0.1px;
     cursor: pointer;
+    transition: opacity 0.15s ease;
 }
 
 .toast-action:active {
