@@ -38,6 +38,14 @@ try {
    APP STATE & CONFIG
 ========================================================= */
 const TMDB_API_KEY = "c8dc4239290060d91afd45c40d8182b7";
+// The single source of truth for the version shown in Settings > About
+// (see the "Version" row wired up in DOMContentLoaded below) and in
+// manifest.json. This is NovaWatch's first stable release - bump this
+// and manifest.json's own "version" field together whenever a future
+// release is cut. Displayed with a "v" prefix in Settings (see below) -
+// full semver-style "1.0.0" rather than a bare major version, since that
+// reads as the more polished, deliberate release number it's meant to be.
+const APP_VERSION = "1.0.0";
 // Derived from the page's actual current origin rather than hardcoded, so
 // this can never silently mismatch whatever domain/subdomain variant the
 // site is really being served from (e.g. bare novawatch.site vs
@@ -661,6 +669,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // choice exists, and syncs the Settings toggle to match.
     if (getSavedThemeMode() === 'auto') setupOSThemeListener();
     syncThemeToggleUI();
+
+    const versionLabel = document.getElementById("appVersionLabel");
+    if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
 
     const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'regionSearchInput'];
     
