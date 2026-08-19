@@ -1787,6 +1787,44 @@ html[data-theme="dark"] .modal-sheet-compact {
     align-items: center;
 }
 
+/* Holds whichever of the two secondary info lines actually applies
+   (weekly schedule for TV, collection/franchise for movies - a title is
+   never both) - hidden by default via inline style, shown by
+   updateModalContent() only when there's something to say. Sits right
+   below the dense, bulleted .modal-meta line since it's a full sentence
+   rather than another short bulleted fact, and reads better as its own
+   line than crammed into that row. */
+.modal-extra-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+    margin: -8px 0 16px;
+}
+
+.modal-extra-info .icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--blue);
+}
+
+/* The content-rating badge (PG-13, TV-MA, etc.) inside .modal-meta -
+   boxed rather than plain text, the way every streaming app actually
+   presents a rating, so it doesn't get lost among the other bulleted
+   facts on that line. */
+.content-rating-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border: 1px solid var(--glass-border);
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+
 .modal-description {
     color: var(--text-secondary);
     font-size: 14px;
@@ -2064,20 +2102,23 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 .season-button.active {
-    /* After several attempts at a bespoke "premium" treatment (a two-
-       layer shadow plus a permanent scale-up) that never actually
-       landed well, this now just reuses .segmented-btn.active's own
-       styling exactly, rather than inventing yet another variation -
-       it's the same underlying pattern (one active pill in a row of
-       pills) already proven to look right elsewhere in the app (Light/
-       Dark/Auto, TV/Movies), so there's no good reason for this one to
-       look or behave any differently. No scale-up this time - a button
-       visibly growing next to its same-sized siblings in a horizontally
-       scrolling row read as inconsistent rather than premium, which was
-       very likely the actual complaint. */
+    /* Two previous attempts both missed the same thing: .season-button's
+       base rule (unlike .segmented-btn, which this was copying from) has
+       its own border - never overridden here, so a pale outline was
+       showing through around the blue fill on every "selected" state so
+       far, which is very likely what read as an unwanted border. And the
+       outer glow (0 8px 18px, copied from .segmented-btn.active) was
+       tuned for a single wide toggle control, not a dense multi-button
+       row - in a horizontally scrolling strip it could bleed into
+       neighboring pills. Both removed outright this time instead of
+       adjusted again: border explicitly matched to the fill color so it
+       disappears rather than being left to show through, and no outer
+       shadow at all - just a subtle inset top highlight for a touch of
+       glass dimension, nothing that reads as a glow or a ring. */
     background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
+    border-color: var(--blue);
     color: white;
-    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .episode {
