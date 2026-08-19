@@ -412,6 +412,7 @@
 
         <div class="modal-content">
             <div id="modalMeta" class="modal-meta"></div>
+            <div id="modalExtraInfo" class="modal-extra-info" style="display:none;"></div>
             <div id="modalWatchOn" class="modal-watch-on" style="display:none;">
                 <div class="watch-on-header">
                     <span class="watch-on-title">Watch On</span>
@@ -752,6 +753,15 @@
                             </div>
                             <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
                         </button>
+                        <div class="settings-action-row static">
+                            <div class="settings-row-icon" style="background: var(--flat-blue);">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            </div>
+                            <div class="settings-row-text">
+                                <div class="settings-row-title">Version</div>
+                            </div>
+                            <div class="settings-row-value" id="appVersionLabel"></div>
+                        </div>
                     </div>
                 </div>
 
