@@ -37,7 +37,7 @@ Live at `https://www.novawatch.site/`. Mobile-first by design — no desktop/tab
 - **Firestore** — the only backend; no server of NovaWatch's own
 - **TMDB API** — search, metadata, episode/season data, recommendations
 - **JustWatch (via TMDB)** — streaming availability by region
-- **TVmaze API** — real per-episode airtimes and each show's weekly schedule for TV, where available (see Upcoming below); scoped narrowly to those two things, never used for search, metadata, or anything else
+- **TVmaze API** — real per-episode airtimes and each show's weekly schedule for TV, where available (see Upcoming below); scoped narrowly to those two things, never used for search, metadata, or anything else. Matched to a show via the TheTVDB ID TMDB itself exposes, falling back to a plain name search when that ID is missing or doesn't resolve (not every TMDB entry has a populated TVDB cross-reference); either way, the match is validated against TMDB's own title before anything from it is trusted.
 
 ### Firebase plan
 
