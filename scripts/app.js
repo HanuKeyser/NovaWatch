@@ -1228,6 +1228,29 @@ function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
     return Math.abs(airstampMs - tmdbMs) / 86400000 <= 1;
 }
 
+// TVmaze computes an episode's `airstamp` from its show-level network or
+// webChannel's own country/timezone data. A show with NEITHER (a real,
+// legitimate state for a title distributed across multiple regions
+// without one clear "home" country - exactly the kind of show a hybrid
+// cable-produced, multi-platform-streamed title like "The Shards" is)
+// gives TVmaze nothing real to resolve a local airtime against - and its
+// airstamp computation appears to default to a flat, literal UTC+0
+// placeholder in that case rather than a genuinely resolved time.
+// Confirmed directly: a real diagnostic showed exactly this pattern - a
+// well-formed, correctly-matched, date-accurate airstamp with a bare
+// +00:00 offset that didn't correspond to any actual US network or
+// platform's real timezone (Pacific Time in August is UTC-7, not
+// UTC+0). A per-episode value alone can't distinguish "genuinely a
+// UK/GMT release" from "TVmaze's own placeholder" - checking the show's
+// own location data directly is what can. Without this, that placeholder
+// value would otherwise pass every other check (well-formed, right
+// show, right date) while still being a fabricated-looking time, not a
+// real one.
+function hasResolvedTVmazeTimezone(show) {
+    const source = (show && show.webChannel) || (show && show.network);
+    return !!(source && source.country && source.country.timezone);
+}
+
 // tmdbShowName is used both to validate a match (see titlesReasonablyMatch)
 // and, when the TVDB-ID lookup below finds nothing, as a fallback search
 // query - without a name at all, only the ID-based lookup is attempted
@@ -1277,6 +1300,15 @@ async function fetchTVmazeEpisodeAirtimes(tvdbId, tmdbShowName) {
     // unreliable for streaming shows specifically - see the file-level
     // TVMAZE TRUST MODEL comment below for the fuller history).
     if (tmdbShowName && !titlesReasonablyMatch(show.name, tmdbShowName)) {
+        return airtimes;
+    }
+
+    // See hasResolvedTVmazeTimezone() above - without real network/
+    // webChannel location data, TVmaze has nothing to resolve a genuine
+    // local airtime against, and both the per-episode airstamps AND the
+    // weekly schedule line below are derived from that same resolution -
+    // so neither is trustworthy here, not just the episode times.
+    if (!hasResolvedTVmazeTimezone(show)) {
         return airtimes;
     }
 
