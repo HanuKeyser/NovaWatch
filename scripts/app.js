@@ -1314,9 +1314,17 @@ function formatReleaseTime(date) {
 // date could now be a day earlier than what TMDB/the network call it -
 // a real, accepted trade-off, and a much smaller and rarer one than
 // showing an internally-contradictory date and time to most viewers.
-function formatDateWithReleaseTime(date) {
+// Reworked per explicit request: only ever shows a clock TIME when it
+// genuinely came from a validated TVmaze airstamp (hasRealTime) - when
+// it didn't (an approximated convention was used instead), this shows
+// just the date, honestly, rather than presenting a guessed time with
+// the same visual confidence as a verified one. isReleased() is still
+// checked first for the same reason as before - no time is shown for
+// something already out either way, verified or not.
+function formatDateWithReleaseTime(date, hasRealTime = false) {
     if (!date) return "TBA";
     if (isReleased(date)) return formatDate(date, null);
+    if (!hasRealTime) return formatDate(date, null);
     return `${formatDate(date, null)} \u2022 ${formatReleaseTime(date)}`;
 }
 
@@ -2910,7 +2918,12 @@ async function refreshItemFromTMDBInternal(item) {
                                     runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
                                     watched: false,
                                     watchedAt: null,
-                                    releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString())
+                                    releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
+                                    // Only true for a genuine, validated TVmaze airstamp -
+                                    // see formatDateWithReleaseTime()/formatReleaseTime()
+                                    // for why this now gates whether a clock TIME is ever
+                                    // shown at all, not just which one.
+                                    hasRealTime: !!tvmazeAirstamp
                                 });
                             });
                         } else if (item.episodes && item.episodes.length > 0) {
@@ -2944,7 +2957,8 @@ async function refreshItemFromTMDBInternal(item) {
                                     existing.overview !== newEp.overview ||
                                     existing.releaseDate !== newEp.releaseDate ||
                                     existing.still !== newEp.still ||
-                                    existing.runtime !== newEp.runtime
+                                    existing.runtime !== newEp.runtime ||
+                                    !!existing.hasRealTime !== !!newEp.hasRealTime
                                 ) {
                                     episodesChanged = true;
                                 }
@@ -4244,7 +4258,8 @@ async function openSearchResultDetails(tmdbId, type) {
                             runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
                             watched: false,
                             watchedAt: null,
-                            releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString())
+                            releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
+                            hasRealTime: !!tvmazeAirstamp
                         });
                     });
                 }
@@ -4397,7 +4412,8 @@ async function importMediaData(id, type, buttonElement) {
                                 runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
                                 watched: false,
                                 watchedAt: null,
-                                releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString())
+                                releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
+                                hasRealTime: !!tvmazeAirstamp
                             });
                         });
                     }
@@ -4546,7 +4562,11 @@ function getUpcomingItems(filterType = null) {
                     type: 'movie',
                     title: item.title,
                     subtitle: 'Movie Release',
-                    date: new Date(item.releaseDate)
+                    date: new Date(item.releaseDate),
+                    // Movies never have a TVmaze-verified time (TVmaze
+                    // doesn't cover them) - always false, see
+                    // formatDateWithReleaseTime()/formatReleaseTime().
+                    hasRealTime: false
                 });
             }
         } else if (item.episodes && (!filterType || filterType === 'tv')) {
@@ -4558,7 +4578,8 @@ function getUpcomingItems(filterType = null) {
                         type: 'tv',
                         title: item.title,
                         subtitle: `S${episode.season} E${episode.number} - ${episode.title}`,
-                        date: new Date(episode.releaseDate)
+                        date: new Date(episode.releaseDate),
+                        hasRealTime: !!episode.hasRealTime
                     });
                 });
         }
@@ -5254,7 +5275,7 @@ function createUpcomingCard(data) {
             <div class="upcoming-info">
                 <div class="upcoming-title">${escapeHTML(data.title)}</div>
                 <div class="upcoming-date">${escapeHTML(data.subtitle)}</div>
-                <div class="upcoming-date">${formatDate(data.date, null)} &bull; ${formatReleaseTime(data.date)}</div>
+                <div class="upcoming-date">${data.hasRealTime ? `${formatDate(data.date, null)} &bull; ${formatReleaseTime(data.date)}` : formatDate(data.date, null)}</div>
                 <div class="upcoming-countdown">${getCountdown(data.date)}</div>
             </div>
         </div>
@@ -6278,7 +6299,7 @@ function renderEpisodesList(container) {
             ${seasonEpisodes.map(ep => {
                 const hasStill = ep.still && ep.still.trim() !== "";
                 const released = isReleased(ep.releaseDate);
-                const dateStr = formatDateWithReleaseTime(ep.releaseDate);
+                const dateStr = formatDateWithReleaseTime(ep.releaseDate, ep.hasRealTime);
                 const watchedText = !released ? "Not Released" : (ep.watched ? "Watched" : "Unwatched");
                 const watchedColor = !released ? "var(--text-muted)" : (ep.watched ? "var(--success)" : "var(--danger)");
                 const isUpNext = nextEp && nextEp.id === ep.id;
@@ -6801,7 +6822,7 @@ function refreshEpisodeModalMeta() {
         <span>•</span>
         <span>${currentEpisode.runtime || '45 min'}</span>
         <span>•</span>
-        <span>${formatDateWithReleaseTime(currentEpisode.releaseDate)}</span>
+        <span>${formatDateWithReleaseTime(currentEpisode.releaseDate, currentEpisode.hasRealTime)}</span>
         ${(currentEpisode.watched && isCurrentItemInLibrary()) ? `
             <span>•</span>
             <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${currentEpisode.id}')">Rewatched \u00d7${currentEpisode.rewatchCount || 0}</span>
