@@ -1022,37 +1022,48 @@ async function isConfirmedOnStreamingPlatform(tmdbId, mediaType) {
     }
 }
 
-// TVMAZE TRUST MODEL: only ever use TVmaze's per-episode airtime for a
-// show POSITIVELY CONFIRMED as a traditional broadcast/cable network
-// (isBroadcastNetworkShow above) - i.e. a show that genuinely airs on a
-// real weekly timeslot, which is exactly the kind of schedule TVmaze is
-// built to track. Everything else - Netflix, Disney+, any other
-// streaming platform, an unrecognized network, or a show with no network
-// data at all - goes straight to the midnight-Pacific streaming
-// convention and TVmaze's airtime is never even looked at, regardless of
-// whether TVmaze happens to have something for it.
+// TVMAZE TRUST MODEL (current, final architecture - evolved through
+// several attempts, history below):
 //
-// This replaced an earlier, opposite-direction attempt: an explicit
-// KNOWN_STREAMING_PLATFORMS blocklist that tried to name every major
-// streaming service and exclude just those. That approach had a real,
-// confirmed bug - reported as Netflix showing 14:00 and Disney+ showing
-// 18:00 (two DIFFERENT wrong times, not the same wrong time twice, which
-// is what pointed at the real cause) instead of the correct 9-10am.
-// Different-per-platform wrong values meant TVmaze's own (unreliable
-// for a non-timeslot platform) per-episode data was still being used -
-// the blocklist wasn't matching. Most likely cause: TMDB's `networks`
-// field probably isn't populated the same way for a streaming Original
-// as it is for an actual broadcast/cable network (the same network-name
-// matching mechanism DOES work correctly for cable, per direct
-// confirmation - the field just may not be there at all for many
-// streaming Originals, which no amount of expanding the blocklist itself
-// would fix). Trying to enumerate every streaming platform in the world
-// is also inherently incomplete on its own terms. Requiring POSITIVE
-// confirmation of broadcast/cable instead - a narrower, more reliable
-// signal - closes that gap structurally rather than patching the list
-// again: nothing can be silently miscategorized as "safe to hand to
-// TVmaze" anymore, because TVmaze is never the default, it's only ever
-// used when a specific, confirmed condition is met.
+// TVmaze's per-episode `airstamp` is now trusted for ANY TV show, once
+// VALIDATED (see titlesReasonablyMatch()/isSaneTVmazeAirstamp() near
+// fetchTVmazeEpisodeAirtimes) - not gated behind broadcast/cable
+// classification anymore. This is what actually lets a hybrid show
+// (airs on a cable network AND is also available on a streaming
+// platform, sometimes at genuinely different times) show its real
+// tracked schedule instead of being forced into either assumption -
+// TVmaze just reports whatever it actually tracks, validated, and that's
+// trusted regardless of platform.
+//
+// isBroadcastNetworkShow()/isConfirmedOnStreamingPlatform() below still
+// matter, but only for the FALLBACK convention (midnight Pacific vs 8pm
+// Eastern) used when TVmaze has nothing valid for a specific episode -
+// they no longer gate whether TVmaze gets consulted at all.
+//
+// HISTORY: this replaced an earlier, more restrictive version that
+// only used TVmaze for a show POSITIVELY CONFIRMED as broadcast/cable,
+// treating a validated ISO timestamp from TVmaze as untrustworthy for
+// every streaming platform categorically. That was itself a fix for an
+// earlier bug: Netflix showing 14:00 and Disney+ showing 18:00 (two
+// DIFFERENT wrong times, not the same wrong value twice) instead of the
+// correct 9-10am - which was originally attributed to "TVmaze's data
+// being unreliable for non-timeslot platforms" and fixed by excluding
+// streaming platforms from ever consulting TVmaze at all.
+//
+// On reflection, that diagnosis conflated two different problems: a
+// well-formed TVmaze timestamp isn't necessarily an ACCURATE one if the
+// TVDB-ID-based show lookup matched the WRONG show entirely (a stale or
+// mismatched ID on either TMDB or TVmaze's end) - which is a data-
+// integrity problem, not a "TVmaze doesn't understand streaming"
+// problem, and categorically excluding every streaming platform was
+// solving the wrong layer of the issue. It also couldn't handle a
+// hybrid broadcast+streaming show at all, since it forced every
+// streaming-available title into the midnight-Pacific assumption
+// regardless of whether TVmaze actually had a real, correct schedule
+// for it. Validating the MATCH (and each episode's plausibility)
+// instead of the PLATFORM is the more correct fix - it closes the
+// original bug at its actual root cause and generalizes correctly to
+// hybrid shows, rather than trading one blind spot for another.
 function tmdbDateToISO(dateStr, isBroadcastNetwork) {
     if (!dateStr) return null;
     const anchorMs = isBroadcastNetwork
@@ -1148,7 +1159,46 @@ function formatTVmazeSchedule(show) {
     return `New episodes every ${daysLabel} at ${localTime}`;
 }
 
-async function fetchTVmazeEpisodeAirtimes(tvdbId) {
+// Simple, dependency-free title comparison - normalizes case/punctuation/
+// whitespace and checks if either title contains the other once
+// normalized. Doesn't need to handle every possible spelling variation
+// perfectly; it only needs to catch the case where the TVDB-ID lookup
+// below returned a WRONG show entirely (a stale or mismatched ID on
+// either TMDB or TVmaze's end) - a real, well-formed, but completely
+// wrong episode schedule is exactly the kind of bug a "is this a valid
+// ISO timestamp" check alone can never catch, since a wrong show's
+// airstamp is still a perfectly valid timestamp.
+function normalizeTitle(title) {
+    return (title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function titlesReasonablyMatch(a, b) {
+    const na = normalizeTitle(a);
+    const nb = normalizeTitle(b);
+    if (!na || !nb) return false;
+    return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+// Rejects a TVmaze airstamp that doesn't land within a few days of
+// TMDB's own reported air_date for the same episode - a second,
+// per-episode safety net alongside the show-level title check above.
+// Catches a mismatched EPISODE within an otherwise-correctly-matched
+// show too (a season/numbering discrepancy between the two databases),
+// and guards against a malformed/unparseable timestamp.
+function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
+    if (!airstamp || !tmdbAirDateStr) return false;
+    const airstampMs = new Date(airstamp).getTime();
+    if (Number.isNaN(airstampMs)) return false;
+    const tmdbMs = new Date(`${tmdbAirDateStr}T12:00:00Z`).getTime();
+    return Math.abs(airstampMs - tmdbMs) / 86400000 <= 3;
+}
+
+// tmdbShowName is used to validate the TVDB-ID-based lookup below
+// actually returned the RIGHT show (see titlesReasonablyMatch) before
+// any of its data is trusted - without a name to check, the show is
+// still fetched but nothing about it is validated (see the 3 call
+// sites - all of them have a name available).
+async function fetchTVmazeEpisodeAirtimes(tvdbId, tmdbShowName) {
     const airtimes = new Map();
     // Attached directly onto the Map itself (rather than changing this
     // function's return shape to a bigger object) so every existing
@@ -1161,6 +1211,17 @@ async function fetchTVmazeEpisodeAirtimes(tvdbId) {
 
     const show = await fetchTVmazeJSON(`https://api.tvmaze.com/lookup/shows?thetvdb=${tvdbId}`);
     if (!show || !show.id) return airtimes;
+
+    // Guards against the TVDB-ID lookup above returning the WRONG show
+    // entirely - the most likely real root cause of TVmaze occasionally
+    // handing back a well-formed but completely wrong airtime (a
+    // mismatched Netflix/Disney+ time reported earlier turned out to
+    // very plausibly be this, not TVmaze's underlying data being
+    // unreliable for streaming shows specifically - see the file-level
+    // TVMAZE TRUST MODEL comment below for the fuller history).
+    if (tmdbShowName && !titlesReasonablyMatch(show.name, tmdbShowName)) {
+        return airtimes;
+    }
 
     airtimes.scheduleText = formatTVmazeSchedule(show);
 
@@ -2780,7 +2841,7 @@ async function refreshItemFromTMDBInternal(item) {
                     // TVmaze lookup never adds sequential latency on top of TMDB's
                     // own season requests - see fetchTVmazeEpisodeAirtimes() for
                     // why this can never actually fail the sync either way.
-                    const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
+                    const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
                     const streamingConfirmedPromise = isBroadcastByNetwork
                         ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
                         : Promise.resolve(false);
@@ -2837,7 +2898,8 @@ async function refreshItemFromTMDBInternal(item) {
                                 // airtime for a positively-confirmed broadcast/
                                 // cable network; everything else uses the
                                 // midnight-Pacific convention directly.
-                                const tvmazeAirstamp = isBroadcast ? tvmazeAirtimes.get(epId) : null;
+                                const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
+                                const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
                                 newEpisodes.push({
                                     id: epId,
                                     season: seasonData.season_number,
@@ -2916,7 +2978,7 @@ async function refreshItemFromTMDBInternal(item) {
                     const newSeasonCount = (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : item.numberOfSeasons;
                     const newEpisodeCount = (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : item.numberOfEpisodes;
                     const newNextAirDate = (showData.next_episode_to_air && showData.next_episode_to_air.air_date)
-                        ? ((isBroadcast && tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`)) || tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
+                        ? (isSaneTVmazeAirstamp(tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`), showData.next_episode_to_air.air_date) ? tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) : tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
                         : null;
 
                     const metadataChanged = (
@@ -2952,7 +3014,7 @@ async function refreshItemFromTMDBInternal(item) {
                         // "New episodes every X at Y" line doesn't make sense for
                         // a streaming platform that doesn't work on a weekly
                         // timeslot at all.
-                        item.weeklySchedule = isBroadcast ? tvmazeAirtimes.scheduleText : null;
+                        item.weeklySchedule = tvmazeAirtimes.scheduleText;
 
                         await saveItem(item);
                         changed = true;
@@ -4111,7 +4173,7 @@ async function openSearchResultDetails(tmdbId, type) {
         // final isBroadcast (see isConfirmedOnStreamingPlatform) is what
         // actually gets used once episodes load in below.
         const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
-        const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
+        const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
         const streamingConfirmedPromise = isBroadcastByNetwork
             ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
             : Promise.resolve(false);
@@ -4170,7 +4232,8 @@ async function openSearchResultDetails(tmdbId, type) {
                 if (seasonData && seasonData.episodes) {
                     seasonData.episodes.forEach(ep => {
                         const epId = `s${seasonData.season_number}e${ep.episode_number}`;
-                        const tvmazeAirstamp = isBroadcast ? tvmazeAirtimes.get(epId) : null;
+                        const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
+                        const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
                         episodes.push({
                             id: epId,
                             season: seasonData.season_number,
@@ -4194,7 +4257,7 @@ async function openSearchResultDetails(tmdbId, type) {
         if (currentItem && currentItem.id === previewId) {
             currentItem.episodes = episodes;
             currentItem.episodesLoading = false;
-            currentItem.weeklySchedule = isBroadcast ? tvmazeAirtimes.scheduleText : null;
+            currentItem.weeklySchedule = tvmazeAirtimes.scheduleText;
             scrollToNextEpisodeOnRender = true;
             updateModalContent();
         }
@@ -4281,7 +4344,7 @@ async function importMediaData(id, type, buttonElement) {
             // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC(). Kicked
             // off now, awaited below alongside the season fetches.
             const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
-            const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id);
+            const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
             const streamingConfirmedPromise = isBroadcastByNetwork
                 ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
                 : Promise.resolve(false);
@@ -4322,7 +4385,8 @@ async function importMediaData(id, type, buttonElement) {
                     if (seasonData && seasonData.episodes) {
                         seasonData.episodes.forEach(ep => {
                             const epId = `s${seasonData.season_number}e${ep.episode_number}`;
-                            const tvmazeAirstamp = isBroadcast ? tvmazeAirtimes.get(epId) : null;
+                            const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
+                            const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
                             episodes.push({
                                 id: epId,
                                 season: seasonData.season_number,
@@ -4376,10 +4440,10 @@ async function importMediaData(id, type, buttonElement) {
                 numberOfSeasons: (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : null,
                 numberOfEpisodes: (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : null,
                 nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date)
-                    ? ((isBroadcast && tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`)) || tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
+                    ? (isSaneTVmazeAirstamp(tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`), showData.next_episode_to_air.air_date) ? tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) : tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
                     : null,
                 isBroadcastNetwork: isBroadcast,
-                weeklySchedule: isBroadcast ? tvmazeAirtimes.scheduleText : null,
+                weeklySchedule: tvmazeAirtimes.scheduleText,
                 isFinished: false,
                 isStopped: archivedShow ? !!archivedShow.isStopped : false,
                 addedAt: new Date().toISOString(),
