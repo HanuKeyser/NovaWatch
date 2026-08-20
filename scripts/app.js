@@ -1351,16 +1351,34 @@ function formatDateWithReleaseTime(date, hasRealTime = false) {
 }
 
 // DIAGNOSTIC ONLY - not a permanent, polished feature, just a direct way
-// to see exactly what's driving a specific unreleased episode's timing
-// (which source, and every raw value involved) without guessing from the
-// outside. Tapped via the small info mark next to an unreleased
-// episode's date in the season/episode list. Deliberately shows the RAW
-// underlying values (TMDB's own air_date, whatever TVmaze search turned
-// up even if it was rejected, the exact stored UTC instant) rather than
-// just repeating what's already visible on screen - the point is to
-// make what's actually happening checkable, not to restate the display.
+// to see exactly what's driving a title's displayed timing (which
+// source, and every raw value involved) without guessing from the
+// outside. Tapped by tapping the (dotted-underlined) date/time text
+// itself, for any episode row, the single-episode modal, or a movie's
+// own meta line. Deliberately shows the RAW underlying values (TMDB's
+// own date, whatever TVmaze turned up even if it was rejected, the
+// exact stored UTC instant) rather than just repeating what's already
+// visible on screen - the point is to make what's actually happening
+// checkable, not to restate the display. episodeId is null for a movie
+// (which has no per-episode data at all - always the plain streaming
+// approximation, TVmaze doesn't cover movies).
 function showTimingDebugInfo(episodeId) {
-    if (!currentItem || !currentItem.episodes) return;
+    if (!currentItem) return;
+
+    if (episodeId === null || currentItem.type === 'movie') {
+        const lines = [
+            `${currentItem.title} (movie)`,
+            ``,
+            `Timing source: Approximated - streaming convention (midnight Pacific). Movies never use TVmaze - it doesn't cover them.`,
+            `Stored release instant (UTC): ${currentItem.releaseDate || '(none)'}`,
+            `That instant in your local time: ${currentItem.releaseDate ? `${formatDate(currentItem.releaseDate, null)} \u2022 ${formatReleaseTime(currentItem.releaseDate)}` : '(n/a)'}`,
+            `Your device's own timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`
+        ];
+        alert(lines.join('\n'));
+        return;
+    }
+
+    if (!currentItem.episodes) return;
     const ep = currentItem.episodes.find(e => e.id === episodeId);
     if (!ep) return;
 
@@ -6202,7 +6220,7 @@ function updateModalContent() {
             <span>•</span>
             <span>${currentItem.runtime || '120 min'}</span>
             <span>•</span>
-            <span>${releaseDateStr}</span>
+            <span onclick="showTimingDebugInfo(null)" style="text-decoration: underline; text-decoration-style: dotted; cursor: pointer;">${releaseDateStr}</span>
             ${contentRatingHTML}
             ${ratingHTML}
         `;
@@ -6391,7 +6409,7 @@ function renderEpisodesList(container) {
                                     <div class="episode-title">E${ep.number} • ${escapeHTML(ep.title)}</div>
                                     <div class="episode-overview">${escapeHTML(ep.overview)}</div>
                                     <div class="episode-meta">
-                                        ${ep.runtime || '45 min'} &bull; ${dateStr}${!released ? ` <span onclick="event.stopPropagation(); showTimingDebugInfo('${ep.id}')" style="cursor:pointer; opacity:0.55; font-weight:800;" aria-label="Timing details">ⓘ</span>` : ''} &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${ep.watched ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
+                                        ${ep.runtime || '45 min'} &bull; <span onclick="event.stopPropagation(); showTimingDebugInfo('${ep.id}')" style="text-decoration: underline; text-decoration-style: dotted; cursor: pointer;">${dateStr}</span> &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${ep.watched ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -6896,7 +6914,7 @@ function refreshEpisodeModalMeta() {
         <span>•</span>
         <span>${currentEpisode.runtime || '45 min'}</span>
         <span>•</span>
-        <span>${formatDateWithReleaseTime(currentEpisode.releaseDate, currentEpisode.hasRealTime)}</span>
+        <span onclick="showTimingDebugInfo('${currentEpisode.id}')" style="text-decoration: underline; text-decoration-style: dotted; cursor: pointer;">${formatDateWithReleaseTime(currentEpisode.releaseDate, currentEpisode.hasRealTime)}</span>
         ${(currentEpisode.watched && isCurrentItemInLibrary()) ? `
             <span>•</span>
             <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${currentEpisode.id}')">Rewatched \u00d7${currentEpisode.rewatchCount || 0}</span>
