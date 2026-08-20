@@ -1193,11 +1193,11 @@ function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
     return Math.abs(airstampMs - tmdbMs) / 86400000 <= 3;
 }
 
-// tmdbShowName is used to validate the TVDB-ID-based lookup below
-// actually returned the RIGHT show (see titlesReasonablyMatch) before
-// any of its data is trusted - without a name to check, the show is
-// still fetched but nothing about it is validated (see the 3 call
-// sites - all of them have a name available).
+// tmdbShowName is used both to validate a match (see titlesReasonablyMatch)
+// and, when the TVDB-ID lookup below finds nothing, as a fallback search
+// query - without a name at all, only the ID-based lookup is attempted
+// and nothing about its result is validated (none of the 3 real call
+// sites are missing a name, though).
 async function fetchTVmazeEpisodeAirtimes(tvdbId, tmdbShowName) {
     const airtimes = new Map();
     // Attached directly onto the Map itself (rather than changing this
@@ -1207,12 +1207,34 @@ async function fetchTVmazeEpisodeAirtimes(tvdbId, tmdbShowName) {
     // actually want the schedule line need to know this property
     // exists at all.
     airtimes.scheduleText = null;
-    if (!tvdbId) return airtimes;
 
-    const show = await fetchTVmazeJSON(`https://api.tvmaze.com/lookup/shows?thetvdb=${tvdbId}`);
+    let show = null;
+
+    if (tvdbId) {
+        show = await fetchTVmazeJSON(`https://api.tvmaze.com/lookup/shows?thetvdb=${tvdbId}`);
+    }
+
+    // Falls back to a plain name search when there's no TVDB ID to look
+    // up by at all, or when that lookup came back empty - TMDB doesn't
+    // have a populated TVDB cross-reference for every show, so relying
+    // on the ID alone silently loses TVmaze coverage (and therefore real
+    // per-episode timing) for any show missing one, even when TVmaze
+    // itself genuinely has the show. The SAME title validation below
+    // still applies to whatever this finds - this widens how a
+    // candidate gets found, not what counts as a trustworthy match.
+    if ((!show || !show.id) && tmdbShowName) {
+        const searchResults = await fetchTVmazeJSON(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(tmdbShowName)}`);
+        if (Array.isArray(searchResults) && searchResults.length > 0 && searchResults[0].show) {
+            // TVmaze's own search already ranks by relevance - the top
+            // result is what it considers the best match for the query,
+            // and titlesReasonablyMatch below still has the final say.
+            show = searchResults[0].show;
+        }
+    }
+
     if (!show || !show.id) return airtimes;
 
-    // Guards against the TVDB-ID lookup above returning the WRONG show
+    // Guards against either lookup path above returning the WRONG show
     // entirely - the most likely real root cause of TVmaze occasionally
     // handing back a well-formed but completely wrong airtime (a
     // mismatched Netflix/Disney+ time reported earlier turned out to
