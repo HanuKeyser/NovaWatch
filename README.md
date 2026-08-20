@@ -64,7 +64,9 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it).
 
-**Upcoming** — everything in the library that hasn't released yet, with a countdown and a release date/time, converted to the viewer's own timezone (date and time always come from the same local reference frame, so they can never disagree about which calendar day a moment falls on).
+**Upcoming** — everything in the library that hasn't released yet, with a countdown and a release date, converted to the viewer's own timezone (date and time, when a time is shown at all, always come from the same local reference frame, so they can never disagree about which calendar day a moment falls on).
+
+A specific clock time is only ever shown when it's a real, validated TVmaze airstamp for that exact episode — otherwise just the date is shown, honestly, rather than presenting a guessed convention with the same visual confidence as a verified one. Movies never show a time at all, since TVmaze doesn't cover them.
 
 Timing works like this, in order:
 1. **A real per-episode airtime from TVmaze is used whenever TVmaze actually has one for that specific show and episode** — for any TV show, not gated by whether it's broadcast, cable, or streaming. This is what correctly handles a hybrid show that airs on a traditional network *and* is also available on a streaming platform (sometimes at a genuinely different time): TVmaze just reports whatever it actually tracks, and that's trusted directly.
