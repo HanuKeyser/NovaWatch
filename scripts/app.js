@@ -1185,12 +1185,31 @@ function titlesReasonablyMatch(a, b) {
 // Catches a mismatched EPISODE within an otherwise-correctly-matched
 // show too (a season/numbering discrepancy between the two databases),
 // and guards against a malformed/unparseable timestamp.
+// Rejects a TVmaze airstamp that doesn't land within a day of TMDB's own
+// reported air_date for the same episode - a second, per-episode safety
+// net alongside the show-level title check above. Catches a mismatched
+// EPISODE within an otherwise-correctly-matched show too (a season/
+// numbering discrepancy between the two databases), and guards against a
+// malformed/unparseable timestamp.
+//
+// Tightened from an original 3-day tolerance to 1 day: any LEGITIMATE
+// timezone-crossing effect (a real evening release landing on the next
+// calendar day once converted) is at most a matter of hours, comfortably
+// under a single day - a gap any bigger than that is far more likely to
+// mean TVmaze and TMDB genuinely disagree about which day an episode
+// airs than a timezone artifact. The 3-day version was too permissive:
+// it could accept a TVmaze time that "looks plausible" (a believable
+// hour) while actually being for the WRONG DAY, which is exactly the
+// "date wrong, time right"-looking symptom this tightens against -
+// favoring the DATE-preserving approximation (see getPacificMidnightUTC/
+// getBroadcastPrimetimeUTC) over a TVmaze value that's directionally
+// plausible but for the wrong calendar day.
 function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
     if (!airstamp || !tmdbAirDateStr) return false;
     const airstampMs = new Date(airstamp).getTime();
     if (Number.isNaN(airstampMs)) return false;
     const tmdbMs = new Date(`${tmdbAirDateStr}T12:00:00Z`).getTime();
-    return Math.abs(airstampMs - tmdbMs) / 86400000 <= 3;
+    return Math.abs(airstampMs - tmdbMs) / 86400000 <= 1;
 }
 
 // tmdbShowName is used both to validate a match (see titlesReasonablyMatch)
@@ -3044,7 +3063,19 @@ async function refreshItemFromTMDBInternal(item) {
                                     existing.releaseDate !== newEp.releaseDate ||
                                     existing.still !== newEp.still ||
                                     existing.runtime !== newEp.runtime ||
-                                    !!existing.hasRealTime !== !!newEp.hasRealTime
+                                    !!existing.hasRealTime !== !!newEp.hasRealTime ||
+                                    // Real, confirmed bug closed here: adding new fields
+                                    // to an episode's shape (timingSource/rawTmdbAirDate/
+                                    // rawTvmazeAirstamp, added for the debug tool) never
+                                    // triggered a resync for an episode whose OTHER fields
+                                    // already happened to match - silently leaving old-
+                                    // schema episodes with undefined diagnostic data
+                                    // forever, never backfilled, even while the sync kept
+                                    // reporting "nothing changed". Comparing this one
+                                    // field explicitly closes that specific gap; if a
+                                    // similar new field is added to an episode's shape
+                                    // again in the future, it needs to be added here too.
+                                    existing.timingSource !== newEp.timingSource
                                 ) {
                                     episodesChanged = true;
                                 }
