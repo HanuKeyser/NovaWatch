@@ -1350,6 +1350,40 @@ function formatDateWithReleaseTime(date, hasRealTime = false) {
     return `${formatDate(date, null)} \u2022 ${formatReleaseTime(date)}`;
 }
 
+// DIAGNOSTIC ONLY - not a permanent, polished feature, just a direct way
+// to see exactly what's driving a specific unreleased episode's timing
+// (which source, and every raw value involved) without guessing from the
+// outside. Tapped via the small info mark next to an unreleased
+// episode's date in the season/episode list. Deliberately shows the RAW
+// underlying values (TMDB's own air_date, whatever TVmaze search turned
+// up even if it was rejected, the exact stored UTC instant) rather than
+// just repeating what's already visible on screen - the point is to
+// make what's actually happening checkable, not to restate the display.
+function showTimingDebugInfo(episodeId) {
+    if (!currentItem || !currentItem.episodes) return;
+    const ep = currentItem.episodes.find(e => e.id === episodeId);
+    if (!ep) return;
+
+    const sourceLabel = {
+        'tvmaze': 'TVmaze (validated match)',
+        'approx-broadcast': 'Approximated - broadcast/cable convention (8PM Eastern)',
+        'approx-streaming': 'Approximated - streaming convention (midnight Pacific)'
+    }[ep.timingSource] || 'Unknown';
+
+    const lines = [
+        `${currentItem.title} — S${ep.season}E${ep.number}: ${ep.title}`,
+        ``,
+        `Timing source: ${sourceLabel}`,
+        `TMDB air_date: ${ep.rawTmdbAirDate || '(none)'}`,
+        `TVmaze airstamp found: ${ep.rawTvmazeAirstamp || '(none - either no match, or rejected as implausible)'}`,
+        `Stored release instant (UTC): ${ep.releaseDate || '(none)'}`,
+        `That instant in your local time: ${ep.releaseDate ? `${formatDate(ep.releaseDate, null)} \u2022 ${formatReleaseTime(ep.releaseDate)}` : '(n/a)'}`,
+        `Your device's own timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`
+    ];
+
+    alert(lines.join('\n'));
+}
+
 function getCountdown(date) {
     if (!date) return "TBA";
     // isReleased() is the precise gate (see above) - checked first so
@@ -2945,7 +2979,19 @@ async function refreshItemFromTMDBInternal(item) {
                                     // see formatDateWithReleaseTime()/formatReleaseTime()
                                     // for why this now gates whether a clock TIME is ever
                                     // shown at all, not just which one.
-                                    hasRealTime: !!tvmazeAirstamp
+                                    hasRealTime: !!tvmazeAirstamp,
+                                    // Diagnostic-only fields - surfaced via the small info
+                                    // button next to an episode's date (see
+                                    // showTimingDebugInfo) so a specific episode's actual
+                                    // timing source can be checked directly, instead of
+                                    // guessing from the outside. rawTvmazeAirstamp is kept
+                                    // even when rejected by isSaneTVmazeAirstamp, so a
+                                    // "TVmaze had something but it got rejected" case is
+                                    // visibly distinguishable from "TVmaze had nothing at
+                                    // all".
+                                    timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
+                                    rawTmdbAirDate: ep.air_date || null,
+                                    rawTvmazeAirstamp: rawTvmazeAirstamp || null
                                 });
                             });
                         } else if (item.episodes && item.episodes.length > 0) {
@@ -4281,7 +4327,10 @@ async function openSearchResultDetails(tmdbId, type) {
                             watched: false,
                             watchedAt: null,
                             releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
-                            hasRealTime: !!tvmazeAirstamp
+                            hasRealTime: !!tvmazeAirstamp,
+                            timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
+                            rawTmdbAirDate: ep.air_date || null,
+                            rawTvmazeAirstamp: rawTvmazeAirstamp || null
                         });
                     });
                 }
@@ -4435,7 +4484,10 @@ async function importMediaData(id, type, buttonElement) {
                                 watched: false,
                                 watchedAt: null,
                                 releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
-                                hasRealTime: !!tvmazeAirstamp
+                                hasRealTime: !!tvmazeAirstamp,
+                                timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
+                                rawTmdbAirDate: ep.air_date || null,
+                                rawTvmazeAirstamp: rawTvmazeAirstamp || null
                             });
                         });
                     }
@@ -6339,7 +6391,7 @@ function renderEpisodesList(container) {
                                     <div class="episode-title">E${ep.number} • ${escapeHTML(ep.title)}</div>
                                     <div class="episode-overview">${escapeHTML(ep.overview)}</div>
                                     <div class="episode-meta">
-                                        ${ep.runtime || '45 min'} &bull; ${dateStr} &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${ep.watched ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
+                                        ${ep.runtime || '45 min'} &bull; ${dateStr}${!released ? ` <span onclick="event.stopPropagation(); showTimingDebugInfo('${ep.id}')" style="cursor:pointer; opacity:0.55; font-weight:800;" aria-label="Timing details">ⓘ</span>` : ''} &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${ep.watched ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
                                     </div>
                                 </div>
                             </div>
