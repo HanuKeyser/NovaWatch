@@ -1204,10 +1204,26 @@ function titlesReasonablyMatch(a, b) {
 // favoring the DATE-preserving approximation (see getPacificMidnightUTC/
 // getBroadcastPrimetimeUTC) over a TVmaze value that's directionally
 // plausible but for the wrong calendar day.
+// Rejects a TVmaze airstamp that doesn't land within a day of TMDB's own
+// reported air_date for the same episode - a second, per-episode safety
+// net alongside the show-level title check above. Catches a mismatched
+// EPISODE within an otherwise-correctly-matched show too (a season/
+// numbering discrepancy between the two databases), and guards against a
+// malformed/unparseable timestamp.
+//
+// If TMDB has no air_date at all for this episode - a real, common case
+// for a not-yet-fully-scheduled season, where TVmaze may already have
+// real per-episode dates even though TMDB doesn't yet - there's nothing
+// to sanity-check the airstamp against. That's not a reason to distrust
+// an otherwise well-formed, show-name-validated TVmaze value: rejecting
+// it here meant falling all the way back to new Date().toISOString() (a
+// meaningless "right now" placeholder) even when TVmaze had a real,
+// specific answer - which is a strictly worse outcome, not a safer one.
 function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
-    if (!airstamp || !tmdbAirDateStr) return false;
+    if (!airstamp) return false;
     const airstampMs = new Date(airstamp).getTime();
     if (Number.isNaN(airstampMs)) return false;
+    if (!tmdbAirDateStr) return true;
     const tmdbMs = new Date(`${tmdbAirDateStr}T12:00:00Z`).getTime();
     return Math.abs(airstampMs - tmdbMs) / 86400000 <= 1;
 }
