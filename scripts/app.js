@@ -2633,6 +2633,26 @@ async function confirmDeleteAccount() {
     }
 }
 
+// Only touches the DOM if the newly-generated HTML actually differs from
+// what's already there. A periodic background sync calling a render
+// function every few minutes (see refreshActivePage below) was rebuilding
+// every poster/thumbnail <img> from scratch each time it ran, EVEN WHEN
+// NOTHING had actually changed - which is what was causing posters to
+// visibly flash app-wide every sync cycle: destroying and recreating an
+// image element forces a fresh load/paint cycle even when the browser
+// serves the identical image instantly from its own cache. Used by every
+// render function that can be re-triggered by something other than a
+// direct user action (a sync, a periodic refresh), not just the ones
+// wired to a button tap.
+function setInnerHTMLIfChanged(el, html) {
+    if (!el) return false;
+    if (el.innerHTML !== html) {
+        el.innerHTML = html;
+        return true;
+    }
+    return false;
+}
+
 function refreshActivePage() {
     if (document.getElementById("libraryPage").classList.contains("active")) {
         if (currentLibraryView === 'tv') renderTVLibrarySection();
@@ -4801,17 +4821,18 @@ function renderUpcomingTab() {
             tv: "No upcoming episodes scheduled in your library.",
             movie: "No upcoming movie releases scheduled in your library."
         };
-        listContainer.innerHTML = emptyState("No Upcoming Releases", emptyMessages[currentUpcomingFilter]);
+        setInnerHTMLIfChanged(listContainer, emptyState("No Upcoming Releases", emptyMessages[currentUpcomingFilter]));
         return;
     }
 
     const groups = groupUpcomingByTimeframe(items);
-    listContainer.innerHTML = groups.map(group => `
+    const html = groups.map(group => `
         <div class="upcoming-group">
             <div class="upcoming-group-title">${group.label}</div>
             ${group.items.map(data => createUpcomingCard(data)).join("")}
         </div>
     `).join("");
+    setInnerHTMLIfChanged(listContainer, html);
 }
 
 // Switches the Upcoming tab's type filter and re-renders. Kept as
@@ -4909,12 +4930,12 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
 
     // Same "still loading, not actually empty" guard as renderContinueWatching.
     if (!items.length && !libraryLoaded) {
-        container.innerHTML = skeletonRows();
+        setInnerHTMLIfChanged(container, skeletonRows());
         return;
     }
 
     if (!items.length) {
-        container.innerHTML = emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'tv')" });
+        setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'tv')" }));
         return;
     }
 
@@ -4958,7 +4979,7 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
         html = emptyState("No TV Shows Matching", "No TV shows match your search query.");
     }
 
-    container.innerHTML = html;
+    setInnerHTMLIfChanged(container, html);
 }
 
 function renderMovieLibrarySection(containerId = "movieLibraryCategories", inputId = "movieLibrarySearchInput") {
@@ -4974,12 +4995,12 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
 
     // Same "still loading, not actually empty" guard as renderContinueWatching.
     if (!items.length && !libraryLoaded) {
-        container.innerHTML = skeletonRows();
+        setInnerHTMLIfChanged(container, skeletonRows());
         return;
     }
 
     if (!items.length) {
-        container.innerHTML = emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'movie')" });
+        setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'movie')" }));
         return;
     }
 
@@ -4997,7 +5018,7 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
         html = emptyState("No Movies Matching", "No movies match your search query.");
     }
 
-    container.innerHTML = html;
+    setInnerHTMLIfChanged(container, html);
 }
 
 function renderCategoryBlock(title, items, upcomingShowIds = null) {
@@ -5196,7 +5217,7 @@ function renderContinueWatching(containerId = "continueWatchingList") {
     // otherwise look identical to a genuinely empty library and read as
     // the app being done loading when it's actually still in flight.
     if (!libraryLoaded) {
-        container.innerHTML = skeletonRows(3);
+        setInnerHTMLIfChanged(container, skeletonRows(3));
         return;
     }
 
@@ -5205,11 +5226,11 @@ function renderContinueWatching(containerId = "continueWatchingList") {
     const movieItems = data.movieItems;
 
     if (tvItems.length === 0 && movieItems.length === 0) {
-        container.innerHTML = emptyState(
+        setInnerHTMLIfChanged(container, emptyState(
             "You're All Caught Up",
             "New episodes and unwatched movies from your library will show up here.",
             { label: "Browse Discover", onclick: "showPage('discover', null, true)" }
-        );
+        ));
         return;
     }
 
@@ -5233,8 +5254,13 @@ function renderContinueWatching(containerId = "continueWatchingList") {
         `;
     }
 
-    container.innerHTML = html;
-    initContinueCardSwipe(container);
+    // Swipe handlers stay attached to unchanged DOM elements, so only
+    // re-run initContinueCardSwipe when the content genuinely changed -
+    // re-initializing on the SAME elements every periodic sync (see
+    // setInnerHTMLIfChanged above) risked attaching duplicate listeners.
+    if (setInnerHTMLIfChanged(container, html)) {
+        initContinueCardSwipe(container);
+    }
 }
 
 // Pointer-based swipe-to-dismiss: dragging a card left or right past the
