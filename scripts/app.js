@@ -1221,6 +1221,22 @@ function titlesReasonablyMatch(a, b) {
 // specific answer - which is a strictly worse outcome, not a safer one.
 function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
     if (!airstamp) return false;
+    // A flat, literal UTC/GMT offset (+00:00 or a bare "Z") is a near-
+    // certain sign of a TVmaze placeholder rather than a genuinely
+    // resolved local time - confirmed directly, twice, via real
+    // diagnostic data for a show known not to actually release at a flat
+    // UTC time. This is deliberately independent of, and in addition to,
+    // hasResolvedTVmazeTimezone() below (which addresses the same root
+    // cause earlier, at the show level, by checking the show's own
+    // network/webChannel metadata) - keeping both is real defense in
+    // depth in case a show's metadata looks resolved but its actual
+    // per-episode airstamp still comes back flat UTC regardless. The
+    // accepted trade-off: a genuinely UK-based, winter (GMT, truly
+    // +00:00) release would also get rejected here and fall back to the
+    // approximation instead - a real but rare cost, clearly outweighed by
+    // reliably catching the "same number shown in every timezone" bug
+    // this was written to close.
+    if (/(?:\+00:00|Z)$/.test(airstamp)) return false;
     const airstampMs = new Date(airstamp).getTime();
     if (Number.isNaN(airstampMs)) return false;
     if (!tmdbAirDateStr) return true;
@@ -1248,7 +1264,22 @@ function isSaneTVmazeAirstamp(airstamp, tmdbAirDateStr) {
 // real one.
 function hasResolvedTVmazeTimezone(show) {
     const source = (show && show.webChannel) || (show && show.network);
-    return !!(source && source.country && source.country.timezone);
+    const timezone = source && source.country && source.country.timezone;
+    if (!timezone) return false;
+    // A confirmed real-world failure mode, not a hypothetical: TVmaze's
+    // OWN record for a show can have its country/timezone literally set
+    // to plain "UTC" (or the equivalent "Etc/UTC") as an internal
+    // placeholder, rather than a real place - a genuinely US-based show
+    // reporting a flat, always-zero, never-DST-observing UTC offset
+    // regardless of season is exactly what that looks like from the
+    // outside, and it slipped through the first version of this check,
+    // which only verified a timezone value existed at all, not that it
+    // was a real one. Almost no real-world TV distribution deal is
+    // genuinely based in a null-island "UTC" timezone, so this is a safe,
+    // targeted thing to specifically distrust.
+    const normalized = timezone.trim().toLowerCase();
+    if (normalized === 'utc' || normalized === 'etc/utc' || normalized === 'gmt') return false;
+    return true;
 }
 
 // tmdbShowName is used both to validate a match (see titlesReasonablyMatch)
