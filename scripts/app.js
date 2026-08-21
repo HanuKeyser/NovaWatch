@@ -1326,15 +1326,173 @@ async function fetchTVmazeEpisodeAirtimes(tvdbId, tmdbShowName) {
     return airtimes;
 }
 
-// timeZone defaults to UTC - correct for movies and streaming TV, since
-// their anchor (see tmdbDateToISO/getPacificMidnightUTC) always lands
-// within the same UTC calendar day as the date TMDB reported. A
-// broadcast show's 8pm-Eastern anchor does NOT (it crosses into the next
-// UTC day - 8pm ET is after midnight UTC) - passing "America/New_York"
-// here for those is what keeps the displayed date matching what TMDB
-// and the network itself call the air date, instead of showing one day
-// later than it should. See formatDateWithReleaseTime() below, which is
-// what actually decides which zone to pass based on the item.
+/* =========================================================
+   TV EPISODE TIMING PIPELINE (shared)
+   Single source of truth for turning TMDB season/episode data (plus the
+   TVmaze validation pipeline above) into the standardized per-episode
+   timing fields (releaseDate/hasRealTime/timingSource/rawTmdbAirDate/
+   rawTvmazeAirstamp), and for the show-level fields built from the same
+   inputs (the final isBroadcast classification, nextEpisodeAirDate,
+   weeklySchedule).
+
+   REWORK NOTE: this used to be ~60 lines of near-identical logic
+   copy-pasted independently into three places - the preview modal
+   (openSearchResultDetails), adding a show to the library
+   (importMediaData), and the periodic background sync
+   (refreshItemFromTMDBInternal). That's exactly the failure pattern
+   already called out elsewhere in this file (see the episodesChanged
+   comment near timingSource): three independent copies of the same
+   pipeline WILL eventually drift - one gets a bug fix or a new field
+   the others don't. All three now call the functions below instead, so
+   a fix only ever needs to happen once and every code path that can
+   create or refresh episode data is guaranteed to compute timing
+   identically.
+========================================================= */
+
+// A season's episode fetch, retried once before giving up on it. Only
+// the background sync used to get this retry (see the BUG FIX note in
+// buildEpisodesFromSeasons() below for why that mattered) - the preview
+// and add-to-library flows made one bare, un-retried attempt per season,
+// meaning a single transient failure (a network blip, a rate limit) on
+// the very first load of a show could silently ship it with a season
+// missing entirely, never retried, never surfaced as an error. Sharing
+// this one implementation closes that gap for every caller at once.
+async function fetchTMDBSeason(tmdbId, seasonNumber) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const r = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
+            const data = await r.json();
+            if (data && data.episodes) return data;
+        } catch (e) {
+            // fall through and retry, or give up after the 2nd attempt
+        }
+    }
+    return null;
+}
+
+// Resolves the two pieces of shared context every timing field below is
+// built from:
+//   - isBroadcast: the FINAL broadcast/cable classification, after the
+//     streaming-platform override (see isBroadcastNetworkShow()/
+//     isConfirmedOnStreamingPlatform() above) - only ever used as the
+//     FALLBACK convention (8pm Eastern vs midnight Pacific) for an
+//     episode TVmaze doesn't have a validated airtime for. A real,
+//     validated TVmaze airstamp is trusted for ANY show regardless of
+//     this value - see the TVMAZE TRUST MODEL comment above
+//     fetchTVmazeEpisodeAirtimes() for the full history of why.
+//   - tvmazeAirtimes: the validated per-episode airstamp map (plus its
+//     .scheduleText for the weekly-schedule line), fetched once and
+//     shared by every episode this show has, instead of being
+//     re-fetched per episode.
+// Both underlying lookups are kicked off by the caller as promises
+// (isBroadcastNetworkShow itself is synchronous and cheap, so it runs
+// immediately) and only awaited here together, so a slow-but-not-
+// failing TVmaze/watch-provider lookup never adds sequential latency on
+// top of whatever season fetches the caller is running in parallel.
+async function resolveShowTimingContext(showData) {
+    const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
+    const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
+    const streamingConfirmedPromise = isBroadcastByNetwork
+        ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
+        : Promise.resolve(false);
+
+    const [tvmazeAirtimes, streamingConfirmed] = await Promise.all([tvmazeAirtimesPromise, streamingConfirmedPromise]);
+    const isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
+
+    return { isBroadcastByNetwork, isBroadcast, tvmazeAirtimes };
+}
+
+// Builds one standardized episode object from a single TMDB episode plus
+// the shared TVmaze/isBroadcast context above - the one place that
+// decides an episode's actual releaseDate and every field the debug tool
+// (showTimingDebugInfo) and the Upcoming tab's real-time gate
+// (hasRealTime) depend on. A real, validated TVmaze airstamp always wins
+// outright over the TMDB-date approximation - it's an actual scheduled
+// airtime, not something that needs the approximation as a starting
+// point - for ANY show once validated, not gated by isBroadcast; the
+// approximation (and therefore isBroadcast) only ever matters for an
+// episode TVmaze has nothing valid for.
+function buildEpisodeTimingFields(seasonNumber, ep, tvmazeAirtimes, isBroadcast) {
+    const epId = `s${seasonNumber}e${ep.episode_number}`;
+    const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
+    const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
+
+    return {
+        id: epId,
+        season: seasonNumber,
+        number: ep.episode_number,
+        title: ep.name || `Episode ${ep.episode_number}`,
+        overview: ep.overview || '',
+        still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
+        runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
+        watched: false,
+        watchedAt: null,
+        releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
+        // Only true for a genuine, validated TVmaze airstamp - see
+        // formatDateWithReleaseTime()/formatReleaseTime() for why this
+        // gates whether a clock TIME is ever shown at all, not just
+        // which one.
+        hasRealTime: !!tvmazeAirstamp,
+        // Diagnostic-only fields, surfaced via showTimingDebugInfo().
+        // rawTvmazeAirstamp is kept even when rejected by
+        // isSaneTVmazeAirstamp, so "TVmaze had something but it got
+        // rejected" is visibly distinguishable from "TVmaze had nothing
+        // at all".
+        timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
+        rawTmdbAirDate: ep.air_date || null,
+        rawTvmazeAirstamp: rawTvmazeAirstamp || null
+    };
+}
+
+// Turns a batch of already-fetched TMDB season payloads into the full,
+// flat episode list for a show, via buildEpisodeTimingFields() for each
+// episode. `seasonsData` and `validSeasons` must be the same length and
+// in the same order (index i of one corresponds to index i of the
+// other) - every call site builds them that way via Promise.all over a
+// validSeasons.map(...) list.
+//
+// existingEpisodes (optional) is the item's own already-stored episode
+// list. BUG FIX, now shared by every caller instead of sync-only: a
+// season whose fetch still failed even after fetchTMDBSeason()'s retry
+// falls back to that season's EXISTING episodes, completely untouched,
+// instead of being silently dropped. A single transient season failure
+// used to be enough to wipe that season's episodes - watched history
+// included - the moment it happened during a background sync, with
+// nothing shown anywhere; falling back instead means worst case that
+// one season's data is a sync cycle stale, never lost. (For a brand new
+// add, existingEpisodes is naturally empty/omitted, so a failed season
+// there just contributes no episodes yet - there's nothing prior to
+// fall back to, and the next sync will pick it up.)
+function buildEpisodesFromSeasons(validSeasons, seasonsData, tvmazeAirtimes, isBroadcast, existingEpisodes = null) {
+    const episodes = [];
+    validSeasons.forEach((season, i) => {
+        const seasonData = seasonsData[i];
+        if (seasonData && seasonData.episodes) {
+            seasonData.episodes.forEach(ep => {
+                episodes.push(buildEpisodeTimingFields(seasonData.season_number, ep, tvmazeAirtimes, isBroadcast));
+            });
+        } else if (existingEpisodes && existingEpisodes.length > 0) {
+            episodes.push(...existingEpisodes.filter(ep => ep.season === season.season_number));
+        }
+    });
+    return episodes;
+}
+
+// The show-level "next episode" timing field works exactly like a single
+// episode's releaseDate above (validated TVmaze airstamp first, TMDB-date
+// approximation as the fallback) but TMDB exposes it as its own top-level
+// next_episode_to_air object rather than as part of a season fetch, so it
+// needs its own small lookup against the same tvmazeAirtimes map instead
+// of going through buildEpisodeTimingFields().
+function computeNextEpisodeAirDate(showData, tvmazeAirtimes, isBroadcast) {
+    const next = showData.next_episode_to_air;
+    if (!next || !next.air_date) return null;
+    const epId = `s${next.season_number}e${next.episode_number}`;
+    const rawAirstamp = tvmazeAirtimes.get(epId);
+    const airstamp = isSaneTVmazeAirstamp(rawAirstamp, next.air_date) ? rawAirstamp : null;
+    return airstamp || tmdbDateToISO(next.air_date, isBroadcast);
+}
+
 // timeZone defaults to UTC - correct for movies and streaming TV, since
 // their anchor (see tmdbDateToISO/getPacificMidnightUTC) always lands
 // within the same UTC calendar day as the date TMDB reported. A
@@ -2979,110 +3137,31 @@ async function refreshItemFromTMDBInternal(item) {
                     // broadcast show's episodes anchor to a primetime-Eastern
                     // approximation instead of the midnight-Pacific streaming
                     // default, since it isn't a streaming-style all-at-once drop.
-                    // Only ever a fallback now, for whatever TVmaze below doesn't
-                    // have real airtime data for. isBroadcastByNetwork is the
-                    // network-name check alone; the extra watch-provider cross-
-                    // check (see isConfirmedOnStreamingPlatform) below only runs
-                    // when this is true, and can still override it to false.
-                    const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
-                    // Kicked off alongside the season fetches below (not awaited
-                    // until they're all needed together) so a slow-but-not-failing
-                    // TVmaze lookup never adds sequential latency on top of TMDB's
-                    // own season requests - see fetchTVmazeEpisodeAirtimes() for
-                    // why this can never actually fail the sync either way.
-                    const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
-                    const streamingConfirmedPromise = isBroadcastByNetwork
-                        ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
-                        : Promise.resolve(false);
-
-                    let newEpisodes = [];
+                    // Only ever a fallback now, for whatever TVmaze doesn't have
+                    // real airtime data for - resolveShowTimingContext() (shared
+                    // by every place that builds episode timing, see the TV
+                    // EPISODE TIMING PIPELINE comment above) resolves this
+                    // alongside the TVmaze lookup and the streaming-provider
+                    // cross-check, kicked off in parallel with the season
+                    // fetches below rather than adding sequential latency.
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
-                    // One retry before giving up on a season - reduces how often the
-                    // fallback below is even needed, since most failures here are
-                    // transient (a network blip, a rate limit) rather than TMDB
-                    // actually having removed the season.
-                    const fetchSeason = async (seasonNumber) => {
-                        for (let attempt = 0; attempt < 2; attempt++) {
-                            try {
-                                const r = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}`);
-                                const data = await r.json();
-                                if (data && data.episodes) return data;
-                            } catch (e) {
-                                // fall through and retry, or give up after the 2nd attempt
-                            }
-                        }
-                        return null;
-                    };
-                    const seasonPromises = validSeasons.map(season => fetchSeason(season.season_number));
-
-                    const seasonsData = await Promise.all(seasonPromises);
-                    const tvmazeAirtimes = await tvmazeAirtimesPromise;
-                    const streamingConfirmed = await streamingConfirmedPromise;
-                    const isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
-                    // BUG FIX: this used to only check `if (seasonData && seasonData.episodes)`
-                    // and otherwise silently skip the season entirely - meaning a single
-                    // season's fetch failing (still possible even with the retry above)
-                    // meant that season just never made it into newEpisodes. Since
-                    // newEpisodes wholesale-replaces item.episodes further down as long
-                    // as ANY season succeeded, one transient failure for one season out
-                    // of several was enough to permanently wipe that season's episodes -
-                    // watched history included - on the very next background sync, with
-                    // no error shown anywhere. This is the actual cause of a previously-
-                    // watched season disappearing on its own. Now: a season whose fetch
-                    // still failed after the retry falls back to that season's EXISTING
-                    // episodes, completely untouched, instead of being dropped - worst
-                    // case that one season's data is a sync cycle stale, never lost.
-                    validSeasons.forEach((season, i) => {
-                        const seasonData = seasonsData[i];
-                        if (seasonData && seasonData.episodes) {
-                            seasonData.episodes.forEach(ep => {
-                                const epId = `s${seasonData.season_number}e${ep.episode_number}`;
-                                // A real TVmaze airstamp, when there is one, replaces
-                                // the TMDB-date-only approximation outright rather
-                                // than being blended with it - it's an actual
-                                // scheduled airtime, not something that needs the
-                                // approximation as a starting point. EXCEPT for a
-                                // known streaming platform - see
-                                // isBroadcastNetworkShow() - only trust TVmaze's
-                                // airtime for a positively-confirmed broadcast/
-                                // cable network; everything else uses the
-                                // midnight-Pacific convention directly.
-                                const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
-                                const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
-                                newEpisodes.push({
-                                    id: epId,
-                                    season: seasonData.season_number,
-                                    number: ep.episode_number,
-                                    title: ep.name || `Episode ${ep.episode_number}`,
-                                    overview: ep.overview || '',
-                                    still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
-                                    runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
-                                    watched: false,
-                                    watchedAt: null,
-                                    releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
-                                    // Only true for a genuine, validated TVmaze airstamp -
-                                    // see formatDateWithReleaseTime()/formatReleaseTime()
-                                    // for why this now gates whether a clock TIME is ever
-                                    // shown at all, not just which one.
-                                    hasRealTime: !!tvmazeAirstamp,
-                                    // Diagnostic-only fields - surfaced via the small info
-                                    // button next to an episode's date (see
-                                    // showTimingDebugInfo) so a specific episode's actual
-                                    // timing source can be checked directly, instead of
-                                    // guessing from the outside. rawTvmazeAirstamp is kept
-                                    // even when rejected by isSaneTVmazeAirstamp, so a
-                                    // "TVmaze had something but it got rejected" case is
-                                    // visibly distinguishable from "TVmaze had nothing at
-                                    // all".
-                                    timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
-                                    rawTmdbAirDate: ep.air_date || null,
-                                    rawTvmazeAirstamp: rawTvmazeAirstamp || null
-                                });
-                            });
-                        } else if (item.episodes && item.episodes.length > 0) {
-                            newEpisodes.push(...item.episodes.filter(ep => ep.season === season.season_number));
-                        }
-                    });
+                    const [seasonsData, timingContext] = await Promise.all([
+                        Promise.all(validSeasons.map(season => fetchTMDBSeason(item.tmdbId, season.season_number))),
+                        resolveShowTimingContext(showData)
+                    ]);
+                    const { isBroadcast, tvmazeAirtimes } = timingContext;
+                    // BUG FIX (now shared logic - see buildEpisodesFromSeasons()):
+                    // a season whose fetch still failed even after
+                    // fetchTMDBSeason()'s retry falls back to that season's
+                    // EXISTING episodes, completely untouched, instead of being
+                    // silently dropped. This is the actual cause of a
+                    // previously-watched season disappearing on its own: without
+                    // the fallback, newEpisodes wholesale-replaces item.episodes
+                    // further down as long as ANY season succeeded, so one
+                    // transient failure for one season out of several used to be
+                    // enough to permanently wipe that season's episodes - watched
+                    // history included - with no error shown anywhere.
+                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, tvmazeAirtimes, isBroadcast, item.episodes);
 
                     // Merge against the existing episode list: keep each episode's
                     // watched flag (and the date it was watched on - see
@@ -3156,9 +3235,7 @@ async function refreshItemFromTMDBInternal(item) {
                         : (item.rating || '');
                     const newSeasonCount = (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : item.numberOfSeasons;
                     const newEpisodeCount = (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : item.numberOfEpisodes;
-                    const newNextAirDate = (showData.next_episode_to_air && showData.next_episode_to_air.air_date)
-                        ? (isSaneTVmazeAirstamp(tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`), showData.next_episode_to_air.air_date) ? tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) : tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
-                        : null;
+                    const newNextAirDate = computeNextEpisodeAirDate(showData, tvmazeAirtimes, isBroadcast);
 
                     const metadataChanged = (
                         item.title !== newTitle ||
@@ -3188,11 +3265,15 @@ async function refreshItemFromTMDBInternal(item) {
                         item.numberOfEpisodes = newEpisodeCount;
                         item.nextEpisodeAirDate = newNextAirDate;
                         item.isBroadcastNetwork = isBroadcast;
-                        // Same trust model as the episode airtimes above - only
-                        // shown for a confirmed broadcast/cable network, since a
-                        // "New episodes every X at Y" line doesn't make sense for
-                        // a streaming platform that doesn't work on a weekly
-                        // timeslot at all.
+                        // Not explicitly gated to broadcast/cable shows - it's
+                        // whatever formatTVmazeSchedule() found on the show's
+                        // TVmaze record (see fetchTVmazeEpisodeAirtimes above),
+                        // null for anything without a real weekly schedule.
+                        // Ends up broadcast/cable-only in practice because
+                        // streaming shows rarely have TVmaze's schedule.days
+                        // populated at all (a streaming drop isn't a weekly
+                        // timeslot to begin with), not because of an explicit
+                        // isBroadcast check here.
                         item.weeklySchedule = tvmazeAirtimes.scheduleText;
 
                         await saveItem(item);
@@ -4341,21 +4422,29 @@ async function openSearchResultDetails(tmdbId, type) {
         }
 
         const previewId = `preview-tv-${showData.id}`;
-        // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC(). Kicked
-        // off here (not awaited yet) so it resolves alongside the season
-        // fetches below rather than adding its own sequential delay -
-        // the modal below still opens immediately either way, this only
-        // affects how accurate the episode air dates are once they load.
-        // isBroadcastByNetwork is used for the initial nextEpisodeAirDate
-        // placeholder below (before the streaming-provider cross-check can
-        // resolve, without delaying the modal opening) - the corrected,
-        // final isBroadcast (see isConfirmedOnStreamingPlatform) is what
-        // actually gets used once episodes load in below.
+        // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC() and the TV
+        // EPISODE TIMING PIPELINE comment above. Kicked off here (not
+        // awaited yet) so it resolves alongside the season fetches below
+        // rather than adding its own sequential delay - the modal below
+        // still opens immediately either way. isBroadcastByNetwork (the
+        // network-name check alone, synchronous) is used for the INITIAL
+        // releaseDate/nextEpisodeAirDate placeholders below, before the
+        // streaming-provider cross-check can resolve, so the modal doesn't
+        // have to wait to open. BUG FIX: those placeholders used to never
+        // get corrected afterward - once the real, validated isBroadcast
+        // came back (from resolveShowTimingContext, awaited alongside the
+        // season fetches), only the per-episode releaseDates picked it up;
+        // the show-level releaseDate/nextEpisodeAirDate/isBroadcastNetwork
+        // silently kept using the pre-correction guess forever, which for
+        // any show the streaming-provider check overrides (see
+        // isConfirmedOnStreamingPlatform - a real, confirmed case: FX's
+        // "The Shards", produced by FX but watched via Disney+) meant the
+        // show-level date and its own episodes disagreed about which
+        // convention applied. Now corrected below once the real
+        // classification is in, same as every other field that depends on
+        // it.
         const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
-        const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
-        const streamingConfirmedPromise = isBroadcastByNetwork
-            ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
-            : Promise.resolve(false);
+        const timingContextPromise = resolveShowTimingContext(showData);
 
         currentItem = {
             id: previewId,
@@ -4396,42 +4485,17 @@ async function openSearchResultDetails(tmdbId, type) {
 
         if (showData.seasons && showData.seasons.length > 0) {
             const validSeasons = showData.seasons.filter(s => s.season_number > 0);
-            const seasonPromises = validSeasons.map(season =>
-                fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${season.season_number}?api_key=${TMDB_API_KEY}`)
-                .then(res => res.json())
-                .catch(e => { console.error(e); return null; })
-            );
-
-            const seasonsData = await Promise.all(seasonPromises);
-            tvmazeAirtimes = await tvmazeAirtimesPromise;
-            const streamingConfirmed = await streamingConfirmedPromise;
-            isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
-
-            seasonsData.forEach(seasonData => {
-                if (seasonData && seasonData.episodes) {
-                    seasonData.episodes.forEach(ep => {
-                        const epId = `s${seasonData.season_number}e${ep.episode_number}`;
-                        const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
-                        const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
-                        episodes.push({
-                            id: epId,
-                            season: seasonData.season_number,
-                            number: ep.episode_number,
-                            title: ep.name || `Episode ${ep.episode_number}`,
-                            overview: ep.overview || '',
-                            still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
-                            runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
-                            watched: false,
-                            watchedAt: null,
-                            releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
-                            hasRealTime: !!tvmazeAirstamp,
-                            timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
-                            rawTmdbAirDate: ep.air_date || null,
-                            rawTvmazeAirstamp: rawTvmazeAirstamp || null
-                        });
-                    });
-                }
-            });
+            const [seasonsData, timingContext] = await Promise.all([
+                Promise.all(validSeasons.map(season => fetchTMDBSeason(tmdbId, season.season_number))),
+                timingContextPromise
+            ]);
+            tvmazeAirtimes = timingContext.tvmazeAirtimes;
+            isBroadcast = timingContext.isBroadcast;
+            episodes = buildEpisodesFromSeasons(validSeasons, seasonsData, tvmazeAirtimes, isBroadcast);
+        } else {
+            const timingContext = await timingContextPromise;
+            tvmazeAirtimes = timingContext.tvmazeAirtimes;
+            isBroadcast = timingContext.isBroadcast;
         }
 
         // The person may have closed the modal or moved on to something
@@ -4441,6 +4505,13 @@ async function openSearchResultDetails(tmdbId, type) {
             currentItem.episodes = episodes;
             currentItem.episodesLoading = false;
             currentItem.weeklySchedule = tvmazeAirtimes.scheduleText;
+            // Correct the show-level fields set from the pre-correction
+            // isBroadcastByNetwork guess above, now that the real,
+            // validated classification (and any TVmaze airstamp for the
+            // next episode) is in - see the BUG FIX note above.
+            currentItem.releaseDate = showData.first_air_date ? tmdbDateToISO(showData.first_air_date, isBroadcast) : null;
+            currentItem.nextEpisodeAirDate = computeNextEpisodeAirDate(showData, tvmazeAirtimes, isBroadcast);
+            currentItem.isBroadcastNetwork = isBroadcast;
             scrollToNextEpisodeOnRender = true;
             updateModalContent();
         }
@@ -4524,13 +4595,12 @@ async function importMediaData(id, type, buttonElement) {
             if (state.library.some(s => s.id === slug || s.tmdbId === showData.id)) {
                 return;
             }
-            // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC(). Kicked
-            // off now, awaited below alongside the season fetches.
-            const isBroadcastByNetwork = isBroadcastNetworkShow(showData.networks);
-            const tvmazeAirtimesPromise = fetchTVmazeEpisodeAirtimes(showData.external_ids && showData.external_ids.tvdb_id, showData.name);
-            const streamingConfirmedPromise = isBroadcastByNetwork
-                ? isConfirmedOnStreamingPlatform(showData.id, 'tv')
-                : Promise.resolve(false);
+            // See isBroadcastNetworkShow()/getBroadcastPrimetimeUTC() and the
+            // TV EPISODE TIMING PIPELINE comment above - resolveShowTimingContext()
+            // resolves the TVmaze lookup, the streaming-provider cross-check,
+            // and the final isBroadcast classification together, kicked off
+            // in parallel with the season fetches below.
+            const timingContextPromise = resolveShowTimingContext(showData);
 
             // A previous removal may have archived this exact show's watch
             // history (see removeLibraryItem) under this same slug - check
@@ -4549,46 +4619,21 @@ async function importMediaData(id, type, buttonElement) {
             let episodes = [];
             let tvmazeAirtimes = new Map();
             tvmazeAirtimes.scheduleText = null;
-            let isBroadcast = isBroadcastByNetwork;
+            let isBroadcast = false;
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
-                const seasonPromises = validSeasons.map(season => 
-                    fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season.season_number}?api_key=${TMDB_API_KEY}`)
-                    .then(res => res.json())
-                    .catch(e => { console.error(e); return null; })
-                );
-                
-                const seasonsData = await Promise.all(seasonPromises);
-                tvmazeAirtimes = await tvmazeAirtimesPromise;
-                const streamingConfirmed = await streamingConfirmedPromise;
-                isBroadcast = isBroadcastByNetwork && !streamingConfirmed;
-
-                seasonsData.forEach(seasonData => {
-                    if (seasonData && seasonData.episodes) {
-                        seasonData.episodes.forEach(ep => {
-                            const epId = `s${seasonData.season_number}e${ep.episode_number}`;
-                            const rawTvmazeAirstamp = tvmazeAirtimes.get(epId);
-                            const tvmazeAirstamp = isSaneTVmazeAirstamp(rawTvmazeAirstamp, ep.air_date) ? rawTvmazeAirstamp : null;
-                            episodes.push({
-                                id: epId,
-                                season: seasonData.season_number,
-                                number: ep.episode_number,
-                                title: ep.name || `Episode ${ep.episode_number}`,
-                                overview: ep.overview || '',
-                                still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
-                                runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
-                                watched: false,
-                                watchedAt: null,
-                                releaseDate: tvmazeAirstamp || (ep.air_date ? tmdbDateToISO(ep.air_date, isBroadcast) : new Date().toISOString()),
-                                hasRealTime: !!tvmazeAirstamp,
-                                timingSource: tvmazeAirstamp ? 'tvmaze' : (isBroadcast ? 'approx-broadcast' : 'approx-streaming'),
-                                rawTmdbAirDate: ep.air_date || null,
-                                rawTvmazeAirstamp: rawTvmazeAirstamp || null
-                            });
-                        });
-                    }
-                });
+                const [seasonsData, timingContext] = await Promise.all([
+                    Promise.all(validSeasons.map(season => fetchTMDBSeason(id, season.season_number))),
+                    timingContextPromise
+                ]);
+                tvmazeAirtimes = timingContext.tvmazeAirtimes;
+                isBroadcast = timingContext.isBroadcast;
+                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData, tvmazeAirtimes, isBroadcast);
+            } else {
+                const timingContext = await timingContextPromise;
+                tvmazeAirtimes = timingContext.tvmazeAirtimes;
+                isBroadcast = timingContext.isBroadcast;
             }
 
             // Carry watched flags (and the date each was watched on - see
@@ -4626,9 +4671,7 @@ async function importMediaData(id, type, buttonElement) {
                 rating: (typeof showData.vote_average === 'number' && showData.vote_average > 0) ? showData.vote_average.toFixed(1) : '',
                 numberOfSeasons: (typeof showData.number_of_seasons === 'number') ? showData.number_of_seasons : null,
                 numberOfEpisodes: (typeof showData.number_of_episodes === 'number') ? showData.number_of_episodes : null,
-                nextEpisodeAirDate: (showData.next_episode_to_air && showData.next_episode_to_air.air_date)
-                    ? (isSaneTVmazeAirstamp(tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`), showData.next_episode_to_air.air_date) ? tvmazeAirtimes.get(`s${showData.next_episode_to_air.season_number}e${showData.next_episode_to_air.episode_number}`) : tmdbDateToISO(showData.next_episode_to_air.air_date, isBroadcast))
-                    : null,
+                nextEpisodeAirDate: computeNextEpisodeAirDate(showData, tvmazeAirtimes, isBroadcast),
                 isBroadcastNetwork: isBroadcast,
                 weeklySchedule: tvmazeAirtimes.scheduleText,
                 isFinished: false,
