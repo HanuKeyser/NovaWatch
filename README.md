@@ -84,19 +84,19 @@ Only the calendar DATE this produces is meant to be trusted per viewer timezone 
 
 **Settings** — reachable via the button on Home's identity card, which becomes a close (X) button while Settings is open. Covers appearance, streaming region, notifications (including Notification Types and Library Display sub-screens), achievements, NovaWrapped, sign-out, account deletion, and Privacy & Terms. Structurally matches every other tab (same padding, same section-title sizing, same spacing rhythm) rather than being a visually separate design.
 
-**Streaming region** — a full ISO 3166-1 country picker, auto-detected on first sign-in from the browser's own locale; drives which "where to watch" info TMDB/JustWatch returns.
+**Streaming region** — a full ISO 3166-1 country picker, still fully manual and editable at any time; auto-detected on first sign-in via the browser's real Geolocation API (reverse-geocoded to a country through a free client-side lookup) when available and granted, falling back to a locale-string guess for every failure mode - no geolocation support, permission denied, a timed-out/failed lookup, or an unsupported country. Drives which "where to watch" info TMDB/JustWatch returns.
 
 **Dark mode** — a three-way Light/Dark/Auto toggle in Settings. Saved to `localStorage` (device-level, not synced across devices) and applied before first paint via an inline script in each page's `<head>`, so there's no light-then-dark flash. Auto follows the OS setting live via a `matchMedia` listener.
 
 **Notifications** — opt-in browser notifications for new episodes, show premieres, and movie releases, requested from the same Settings row. Only ever fires on the actual release day (an exact per-item day check against the item's real release instant, deduplicated so the same item never re-notifies the same day) - never at the moment TMDB/TVmaze data merely mentions something, and never for episodes that were already out when a show was added, since a freshly-added show's full episode list is already in hand at add time. Every category shares one notification title, "New Release" — the body carries the specifics ("Show Name - Season X Episode X release" for TV, "Movie Name - Movie Release" for movies). A separate "Notification Types" row lets each category (New Episodes / Show Premieres / Movie Releases) be turned off independently, stored device-side the same way the theme preference is. No "you'll be notified..." confirmation notifications anywhere - enabling notifications or adding an item only ever shows a toast/button-state change, not a notification whose entire content is announcing a future notification.
 
-**Library Display** (Settings) — Finished and Stopped Watching (the two TV Library categories that hide content the person is done with, one way or another) can each be shown or hidden independently, stored device-side the same way notification preferences are. Purely a display filter - hiding a category never touches the underlying watched/stopped data, it just skips rendering that category block.
+**Library Display** (Settings) — Finished, Unwatched, and Stopped Watching (the three TV Library categories that hide content the person is done with, hasn't started, or chose to stop, one way or another) can each be shown or hidden independently - on (green) by default, off (red) once the person turns one off - stored device-side the same way notification preferences are. Purely a display filter - hiding a category never touches the underlying watched/stopped data, it just skips rendering that category block.
 
 **Avatars** — 8 curated hosted images, assigned at random to a new account and always changeable via the picker in Settings.
 
 **PWA install shortcuts** — long-pressing the installed app's icon offers Discover/Library/Upcoming as direct shortcuts (Home is skipped, since it's already the default landing).
 
-**Upcoming** (4th bottom-nav tab) — not-yet-released movies and TV episodes from the library, soonest first, bucketed into Today/Tomorrow/This Week/Later. One row per TV show for its next not-yet-released episode, plus every not-yet-released unwatched movie. Read-only (no swipe actions - nothing to mark watched on something that hasn't released yet); tapping a card opens the usual details modal.
+**Upcoming** (4th bottom-nav tab) — every not-yet-released movie and TV episode from the library (every queued-up episode per show, not just the next one), split into two top-level sections - TV Shows and Movies - each with entries soonest first and bucketed into Today/Tomorrow/This Week/Later. No page-level title on the tab itself; the TV Shows/Movies section headers carry that role instead. Deliberately not boxed cards - a bare listed row per item (small thumbnail, title, meta, trailing countdown + exact date) separated only by a hairline divider, no per-row background/border/shadow. Read-only (nothing to mark watched on something that hasn't released yet); tapping a row opens the usual details modal.
 
 **Bottom navigation** — a floating "Liquid Glass" pill bar, 4 tabs (Home/Discover/Library/Upcoming). Supports both tapping a tab and dragging a finger across the bar to switch tabs, with the pill indicator tracking the finger continuously during a drag and settling into place on release. The indicator measures whichever button is active at render time, so it isn't hardcoded to any particular tab count.
 
@@ -116,11 +116,6 @@ Tracks January 1 – December 31 UTC, with a 7-day grace period after account cr
 
 `tokens.css` defines the shared "Liquid Glass" visual language — translucent, blurred, low-opacity surfaces with a soft diagonal sheen — used consistently across the whole app (cards, sheets, buttons, the search bars, the bottom nav) rather than each surface inventing its own treatment. A defined corner-radius scale (`--radius-xs` through `--radius-2xl`) assigns a consistent roundness by component role — e.g. every poster thumbnail across every tab uses the same radius, regardless of which screen it appears on.
 
+Text selection and iOS's long-press copy/selection callout are disabled app-wide by default (meant to feel like an installed app, not a page of selectable text) - real `<input>`/`<textarea>` fields explicitly re-enable both, so typing, selecting, and copying what the person actually types (search bars, display name, etc.) still works normally.
+
 ---
-
-## Not yet built
-
-- **Multi-profiles** — the data model already supports an array of profiles, but there's no UI to add or switch between them; `activeProfileId` is currently always the single default profile.
-- **Lists** — freeform, unstructured collections planned for Home (below Continue Watching) that wouldn't require fully adding a title to the tracked Library. Not built.
-- **Premium tier** — `state.isPremiumUser` is a hardcoded `false` placeholder; nothing in the app is actually gated behind it yet, and no payment/billing integration exists. The intent is for premium to unlock things like extra profiles, deeper NovaWrapped detail, and the premium achievement tier above — without making the free tier feel incomplete.
-- **Avatar uploads** — would require Firebase Storage, i.e. the paid Blaze plan; deferred until there's a reason to upgrade.
