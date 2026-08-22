@@ -61,11 +61,9 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Discover → For You** — TMDB `/recommendations` seeded from your library, ranked by cross-seed hit count then TMDB score. Falls back to plain Trending when the library's empty for that content type.
 
-**Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it).
+**Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it). Marking an episode watched this way also shows how many episodes are left in that show, if any.
 
-**Movie release dates** — still tracked and displayed (details modal, gates "mark watched" until release), computed from TMDB's reported date anchored to the real-world midnight-Pacific streaming convention.
-
-**TV episode timing — dateless.** Episodes still have a real released/not-yet-released gate, same as movies — it's just not backed by any stored date or time. Each episode gets a plain `released` boolean, computed from TMDB's own reported air_date compared to today's calendar date (no timezone anchoring, no display of any date or countdown anywhere). An unreleased episode is visibly dimmed with a "Not Yet Released" label instead of "Unwatched", can't be marked watched (same rejection pattern as an unreleased movie), and doesn't count toward a show's watched-progress total or show up as "next up" in Continue Watching. Because there's no stored instant the way movies get, this is only as current as the last time the show was fetched or background-synced — not a continuously live check. There's also no Upcoming tab and no per-episode clock time at all. This replaced a fairly involved prior system (TVmaze airtimes, then a TMDB-date-plus-broadcast/streaming-convention replacement) that kept surfacing new ways to be subtly wrong; it's been stripped down to this simpler boolean rather than patched further. The one other thing tracked at the show level is `hasNextEpisode`, a plain presence flag from TMDB's `next_episode_to_air` (again, no date attached), used only to distinguish "Up to Date" (more episodes are coming) from "Finished" (they're not) in the Library grid. A real timezone-aware date/time display for TV is planned to be rebuilt later, from scratch.
+**TV episode release timing** — deliberately not tracked at all. This went through a long series of attempts: real per-episode airtimes from a third-party source, several rounds of validation tightening after real bugs kept surfacing, a pure date+convention computation, a personal manual-correction feature, and (found mid-build, from earlier sessions) two different partially-built admin-curated shared-correction systems. Each fix closed one specific failure mode and a new one kept appearing - the diagnosis was ultimately that this class of problem (a hybrid broadcast/streaming show, or a platform's staggered international rollout, genuinely doesn't reduce to a single computable release moment) isn't fully solvable with the data sources available to this app. Removed entirely rather than continuing to patch it - TV episodes have no release date, no "not released yet" state, and no Upcoming tab. Every known episode is simply available. Movies are unaffected and keep their release date (via TMDB's date + the midnight-Pacific streaming convention, DST-aware) - that side was never reported as inaccurate.
 
 **Content rating** — PG-13, TV-MA, etc., shown as a badge in the details modal for both movies and TV shows. Fetched from a separate per-region TMDB endpoint (`release_dates` for movies, `content_ratings` for TV), tried in the viewer's own streaming region first, falling back to US.
 
@@ -85,13 +83,15 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Dark mode** — a three-way Light/Dark/Auto toggle in Settings. Saved to `localStorage` (device-level, not synced across devices) and applied before first paint via an inline script in each page's `<head>`, so there's no light-then-dark flash. Auto follows the OS setting live via a `matchMedia` listener.
 
-**Notifications** — opt-in browser notifications for new episodes/movie releases, requested from the same Settings row.
+**Notifications** — opt-in browser notifications for new episodes/releases, requested from the same Settings row.
 
 **Avatars** — 8 curated hosted images, assigned at random to a new account and always changeable via the picker in Settings.
 
 **PWA install shortcuts** — long-pressing the installed app's icon offers Discover/Library as direct shortcuts (Home is skipped, since it's already the default landing).
 
 **Bottom navigation** — a floating "Liquid Glass" pill bar. Supports both tapping a tab and dragging a finger across the bar to switch tabs, with the pill indicator tracking the finger continuously during a drag and settling into place on release.
+
+**Change-aware list rendering** — Library, Continue Watching, and the episode list inside a show's details modal only touch the DOM when their content has genuinely changed, rather than rebuilding on every periodic background sync (or every time the modal refreshes) regardless. Rebuilding unconditionally was destroying and recreating every poster/thumbnail/episode-still image element each time, which read as flashing even though nothing had actually changed.
 
 ---
 
@@ -112,7 +112,6 @@ Tracks January 1 – December 31 UTC, with a 7-day grace period after account cr
 ## Not yet built
 
 - **Multi-profiles** — the data model already supports an array of profiles, but there's no UI to add or switch between them; `activeProfileId` is currently always the single default profile.
-- **TV episode date/time display & an Upcoming tab** — deliberately torn out (see "TV episode timing — dateless" above) rather than patched further; the released/unreleased gate itself is still there, just dateless. A real timezone-aware version is planned to be rebuilt from scratch.
 - **Lists** — freeform, unstructured collections planned for Home (below Continue Watching) that wouldn't require fully adding a title to the tracked Library. Not built.
 - **Premium tier** — `state.isPremiumUser` is a hardcoded `false` placeholder; nothing in the app is actually gated behind it yet, and no payment/billing integration exists. The intent is for premium to unlock things like extra profiles, deeper NovaWrapped detail, and the premium achievement tier above — without making the free tier feel incomplete.
 - **Avatar uploads** — would require Firebase Storage, i.e. the paid Blaze plan; deferred until there's a reason to upgrade.
