@@ -329,6 +329,21 @@
 </main>
 
 <!-- =====================================================
+     4. UPCOMING TAB
+     Not-yet-released movies and TV episodes from the library, soonest
+     first, bucketed into Today/Tomorrow/This Week/Later - see
+     renderUpcomingTab() in app.js.
+================================================     -->
+<main id="upcomingPage" class="page">
+    <div class="tab-content-wrapper">
+        <div class="section-header">
+            <div class="section-title">Upcoming</div>
+        </div>
+        <div id="upcomingList"></div>
+    </div>
+</main>
+
+<!-- =====================================================
      BOTTOM NAVIGATION
 ================================================     -->
 <nav class="bottom-nav">
@@ -355,6 +370,15 @@
             <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>
         </svg>
         Library
+    </button>
+    <button id="navUpcoming" class="nav-button" onclick="showPage('upcoming')">
+        <svg class="icon" viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Upcoming
     </button>
 </nav>
 </div>
@@ -525,6 +549,61 @@
 </div>
 
 <!-- =====================================================
+     NOTIFICATION TYPES
+     Opened from the "Notification Types" row in Settings - which
+     release-day notification categories are on/off (see
+     getNotificationPrefs()/setNotificationPref() in app.js). Purely a
+     filter on top of the browser's own Notification permission, not a
+     replacement for it - these stay dimmed-irrelevant if notifications
+     were never enabled in the first place, same as the row above it.
+================================================     -->
+<div id="notificationPrefsModal" class="modal modal-compact" onclick="closeNotificationPrefsModalOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeNotificationPrefsModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Notification Types</h2>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">Choose what you want to be notified about. These only apply once notifications are enabled.</p>
+            <div id="notificationPrefsList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     LIBRARY DISPLAY
+     Opened from the "Library Display" row in Settings - whether the
+     Finished and Stopped Watching TV Library categories are shown or
+     hidden (see getLibraryVisibilityPrefs()/setLibraryVisibilityPref()
+     in app.js). Purely a display filter - hiding a category never
+     changes the underlying data (a hidden Finished show is still
+     fully watched, a hidden Stopped show is still marked stopped),
+     it just doesn't render that category block.
+================================================     -->
+<div id="libraryDisplayModal" class="modal modal-compact" onclick="closeLibraryDisplayModalOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeLibraryDisplayModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content" style="padding-top: 60px;">
+            <h2 class="poster-picker-title">Library Display</h2>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">Choose which TV Library categories are visible.</p>
+            <div id="libraryDisplayList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
      NOVAWRAPPED
      Migrated in from its own separate page (nova-wrapped/index.html)
      since it always needed the same signed-in session's Firestore data
@@ -653,7 +732,12 @@
                             </div>
                             <button class="hero-pill-btn region-btn" id="regionPillBtn" onclick="openRegionPicker()">Region</button>
                         </div>
+                    </div>
+                </div>
 
+                <div>
+                    <div class="section-header"><div class="section-title">Notifications</div></div>
+                    <div class="analytics-card settings-card">
                         <div class="settings-row">
                             <div class="settings-row-icon" style="background: var(--blue-gradient);">
                                 <svg class="icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -663,6 +747,33 @@
                                 <div class="settings-row-sub">Get alerts for new episodes & releases.</div>
                             </div>
                             <button class="hero-pill-btn" id="notificationBtn" onclick="requestNotificationPermission()">Enable</button>
+                        </div>
+
+                        <div class="settings-row" style="cursor: pointer;" onclick="openNotificationPrefsModal()">
+                            <div class="settings-row-icon" style="background: var(--blue-gradient);">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h7"/></svg>
+                            </div>
+                            <div class="settings-row-text">
+                                <div class="settings-row-title">Notification Types</div>
+                                <div class="settings-row-sub">Choose what you get notified about.</div>
+                            </div>
+                            <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="section-header"><div class="section-title">Library</div></div>
+                    <div class="analytics-card settings-card">
+                        <div class="settings-row" style="cursor: pointer;" onclick="openLibraryDisplayModal()">
+                            <div class="settings-row-icon" style="background: var(--green-gradient);">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                            </div>
+                            <div class="settings-row-text">
+                                <div class="settings-row-title">Library Display</div>
+                                <div class="settings-row-sub">Show or hide Finished & Stopped Watching.</div>
+                            </div>
+                            <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
                         </div>
 
                         <div class="settings-row" style="cursor: pointer;" onclick="openAchievementsModal()">
