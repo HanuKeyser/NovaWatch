@@ -535,7 +535,7 @@ function closeNotificationPrefsModalOutside(event) {
    underlying watched/stopped data itself.
 ========================================================= */
 const LIBRARY_VISIBILITY_KEY = "novawatch-libraryVisibility";
-const DEFAULT_LIBRARY_VISIBILITY = { showFinished: true, showStopped: true };
+const DEFAULT_LIBRARY_VISIBILITY = { showFinished: true, showStopped: true, showUnwatched: true };
 
 function getLibraryVisibilityPrefs() {
     try {
@@ -566,6 +566,7 @@ function setLibraryVisibilityPref(key, value) {
 
 const LIBRARY_VISIBILITY_CATEGORIES = [
     { key: 'showFinished', title: 'Finished', sub: 'Shows that have ended or been cancelled.' },
+    { key: 'showUnwatched', title: 'Unwatched', sub: 'Shows you haven\'t started watching yet.' },
     { key: 'showStopped', title: 'Stopped Watching', sub: 'Shows you\'ve chosen to stop watching.' }
 ];
 
@@ -576,6 +577,13 @@ function renderLibraryDisplayModal() {
 
     container.innerHTML = LIBRARY_VISIBILITY_CATEGORIES.map(cat => {
         const isOn = !!prefs[cat.key];
+        // On = green, Off = red - a clearer at-a-glance signal than the
+        // neutral blue/gray used for the notification-type toggles, since
+        // this one is specifically about showing (green) vs hiding (red)
+        // content, not just an arbitrary on/off preference.
+        const btnStyle = isOn
+            ? 'min-width: 72px; background: var(--green-gradient); color: #fff; box-shadow: none;'
+            : 'min-width: 72px; background: var(--red-gradient); color: #fff; box-shadow: none;';
         return `
             <div class="analytics-card settings-card" style="padding: 14px;">
                 <div class="settings-row" style="padding: 0;">
@@ -583,7 +591,7 @@ function renderLibraryDisplayModal() {
                         <div class="settings-row-title">${escapeHTML(cat.title)}</div>
                         <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
                     </div>
-                    <button class="hero-pill-btn" style="min-width: 72px; ${isOn ? '' : 'background: var(--surface-2); color: var(--text-muted); box-shadow: none;'}" onclick="setLibraryVisibilityPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
+                    <button class="hero-pill-btn" style="${btnStyle}" onclick="setLibraryVisibilityPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
                 </div>
             </div>
         `;
@@ -4464,16 +4472,6 @@ function getNextUnwatchedEpisode(show) {
     return sortedEps.find(ep => !ep.watched) || null;
 }
 
-// The soonest not-yet-released episode for a show, if it has one - the
-// TV half of the Upcoming tab (see getUpcomingItems).
-function getNextUpcomingEpisode(show) {
-    if (!show.episodes || show.episodes.length === 0) return null;
-    const upcoming = show.episodes
-        .filter(ep => ep.releaseDate && !isReleased(ep.releaseDate))
-        .sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
-    return upcoming[0] || null;
-}
-
 // Which season the details modal should land on when a show is opened, so
 // it always reflects where the user actually is in the show rather than
 // whichever season happened to be selected last (which might belong to a
@@ -4550,18 +4548,21 @@ function isTVFinished(show) {
     );
 }
 
-// Sorts by whichever episode was most recently watched - the closest
-// available substitute for "most recently aired" now that episodes
-// don't carry a release date at all (see the tmdbDateToISO comment).
-function getLatestWatchedEpisodeDate(show) {
+// Sorts by each show's most recently released episode - real air-date
+// based now that episodes carry a genuine releaseDate again (see the TV
+// EPISODE RELEASE TIMING block near tmdbDateToISO). This used to be a
+// "most recently watched" substitute back when TV episodes didn't carry
+// a release date at all - that substitute is gone now that the real
+// thing is available again. Ascending (oldest first).
+function getLatestAiredEpisodeDate(show) {
     if (!show.episodes || show.episodes.length === 0) return 0;
-    const watchedEps = show.episodes.filter(ep => ep.watched && ep.watchedAt);
-    if (watchedEps.length === 0) return 0;
-    return Math.max(...watchedEps.map(ep => new Date(ep.watchedAt).getTime()));
+    const released = show.episodes.filter(ep => ep.releaseDate && isReleased(ep.releaseDate));
+    if (released.length === 0) return 0;
+    return Math.max(...released.map(ep => new Date(ep.releaseDate).getTime()));
 }
 
 function sortTVShowsByLatestAired(shows) {
-    return shows.sort((a, b) => getLatestWatchedEpisodeDate(b) - getLatestWatchedEpisodeDate(a));
+    return shows.sort((a, b) => getLatestAiredEpisodeDate(a) - getLatestAiredEpisodeDate(b));
 }
 
 function sortMoviesByWatchedDate(movies) {
@@ -4966,7 +4967,7 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
     if (inProgress.length > 0) html += renderCategoryBlock("In Progress", inProgress);
     if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", upToDate);
     if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
-    if (unwatched.length > 0) html += renderCategoryBlock("Unwatched", unwatched);
+    if (unwatched.length > 0 && visPrefs.showUnwatched) html += renderCategoryBlock("Unwatched", unwatched);
     if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
     if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", stopped);
 
@@ -5239,17 +5240,28 @@ function renderContinueWatching(containerId = "continueWatchingList") {
    UPCOMING TAB
    Not-yet-released movies and TV episodes from the library - the
    mirror image of Continue Watching (what's still ahead, rather than
-   what's already out and unwatched). One row per TV show for its next
-   not-yet-released episode (see getNextUpcomingEpisode), plus every
-   not-yet-released, unwatched movie - sorted soonest first and
-   bucketed into Today/Tomorrow/This Week/Later so it reads like a
-   schedule rather than one long list.
+   what's already out and unwatched). Every not-yet-released episode for
+   every tracked show (see getUpcomingTVEpisodes - not just the next one
+   per show), plus every not-yet-released, unwatched movie - sorted
+   soonest first and bucketed into Today/Tomorrow/This Week/Later so it
+   reads like a schedule rather than one long list.
 ========================================================= */
+// Every not-yet-released TV episode across the whole library, one row
+// per episode - not just the next one per show, so a show with several
+// unreleased episodes queued up (a season mid-air) shows all of them,
+// not just the soonest.
+function getUpcomingTVEpisodes(show) {
+    if (!show.episodes || show.episodes.length === 0) return [];
+    return show.episodes
+        .filter(ep => ep.releaseDate && !isReleased(ep.releaseDate))
+        .sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
+}
+
 function getUpcomingItems() {
     const tvShows = state.library.filter(item => item.type !== 'movie' && !item.isStopped);
-    const tvEntries = tvShows
-        .map(show => ({ type: 'tv', item: show, episode: getNextUpcomingEpisode(show) }))
-        .filter(entry => entry.episode !== null);
+    const tvEntries = tvShows.flatMap(show =>
+        getUpcomingTVEpisodes(show).map(episode => ({ type: 'tv', item: show, episode }))
+    );
 
     const movieEntries = state.library
         .filter(item => item.type === 'movie' && !item.watched && item.releaseDate && !isReleased(item.releaseDate))
@@ -5281,34 +5293,30 @@ function bucketUpcomingItems(entries) {
     return buckets;
 }
 
-function createUpcomingCard(entry) {
+function createUpcomingRow(entry) {
     const item = entry.item;
     const episode = entry.episode;
     const date = entry.type === 'tv' ? episode.releaseDate : item.releaseDate;
 
     const hasPoster = item.poster && item.poster.trim() !== "";
     const posterHTML = hasPoster
-        ? `<img src="${tmdbThumb(item.poster, 'w342')}" class="continue-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
-        : `<div class="continue-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${continuePlaceholderIcon(entry.type)}</div>`;
+        ? `<img src="${tmdbThumb(item.poster, 'w185')}" class="upcoming-row-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+        : `<div class="upcoming-row-poster-placeholder">${continuePlaceholderIcon(entry.type)}</div>`;
 
     const metaHTML = entry.type === 'tv'
-        ? `<span>S${episode.season}</span><span>•</span><span>E${episode.number}</span><span>•</span><span>${escapeHTML(formatDateWithReleaseTime(date))}</span>`
-        : `<span>${escapeHTML(item.year || 'N/A')}</span><span>•</span><span>Movie</span><span>•</span><span>${escapeHTML(formatDateWithReleaseTime(date))}</span>`;
-
-    const nameHTML = entry.type === 'tv'
-        ? `<div class="continue-episode-name">${escapeHTML(episode.title)}</div>`
-        : '';
+        ? `S${episode.season} E${episode.number} &bull; ${escapeHTML(episode.title)}`
+        : `${escapeHTML(item.year || 'N/A')} &bull; Movie`;
 
     return `
-        <div class="continue-card-wrap">
-            <div class="continue-card upcoming-card" data-id="${item.id}" onclick="openDetails('${item.id}')">
-                ${posterHTML}
-                <div class="continue-body">
-                    <div class="continue-title">${escapeHTML(item.title)}</div>
-                    <div class="continue-meta-line">${metaHTML}</div>
-                    ${nameHTML}
-                </div>
-                <div class="upcoming-countdown-badge" title="${escapeHTML(formatDateWithReleaseTime(date))}">${getCountdown(date)}</div>
+        <div class="upcoming-row" data-id="${item.id}" onclick="openDetails('${item.id}')">
+            ${posterHTML}
+            <div class="upcoming-row-body">
+                <div class="upcoming-row-title">${escapeHTML(item.title)}</div>
+                <div class="upcoming-row-meta">${metaHTML}</div>
+            </div>
+            <div class="upcoming-row-trailing">
+                <div class="upcoming-row-countdown">${getCountdown(date)}</div>
+                <div class="upcoming-row-exact-date">${escapeHTML(formatDateWithReleaseTime(date))}</div>
             </div>
         </div>
     `;
@@ -5318,7 +5326,7 @@ function renderUpcomingGroup(title, entries) {
     return `
         <div class="continue-group">
             <div class="continue-group-title"><span>${escapeHTML(title)}</span></div>
-            ${entries.map(entry => createUpcomingCard(entry)).join("")}
+            ${entries.map(entry => createUpcomingRow(entry)).join("")}
         </div>
     `;
 }
