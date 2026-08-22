@@ -1,7 +1,7 @@
 {
   "name": "NovaWatch",
   "short_name": "NovaWatch",
-  "description": "Track what you watch and get release alerts for upcoming movies and TV episodes.",
+  "description": "Track what you watch and get release alerts for upcoming movies.",
   "version": "1.0.0",
   "id": "/",
   "start_url": ".",
@@ -32,19 +32,6 @@
       "short_name": "Library",
       "description": "See what you're tracking",
       "url": "/?shortcut=library",
-      "icons": [
-        {
-          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Upcoming",
-      "short_name": "Upcoming",
-      "description": "See what's releasing soon",
-      "url": "/?shortcut=upcoming",
       "icons": [
         {
           "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
