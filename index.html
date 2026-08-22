@@ -330,13 +330,26 @@
 
 <!-- =====================================================
      4. UPCOMING TAB
-     Not-yet-released movies and TV episodes from the library, soonest
-     first, bucketed into Today/Tomorrow/This Week/Later - see
-     renderUpcomingTab() in app.js.
+     Not-yet-released movies and TV episodes from the library - same
+     structure as the Library tab (a TV Shows/Movies segmented toggle,
+     the same category-block/poster-grid cards) so the two tabs read as
+     one consistent system rather than two different designs. See
+     setUpcomingView() in app.js.
 ================================================     -->
 <main id="upcomingPage" class="page">
-    <div class="tab-content-wrapper">
-        <div id="upcomingList"></div>
+    <div class="segmented-toggle">
+        <button id="upcomingTabTV" class="segmented-btn active" onclick="setUpcomingView('tv')">TV Shows</button>
+        <button id="upcomingTabMovies" class="segmented-btn" onclick="setUpcomingView('movies')">Movies</button>
+    </div>
+
+    <!-- TV Shows sub-view -->
+    <div id="upcomingViewTV" class="library-subview">
+        <div id="upcomingTVCategories"></div>
+    </div>
+
+    <!-- Movies sub-view -->
+    <div id="upcomingViewMovies" class="library-subview" style="display: none;">
+        <div id="upcomingMovieCategories"></div>
     </div>
 </main>
 
