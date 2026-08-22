@@ -314,7 +314,7 @@ function computeAchievementStats() {
             }
         } else if (item.episodes && item.episodes.length > 0) {
             anyItems = true;
-            const releasedEps = item.episodes;
+            const releasedEps = getAvailableEpisodes(item);
             const watchedEps = releasedEps.filter(ep => ep.watched);
             if (releasedEps.length > 0 && watchedEps.length === releasedEps.length) {
                 showsCompleted++;
@@ -480,6 +480,133 @@ function closeAchievementsModalOutside(event) {
     if (event.target.id === 'achievementsModal') closeAchievementsModal();
 }
 
+/* =========================================================
+   NOTIFICATION TYPES MODAL
+========================================================= */
+const NOTIFICATION_CATEGORIES = [
+    { key: 'newEpisodes', title: 'New Episodes', sub: 'A tracked show has a new episode out.' },
+    { key: 'showPremieres', title: 'Show Premieres', sub: 'A tracked show\'s first episode is out.' },
+    { key: 'movieReleases', title: 'Movie Releases', sub: 'A tracked movie is out.' }
+];
+
+function renderNotificationPrefsModal() {
+    const container = document.getElementById('notificationPrefsList');
+    if (!container) return;
+    const prefs = getNotificationPrefs();
+
+    container.innerHTML = NOTIFICATION_CATEGORIES.map(cat => {
+        const isOn = !!prefs[cat.key];
+        return `
+            <div class="analytics-card settings-card" style="padding: 14px;">
+                <div class="settings-row" style="padding: 0;">
+                    <div class="settings-row-text">
+                        <div class="settings-row-title">${escapeHTML(cat.title)}</div>
+                        <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
+                    </div>
+                    <button class="hero-pill-btn" style="min-width: 72px; ${isOn ? '' : 'background: var(--surface-2); color: var(--text-muted); box-shadow: none;'}" onclick="setNotificationPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function openNotificationPrefsModal() {
+    const modal = document.getElementById('notificationPrefsModal');
+    renderNotificationPrefsModal();
+    if (modal.classList.contains('open')) return;
+    modal.classList.add('open');
+    lockBodyScroll('notificationPrefsModal');
+}
+
+function closeNotificationPrefsModal() {
+    document.getElementById('notificationPrefsModal').classList.remove('open');
+    unlockBodyScroll('notificationPrefsModal');
+}
+
+function closeNotificationPrefsModalOutside(event) {
+    if (event.target.id === 'notificationPrefsModal') closeNotificationPrefsModal();
+}
+
+/* =========================================================
+   LIBRARY DISPLAY PREFERENCES (show/hide Finished & Stopped)
+   Same device-level storage pattern as notification preferences and
+   the theme setting - purely a display filter on the TV Library's
+   category blocks (see renderTVLibrarySection), never touches the
+   underlying watched/stopped data itself.
+========================================================= */
+const LIBRARY_VISIBILITY_KEY = "novawatch-libraryVisibility";
+const DEFAULT_LIBRARY_VISIBILITY = { showFinished: true, showStopped: true };
+
+function getLibraryVisibilityPrefs() {
+    try {
+        const raw = localStorage.getItem(LIBRARY_VISIBILITY_KEY);
+        if (!raw) return { ...DEFAULT_LIBRARY_VISIBILITY };
+        return { ...DEFAULT_LIBRARY_VISIBILITY, ...JSON.parse(raw) };
+    } catch (e) {
+        return { ...DEFAULT_LIBRARY_VISIBILITY };
+    }
+}
+
+function setLibraryVisibilityPref(key, value) {
+    const prefs = getLibraryVisibilityPrefs();
+    prefs[key] = value;
+    try {
+        localStorage.setItem(LIBRARY_VISIBILITY_KEY, JSON.stringify(prefs));
+    } catch (e) {
+        // Non-fatal - worst case the preference doesn't stick this session.
+    }
+    renderLibraryDisplayModal();
+    // Re-render the TV Library immediately if it's the active page, so
+    // toggling this actually shows/hides the category right away instead
+    // of waiting for the next unrelated refresh.
+    if (document.getElementById("libraryPage").classList.contains("active")) {
+        renderTVLibrarySection();
+    }
+}
+
+const LIBRARY_VISIBILITY_CATEGORIES = [
+    { key: 'showFinished', title: 'Finished', sub: 'Shows that have ended or been cancelled.' },
+    { key: 'showStopped', title: 'Stopped Watching', sub: 'Shows you\'ve chosen to stop watching.' }
+];
+
+function renderLibraryDisplayModal() {
+    const container = document.getElementById('libraryDisplayList');
+    if (!container) return;
+    const prefs = getLibraryVisibilityPrefs();
+
+    container.innerHTML = LIBRARY_VISIBILITY_CATEGORIES.map(cat => {
+        const isOn = !!prefs[cat.key];
+        return `
+            <div class="analytics-card settings-card" style="padding: 14px;">
+                <div class="settings-row" style="padding: 0;">
+                    <div class="settings-row-text">
+                        <div class="settings-row-title">${escapeHTML(cat.title)}</div>
+                        <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
+                    </div>
+                    <button class="hero-pill-btn" style="min-width: 72px; ${isOn ? '' : 'background: var(--surface-2); color: var(--text-muted); box-shadow: none;'}" onclick="setLibraryVisibilityPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function openLibraryDisplayModal() {
+    const modal = document.getElementById('libraryDisplayModal');
+    renderLibraryDisplayModal();
+    if (modal.classList.contains('open')) return;
+    modal.classList.add('open');
+    lockBodyScroll('libraryDisplayModal');
+}
+
+function closeLibraryDisplayModal() {
+    document.getElementById('libraryDisplayModal').classList.remove('open');
+    unlockBodyScroll('libraryDisplayModal');
+}
+
+function closeLibraryDisplayModalOutside(event) {
+    if (event.target.id === 'libraryDisplayModal') closeLibraryDisplayModal();
+}
+
 // True once the signed-in user's library has been fetched at least once
 // this session - lets Home/Library tell "genuinely empty" apart from
 // "still loading" and show a skeleton instead of a misleading empty
@@ -536,10 +663,10 @@ async function requestNotificationPermission() {
         const permission = await Notification.requestPermission();
         checkNotificationPermissionState();
         if (permission === "granted") {
+            // No confirmation notification here on purpose - a notification
+            // whose entire content is "you'll get notifications now" is
+            // pure noise. The toast below is confirmation enough.
             showToast("Notifications enabled successfully!", "success");
-            sendAppNotification("NovaWatch Notifications Active", {
-                body: "You will now receive alerts for upcoming releases and new episodes!"
-            });
         } else {
             showToast("Notification permission denied.", "error");
         }
@@ -765,6 +892,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState !== "visible") return;
+
+        // Runs immediately on every return-to-foreground, regardless of
+        // how long the tab was backgrounded - cheap and local-only (no
+        // network), and mobile browsers throttle setInterval heavily once
+        // a tab is backgrounded, so the 5-minute timer above can't be
+        // trusted alone to catch something that released while this tab
+        // was out of view. Without this, returning to a backgrounded tab
+        // could show the updated "released" state (via refreshActivePage
+        // elsewhere) without ever having actually fired the notification
+        // for it.
+        checkTodaysReleases();
+        refreshActivePage();
+
         if (!auth || !auth.currentUser) return;
 
         const last = getLastLibraryCheck();
@@ -896,19 +1036,139 @@ function getPacificMidnightUTC(dateStr) {
     return getTimezoneAnchorUTC(dateStr, "America/Los_Angeles", 0, 0, -8);
 }
 
-// The one place a movie's release date gets anchored - always the
-// streaming/midnight-Pacific convention, movies have no broadcast/cable
-// concept. TV episode timing (and the whole broadcast/streaming
-// classification, admin-corrections system, and per-episode diagnostic
-// tool that used to exist for it) was removed entirely - see the
-// REWORK NOTE that used to live here for the full history of why. TV
-// episodes simply don't carry a releaseDate anymore; isReleased(date)
-// already treats a missing date as released (see below), so every
-// episode is just treated as available without needing per-episode
-// timing logic of any kind.
+// Anchors a movie's release date - always the streaming/midnight-Pacific
+// convention, movies have no broadcast/cable concept. Also reused below
+// (see getEpisodeReleaseDate) as the streaming-default anchor for TV
+// episodes that aren't on a real broadcast/cable schedule.
 function tmdbDateToISO(dateStr) {
     if (!dateStr) return null;
     return new Date(getPacificMidnightUTC(dateStr)).toISOString();
+}
+
+/* =========================================================
+   TV EPISODE RELEASE TIMING
+   Real per-episode release instants, timezone-correct for every viewer.
+   TV episode timing was fully removed at one point (a long saga: real
+   TVmaze-sourced airtimes -> repeated validation tightening as new edge
+   cases kept surfacing -> pure TMDB-date+convention math -> a manual
+   correction feature -> two abandoned admin-correction systems -> full
+   removal). Brought back deliberately differently this time: rather
+   than trying to force one computed formula to cover every show, this
+   splits by what TVmaze itself says it actually knows -
+
+     - A show TVmaze lists under a real `network` (broadcast/cable) has
+       a genuinely reliable, network-announced local airtime - used
+       as-is (see buildBroadcastTimingMap).
+     - Everything else (a TVmaze `webChannel` entry, or no TVmaze match
+       at all) falls back to the same midnight-Pacific streaming
+       convention movies already use. TVmaze itself does NOT store a
+       trustworthy per-episode time for global streaming shows (their
+       own API returns a fixed noon-UTC placeholder for those) - so
+       there's nothing worth reading from TVmaze for that case, and
+       midnight Pacific is the latest time in the range real streaming
+       platforms actually use (official Netflix/Disney+ policy; most
+       others release earlier in the evening PT). That means this can
+       under-promise (show "not released yet" for a few extra hours on
+       an early-release platform) but never over-promise (claim
+       something's out before it verifiably is, anywhere).
+
+   Only the calendar DATE this produces is meant to be trusted per
+   viewer timezone - not treated as a promise of the exact hour.
+========================================================= */
+const TVMAZE_API_BASE = "https://api.tvmaze.com";
+
+// Resolves a show's TVmaze record (with its full embedded episode list),
+// caching the result on the item itself (`tvmazeId`) so a show only ever
+// gets searched for once. `undefined` = never attempted, `null` =
+// attempted and not found (or TVmaze unreachable) - both simply mean
+// this show stays on the streaming-midnight-Pacific default, same as
+// every TV show did before this feature existed. Never a hard failure -
+// a network error or a show TVmaze doesn't have is a normal outcome
+// here, not something to surface to the user.
+async function resolveTVmazeShow(item, showData, imdbId) {
+    if (item.tvmazeId === null) return null;
+
+    if (typeof item.tvmazeId === 'number') {
+        try {
+            const res = await fetch(`${TVMAZE_API_BASE}/shows/${item.tvmazeId}?embed=episodes`);
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    try {
+        let tvmazeShow = null;
+        if (imdbId) {
+            const res = await fetch(`${TVMAZE_API_BASE}/lookup/shows?imdb=${imdbId}`);
+            if (res.ok) tvmazeShow = await res.json();
+        }
+        // Fallback is a best-effort name search - only reachable when
+        // there's no IMDB id to do an exact lookup with. A loose name
+        // match occasionally being wrong just means that one show keeps
+        // the streaming-default date instead of a real broadcast one -
+        // never worse than the "no TV timing at all" baseline this is
+        // replacing.
+        if (!tvmazeShow) {
+            const res = await fetch(`${TVMAZE_API_BASE}/singlesearch/shows?q=${encodeURIComponent(showData.name || item.title)}`);
+            if (res.ok) tvmazeShow = await res.json();
+        }
+        if (!tvmazeShow || !tvmazeShow.id) {
+            item.tvmazeId = null;
+            return null;
+        }
+        item.tvmazeId = tvmazeShow.id;
+        const epRes = await fetch(`${TVMAZE_API_BASE}/shows/${tvmazeShow.id}?embed=episodes`);
+        if (!epRes.ok) return null;
+        return await epRes.json();
+    } catch (e) {
+        item.tvmazeId = null;
+        return null;
+    }
+}
+
+// A `season+episode -> real anchor instant` lookup, populated only when
+// TVmaze has this show under a real broadcast/cable `network` (not a
+// streaming `webChannel` - see the block comment above for why that
+// half is deliberately never trusted for per-episode time). Empty map
+// for any show that doesn't qualify, which getEpisodeReleaseDate below
+// treats the same as "TVmaze doesn't have this show" - falls straight
+// through to the streaming default.
+function buildBroadcastTimingMap(tvmazeShow) {
+    const map = new Map();
+    if (!tvmazeShow || !tvmazeShow.network) return map;
+    const episodes = tvmazeShow._embedded && tvmazeShow._embedded.episodes;
+    if (!episodes) return map;
+    const timeZone = tvmazeShow.network.country && tvmazeShow.network.country.timezone;
+    if (!timeZone) return map;
+
+    episodes.forEach(ep => {
+        if (!ep.airdate) return;
+        const timeStr = ep.airtime || (tvmazeShow.schedule && tvmazeShow.schedule.time) || '20:00';
+        const parts = timeStr.split(':').map(Number);
+        const hour = Number.isFinite(parts[0]) ? parts[0] : 20;
+        const minute = Number.isFinite(parts[1]) ? parts[1] : 0;
+        // -5 (US Eastern standard time) as the fallback offset if the
+        // browser's Intl support falls through - matches getPacificMidnightUTC's
+        // pattern of a safe fixed guess for the rare non-DST-aware path.
+        const anchor = getTimezoneAnchorUTC(ep.airdate, timeZone, hour, minute, -5);
+        map.set(`s${ep.season}e${ep.number}`, new Date(anchor).toISOString());
+    });
+    return map;
+}
+
+// The one place a TV episode's release date gets anchored. Real
+// broadcast time when the show qualifies for one (see
+// buildBroadcastTimingMap), otherwise the same streaming convention
+// movies use, applied to TMDB's own per-episode air_date.
+function getEpisodeReleaseDate(tmdbEp, seasonNumber, broadcastTimingMap) {
+    const key = `s${seasonNumber}e${tmdbEp.episode_number}`;
+    if (broadcastTimingMap && broadcastTimingMap.has(key)) {
+        return { releaseDate: broadcastTimingMap.get(key), timingSource: 'broadcast' };
+    }
+    if (!tmdbEp.air_date) return { releaseDate: null, timingSource: null };
+    return { releaseDate: tmdbDateToISO(tmdbEp.air_date), timingSource: 'streaming' };
 }
 
 // A season's episode fetch, retried once before giving up on it - a
@@ -928,10 +1188,13 @@ async function fetchTMDBSeason(tmdbId, seasonNumber) {
     return null;
 }
 
-// Builds one standardized episode object from a single TMDB episode - no
-// release-timing fields at all (see the tmdbDateToISO comment above for
-// why TV episode timing was removed entirely).
-function buildEpisodeFields(seasonNumber, ep) {
+// Builds one standardized episode object from a single TMDB episode.
+// `broadcastTimingMap` is optional (omit/pass null for contexts that
+// deliberately skip TVmaze - see the preview-fetch call site) - every
+// episode still gets a streaming-default releaseDate either way, as
+// long as TMDB itself has an air_date for it.
+function buildEpisodeFields(seasonNumber, ep, broadcastTimingMap) {
+    const timing = getEpisodeReleaseDate(ep, seasonNumber, broadcastTimingMap);
     return {
         id: `s${seasonNumber}e${ep.episode_number}`,
         season: seasonNumber,
@@ -940,6 +1203,8 @@ function buildEpisodeFields(seasonNumber, ep) {
         overview: ep.overview || '',
         still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
         runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
+        releaseDate: timing.releaseDate,
+        timingSource: timing.timingSource,
         watched: false,
         watchedAt: null
     };
@@ -957,13 +1222,13 @@ function buildEpisodeFields(seasonNumber, ep) {
 // episodes, completely untouched, instead of being silently dropped (a
 // real, confirmed bug this once caused: a single transient season
 // failure wiping that season's watched history on the very next sync).
-function buildEpisodesFromSeasons(validSeasons, seasonsData, existingEpisodes = null) {
+function buildEpisodesFromSeasons(validSeasons, seasonsData, existingEpisodes = null, broadcastTimingMap = null) {
     const episodes = [];
     validSeasons.forEach((season, i) => {
         const seasonData = seasonsData[i];
         if (seasonData && seasonData.episodes) {
             seasonData.episodes.forEach(ep => {
-                episodes.push(buildEpisodeFields(seasonData.season_number, ep));
+                episodes.push(buildEpisodeFields(seasonData.season_number, ep, broadcastTimingMap));
             });
         } else if (existingEpisodes && existingEpisodes.length > 0) {
             episodes.push(...existingEpisodes.filter(ep => ep.season === season.season_number));
@@ -990,19 +1255,95 @@ function getCountdown(date) {
     return `In ${weeks} weeks`;
 }
 
+// Plain calendar-day formatting of a release instant, in the viewer's own
+// local timezone - the DATE is what's meant to be trusted (see the TV
+// EPISODE RELEASE TIMING block near tmdbDateToISO), not necessarily the
+// exact hour, so this deliberately never displays a time component even
+// though the name is kept for the callers that already reference it.
+function formatDateWithReleaseTime(dateStr) {
+    if (!dateStr) return 'TBA';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'TBA';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// Same plain local-calendar-day formatting, for a non-release timestamp
+// (e.g. when something was watched) - separate name from the above
+// purely so each call site reads clearly for what it's formatting.
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/* =========================================================
+   NOTIFICATION PREFERENCES (customization)
+   Device-level, same storage pattern as the dark-mode setting - which
+   categories of release-day notification the person actually wants.
+   Independent of the browser's own Notification permission: this only
+   filters WHICH notifications get sent once permission is already
+   granted, it doesn't request or track permission itself.
+========================================================= */
+const NOTIFICATION_PREFS_KEY = "novawatch-notificationPrefs";
+const DEFAULT_NOTIFICATION_PREFS = { newEpisodes: true, showPremieres: true, movieReleases: true };
+
+function getNotificationPrefs() {
+    try {
+        const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY);
+        if (!raw) return { ...DEFAULT_NOTIFICATION_PREFS };
+        return { ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(raw) };
+    } catch (e) {
+        return { ...DEFAULT_NOTIFICATION_PREFS };
+    }
+}
+
+function setNotificationPref(key, value) {
+    const prefs = getNotificationPrefs();
+    prefs[key] = value;
+    try {
+        localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs));
+    } catch (e) {
+        // Non-fatal - worst case the preference doesn't stick this session.
+    }
+    renderNotificationPrefsModal();
+}
+
 /* =========================================================
    RELEASE-DAY NOTIFICATIONS
 ========================================================= */
-// Scans the whole library for movies whose release date is exactly
-// `daysOffset` days from today. Movie-only now - TV episodes no longer
-// carry a release date at all (see the tmdbDateToISO comment for why
-// per-episode timing was removed entirely).
+// Scans the whole library for anything - movies AND TV episodes - whose
+// real release instant (see the TV EPISODE RELEASE TIMING block near
+// tmdbDateToISO) falls exactly `daysOffset` days from today, in the
+// viewer's own local calendar. This is the ONLY place a "new episode"/
+// "movie out" notification gets triggered from now - deliberately not
+// the moment TMDB/TVmaze data changes (see refreshItemFromTMDBInternal's
+// comment), since data can appear well before something's actually
+// released. A TV episode's own season 1 / episode 1 counts as a show
+// premiere rather than a plain new episode, so the two can be toggled
+// separately in the notification preferences above.
 function getReleasesForDay(daysOffset = 0) {
     const results = [];
 
     state.library.forEach(item => {
-        if (item.type === 'movie' && item.releaseDate && daysUntil(item.releaseDate) === daysOffset) {
-            results.push({ item, type: 'movie', title: item.title, subtitle: 'Movie Release', date: new Date(item.releaseDate) });
+        if (item.type === 'movie') {
+            if (item.releaseDate && daysUntil(item.releaseDate) === daysOffset) {
+                results.push({ item, type: 'movie', category: 'movieReleases', title: item.title, subtitle: 'Movie Release', date: new Date(item.releaseDate) });
+            }
+        } else if (item.episodes) {
+            item.episodes.forEach(ep => {
+                if (!ep.releaseDate || daysUntil(ep.releaseDate) !== daysOffset) return;
+                const isPremiere = ep.season === 1 && ep.number === 1;
+                results.push({
+                    item,
+                    episode: ep,
+                    type: 'tv',
+                    category: isPremiere ? 'showPremieres' : 'newEpisodes',
+                    title: item.title,
+                    subtitle: `Season ${ep.season} Episode ${ep.number} release`,
+                    date: new Date(ep.releaseDate)
+                });
+            });
         }
     });
 
@@ -1011,13 +1352,16 @@ function getReleasesForDay(daysOffset = 0) {
 
 // Fires a notification for anything releasing today, exactly once per item
 // per day (tracked in localStorage so re-opening the app or re-running the
-// background check doesn't spam the same notification repeatedly).
+// background check doesn't spam the same notification repeatedly), and
+// only for categories the person hasn't turned off in their notification
+// preferences.
 const TODAYS_RELEASE_NOTIFIED_KEY = "novawatch_notifiedReleaseDay";
 
 function checkTodaysReleases() {
     const releases = getReleasesForDay(0);
     if (releases.length === 0) return;
 
+    const prefs = getNotificationPrefs();
     const t = getLocalTodayParts();
     const todayStamp = `${t.y}-${t.m}-${t.d}`;
 
@@ -1034,16 +1378,18 @@ function checkTodaysReleases() {
 
     let changed = false;
     releases.forEach(release => {
+        if (!prefs[release.category]) return;
+
         const releaseId = release.type === 'movie'
             ? `movie:${release.item.id}`
-            : `tv:${release.item.id}:${release.subtitle}`;
+            : `tv:${release.item.id}:${release.episode.id}`;
 
         if (record.ids.includes(releaseId)) return;
 
-        sendAppNotification(
-            release.type === 'movie' ? "Out Today!" : "New Episode Today!",
-            { body: `${release.title} - ${release.subtitle}` }
-        );
+        // Unified title across every category - the body itself carries the
+        // "what" (season/episode for TV, or the movie label), so the title
+        // doesn't need to vary by category on top of that.
+        sendAppNotification("New Release", { body: `${release.title} - ${release.subtitle}` });
         record.ids.push(releaseId);
         changed = true;
     });
@@ -2367,6 +2713,7 @@ function refreshActivePage() {
         if (currentLibraryView === 'movies') renderMovieLibrarySection();
     }
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
+    if (document.getElementById("upcomingPage").classList.contains("active")) renderUpcomingTab();
     updateHomeUI();
     checkAchievements();
 }
@@ -2494,11 +2841,29 @@ async function refreshItemFromTMDBInternal(item) {
                     }
                 } else {
                     // TV Shows: refresh show-level metadata AND the full episode/season list.
-                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+                    // external_ids appended so resolveTVmazeShow() below has an
+                    // IMDB id for an exact TVmaze lookup, without a second round-trip.
+                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
                     const showData = await res.json();
                     if (!showData || !showData.seasons) return { changed: false, failed: false };
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
                     const seasonsData = await Promise.all(validSeasons.map(season => fetchTMDBSeason(item.tmdbId, season.season_number)));
+
+                    // Real per-episode timing (see the TV EPISODE RELEASE TIMING
+                    // block near tmdbDateToISO) - resolved every sync so a show
+                    // that only just got picked up by a network TVmaze tracks
+                    // (or one whose schedule changed) picks that up here, not
+                    // just at add time. resolveTVmazeShow() mutates item.tvmazeId
+                    // as a caching side effect - captured before/after so that
+                    // first-time resolution gets saved even on a sync where
+                    // nothing else about the show happened to change (otherwise
+                    // it'd never persist and every sync would re-search TVmaze
+                    // from scratch, forever).
+                    const prevTvmazeId = item.tvmazeId;
+                    const tvmazeShow = await resolveTVmazeShow(item, showData, showData.external_ids && showData.external_ids.imdb_id);
+                    const broadcastTimingMap = buildBroadcastTimingMap(tvmazeShow);
+                    const tvmazeIdChanged = item.tvmazeId !== prevTvmazeId;
+
                     // BUG FIX (shared logic - see buildEpisodesFromSeasons()):
                     // a season whose fetch still failed even after
                     // fetchTMDBSeason()'s retry falls back to that season's
@@ -2510,17 +2875,22 @@ async function refreshItemFromTMDBInternal(item) {
                     // transient failure for one season out of several used to be
                     // enough to permanently wipe that season's episodes - watched
                     // history included - with no error shown anywhere.
-                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, item.episodes);
+                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, item.episodes, broadcastTimingMap);
 
                     // Merge against the existing episode list: keep each episode's
                     // watched flag (and the date it was watched on - see
-                    // setEpisodeWatched), but pick up any TMDB edit (renamed
-                    // episode, fixed synopsis/still/air date/runtime) and flag
-                    // genuinely new episodes for a notification. This runs on
-                    // every periodic background sync, so skipping the watchedAt
-                    // carryover here would quietly erase every per-episode watch
-                    // date shortly after it was first set.
-                    let hasNewContent = false;
+                    // setEpisodeWatched), but pick up any TMDB/TVmaze edit (renamed
+                    // episode, fixed synopsis/still/air date/runtime/release timing).
+                    // This runs on every periodic background sync, so skipping the
+                    // watchedAt carryover here would quietly erase every
+                    // per-episode watch date shortly after it was first set.
+                    // Deliberately NOT sending a "new episode" notification from
+                    // here - a new entry in TMDB's season data can (and usually
+                    // does) mean an episode TMDB knows about well before it's
+                    // actually released, not an episode that just dropped. The
+                    // day-based checkTodaysReleases() check is what actually
+                    // gates real, on-the-day release notifications now that
+                    // episodes carry a real releaseDate again.
                     let episodesChanged = false;
                     if (item.episodes && item.episodes.length > 0) {
                         const epMap = new Map();
@@ -2537,16 +2907,13 @@ async function refreshItemFromTMDBInternal(item) {
                                     existing.title !== newEp.title ||
                                     existing.overview !== newEp.overview ||
                                     existing.still !== newEp.still ||
-                                    existing.runtime !== newEp.runtime
+                                    existing.runtime !== newEp.runtime ||
+                                    existing.releaseDate !== newEp.releaseDate
                                 ) {
                                     episodesChanged = true;
                                 }
                             } else {
-                                hasNewContent = true;
                                 episodesChanged = true;
-                                sendAppNotification(`New Episode Available!`, {
-                                    body: `${item.title} - S${newEp.season}E${newEp.number}: ${newEp.title}`
-                                });
                             }
                         });
 
@@ -2584,7 +2951,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.numberOfEpisodes !== newEpisodeCount
                     );
 
-                    if (episodesChanged || metadataChanged) {
+                    if (episodesChanged || metadataChanged || tvmazeIdChanged) {
                         if (newEpisodes.length > 0) item.episodes = newEpisodes;
                         item.title = newTitle;
                         item.year = newYear;
@@ -2596,6 +2963,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.rating = newRating;
                         item.numberOfSeasons = newSeasonCount;
                         item.numberOfEpisodes = newEpisodeCount;
+                        // item.tvmazeId was already set in place by resolveTVmazeShow().
 
                         await saveItem(item);
                         changed = true;
@@ -2651,8 +3019,12 @@ async function refreshItemFromTMDBInternal(item) {
    shown, not another country's answer.
 
    Each signed-in user has their own state.region (an ISO 3166-1
-   country code), auto-detected once from the browser's locale and
-   editable any time from the "Streaming region" control on Home - see
+   country code), auto-detected once - via the browser's real
+   Geolocation API when available/granted, reverse-geocoded to a
+   country through a free client-side lookup, falling back to a
+   locale-string guess when geolocation isn't available, is denied, or
+   the reverse-geocode lookup fails for any reason - and editable any
+   time from the "Streaming region" control on Home. See
    detectDefaultRegion(), selectRegion(), and the region-detection
    calls inside proceedToApp().
 ========================================================= */
@@ -2755,11 +3127,14 @@ const REGION_NAMES = {
 const FALLBACK_REGION = 'ZA';
 
 // Best-effort guess from the browser's own locale (e.g. "en-ZA" -> "ZA").
-// This is only ever a starting point - it can easily be wrong (a device
-// left on "en-US" while physically in another country is common), which
-// is exactly why it's stored as an editable, persisted preference rather
-// than re-detected and silently overridden every session.
-function detectDefaultRegion() {
+// This is the FALLBACK path now (see detectDefaultRegion below) - only
+// reached when real device geolocation isn't available, was denied, or
+// its reverse-geocode lookup failed. Still only ever a starting point -
+// it can easily be wrong (a device left on "en-US" while physically in
+// another country is common) - which is exactly why the result is
+// stored as an editable, persisted preference rather than re-detected
+// and silently overridden every session.
+function detectDefaultRegionFromLocale() {
     try {
         const locales = (navigator.languages && navigator.languages.length)
             ? navigator.languages
@@ -2776,6 +3151,60 @@ function detectDefaultRegion() {
         // Ignore - fall through to the static default below.
     }
     return FALLBACK_REGION;
+}
+
+// The real, device-location-based detection path. Uses the browser's own
+// Geolocation API (a permission prompt, same as any site asking for
+// location) rather than just guessing from locale - genuinely knows
+// where the device physically is rather than what language it's set to,
+// which is exactly the case (a device left on the wrong locale) the
+// locale guess above couldn't handle. Country-level accuracy is all
+// that's needed here, so a coarse/network-based fix is fine - no reason
+// to request high-accuracy GPS for this.
+//
+// Reverse-geocoded to a country via BigDataCloud's free client-side
+// reverse-geocode endpoint (no API key, designed for exactly this
+// client-only "coordinates -> country" use case). Every failure mode -
+// no Geolocation API support, the person denies the permission prompt,
+// a timeout, the reverse-geocode call itself failing, or the returned
+// country not being one NovaWatch's region list supports - falls back
+// to the locale guess rather than ever blocking sign-in on this.
+function detectDefaultRegionViaGeolocation() {
+    return new Promise((resolve) => {
+        if (!("geolocation" in navigator)) {
+            resolve(detectDefaultRegionFromLocale());
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                try {
+                    const { latitude, longitude } = position.coords;
+                    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+                    const data = await res.json();
+                    const code = data && data.countryCode ? String(data.countryCode).toUpperCase() : null;
+                    resolve((code && SUPPORTED_REGIONS.includes(code)) ? code : detectDefaultRegionFromLocale());
+                } catch (e) {
+                    resolve(detectDefaultRegionFromLocale());
+                }
+            },
+            () => {
+                // Permission denied, position unavailable, or timed out -
+                // never block sign-in on this, just fall back.
+                resolve(detectDefaultRegionFromLocale());
+            },
+            { enableHighAccuracy: false, timeout: 8000, maximumAge: 3600000 }
+        );
+    });
+}
+
+// The single entry point every call site uses - tries real device
+// geolocation first, falls back to the locale guess for anything that
+// doesn't pan out. Async because the geolocation path is (the prompt
+// and reverse-geocode lookup both take a moment); every call site is
+// already inside an async context, so this is just one more `await`.
+async function detectDefaultRegion() {
+    return await detectDefaultRegionViaGeolocation();
 }
 
 // The single region every TMDB "watch/providers" and cinema-release lookup
@@ -3290,7 +3719,7 @@ async function proceedToApp(user, authScreen, mainApp) {
                         // every single lookup for the rest of this account's
                         // life.
                         if (!state.region) {
-                            state.region = detectDefaultRegion();
+                            state.region = await detectDefaultRegion();
                             await saveUserProfile();
                         }
                     } else {
@@ -3306,7 +3735,7 @@ async function proceedToApp(user, authScreen, mainApp) {
                         if (state.profiles && state.profiles[0] && !state.profiles[0].avatarId) {
                             state.profiles[0].avatarId = randomAvatarId();
                         }
-                        state.region = detectDefaultRegion();
+                        state.region = await detectDefaultRegion();
                         await saveUserProfile();
                     }
                     syncRegionUI();
@@ -3856,11 +4285,15 @@ async function importMediaData(id, type, buttonElement) {
                 buttonElement.className = "search-add-btn added";
                 buttonElement.innerHTML = `<svg class="icon icon-small" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>`;
             }
-            sendAppNotification("Added to Library", { body: `You will be notified when ${movieData.title} releases.` });
+            // No "you'll be notified when it releases" confirmation
+            // notification here on purpose - see the matching note on the
+            // TV add flow below for why.
 
         } else {
             const availabilityPromise = fetchWatchAvailability(id, 'tv');
-            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}`);
+            // external_ids appended for the TVmaze lookup below (an exact
+            // IMDB-id match beats the name-search fallback).
+            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
             const showData = await showRes.json();
 
             if (!showRes.ok || !showData || !showData.id || !showData.name) {
@@ -3887,11 +4320,27 @@ async function importMediaData(id, type, buttonElement) {
             }
 
             let episodes = [];
+            // Stays undefined (not null) unless a TVmaze resolution is
+            // actually attempted below - matches resolveTVmazeShow()'s own
+            // undefined/null distinction, so a show added with no seasons
+            // yet still gets a real attempt on its first background sync
+            // rather than being permanently treated as "already tried".
+            let tvmazeId;
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
                 const seasonsData = await Promise.all(validSeasons.map(season => fetchTMDBSeason(id, season.season_number)));
-                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData);
+
+                // Real per-episode timing, resolved once up front so the show
+                // enters the library with accurate dates immediately instead
+                // of waiting for the first background sync (see the TV
+                // EPISODE RELEASE TIMING block near tmdbDateToISO).
+                const timingContext = { title: showData.name };
+                const tvmazeShow = await resolveTVmazeShow(timingContext, showData, showData.external_ids && showData.external_ids.imdb_id);
+                tvmazeId = timingContext.tvmazeId;
+                const broadcastTimingMap = buildBroadcastTimingMap(tvmazeShow);
+
+                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData, null, broadcastTimingMap);
             }
 
             // Carry watched flags (and the date each was watched on - see
@@ -3938,6 +4387,12 @@ async function importMediaData(id, type, buttonElement) {
                 watchLink: availability.link,
                 contentRating: availability.contentRating
             };
+            // Only set when a TVmaze resolution was actually attempted above -
+            // an omitted key (rather than an explicit `undefined` value) is
+            // what keeps this field out of the Firestore write entirely,
+            // consistent with resolveTVmazeShow()'s own undefined/null
+            // distinction (see its comment).
+            if (typeof tvmazeId !== 'undefined') newShow.tvmazeId = tvmazeId;
 
             state.library.push(newShow);
             await saveItem(newShow);
@@ -3960,7 +4415,11 @@ async function importMediaData(id, type, buttonElement) {
             if (archivedShow) {
                 showToast(`Welcome back! Your watch history for "${showData.name}" was restored.`, "success");
             }
-            sendAppNotification("Added to Library", { body: `You will be notified for new episodes of ${showData.name}.` });
+            // No "you'll be notified..." confirmation notification here on
+            // purpose - a notification whose entire content is "you will get
+            // a notification later" is just noise. The button's own added-
+            // state (checkmark) and the toast above (restore case) already
+            // confirm the add.
         }
     } catch (error) {
         console.error("Error adding media:", error);
@@ -3979,22 +4438,40 @@ function getItem(id) {
     return state.library.find(item => item.id === id);
 }
 
-// "Available" episodes used to mean "released" specifically - now that
-// TV episodes don't carry a release date at all (see the tmdbDateToISO
-// comment), every episode TMDB has is simply available.
+// "Available" means "released" again now that TV episodes carry a real
+// releaseDate (see the TV EPISODE RELEASE TIMING block near
+// tmdbDateToISO). isReleased() already treats a missing/null date as
+// released, so an episode NovaWatch couldn't get any timing data for at
+// all still behaves the same safe way it did before this feature
+// existed, rather than silently vanishing from "available" lists.
 function getAvailableEpisodes(show) {
     if (!show.episodes) return [];
-    return show.episodes;
+    return show.episodes.filter(ep => isReleased(ep.releaseDate));
 }
 
+// Only ever returns a released episode - an aired-but-unwatched one, not
+// a future one still waiting on its release date. This is what "Next:
+// SxEy", Continue Watching, and the up-next highlight in the episode
+// list all key off, so none of them can ever offer to mark a future
+// episode watched.
 function getNextUnwatchedEpisode(show) {
     if (!show.episodes || show.episodes.length === 0) return null;
-    const sortedEps = [...show.episodes]
+    const sortedEps = getAvailableEpisodes(show)
         .sort((a, b) => {
             if (a.season !== b.season) return a.season - b.season;
             return a.number - b.number;
         });
     return sortedEps.find(ep => !ep.watched) || null;
+}
+
+// The soonest not-yet-released episode for a show, if it has one - the
+// TV half of the Upcoming tab (see getUpcomingItems).
+function getNextUpcomingEpisode(show) {
+    if (!show.episodes || show.episodes.length === 0) return null;
+    const upcoming = show.episodes
+        .filter(ep => ep.releaseDate && !isReleased(ep.releaseDate))
+        .sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
+    return upcoming[0] || null;
 }
 
 // Which season the details modal should land on when a show is opened, so
@@ -4140,6 +4617,7 @@ function showPage(page, subType = null, focusSearch = false) {
         }
     }
     if (page === "home") renderHomeTab();
+    if (page === "upcoming") renderUpcomingTab();
 }
 
 // Slides the shared glass capsule under whichever nav button is active,
@@ -4481,14 +4959,16 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
     }));
     const stopped = sortTVShowsByLatestAired(items.filter(item => item.isStopped));
 
+    const visPrefs = getLibraryVisibilityPrefs();
+
     let html = "";
 
     if (inProgress.length > 0) html += renderCategoryBlock("In Progress", inProgress);
     if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", upToDate);
-    if (finished.length > 0) html += renderCategoryBlock("Finished", finished);
+    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
     if (unwatched.length > 0) html += renderCategoryBlock("Unwatched", unwatched);
     if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
-    if (stopped.length > 0) html += renderCategoryBlock("Stopped Watching", stopped);
+    if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", stopped);
 
     if (!html) {
         html = emptyState("No TV Shows Matching", "No TV shows match your search query.");
@@ -4755,6 +5235,123 @@ function renderContinueWatching(containerId = "continueWatchingList") {
     }
 }
 
+/* =========================================================
+   UPCOMING TAB
+   Not-yet-released movies and TV episodes from the library - the
+   mirror image of Continue Watching (what's still ahead, rather than
+   what's already out and unwatched). One row per TV show for its next
+   not-yet-released episode (see getNextUpcomingEpisode), plus every
+   not-yet-released, unwatched movie - sorted soonest first and
+   bucketed into Today/Tomorrow/This Week/Later so it reads like a
+   schedule rather than one long list.
+========================================================= */
+function getUpcomingItems() {
+    const tvShows = state.library.filter(item => item.type !== 'movie' && !item.isStopped);
+    const tvEntries = tvShows
+        .map(show => ({ type: 'tv', item: show, episode: getNextUpcomingEpisode(show) }))
+        .filter(entry => entry.episode !== null);
+
+    const movieEntries = state.library
+        .filter(item => item.type === 'movie' && !item.watched && item.releaseDate && !isReleased(item.releaseDate))
+        .map(item => ({ type: 'movie', item, episode: null }));
+
+    const combined = [...tvEntries, ...movieEntries];
+    combined.sort((a, b) => {
+        const dateA = new Date(a.type === 'tv' ? a.episode.releaseDate : a.item.releaseDate).getTime();
+        const dateB = new Date(b.type === 'tv' ? b.episode.releaseDate : b.item.releaseDate).getTime();
+        return dateA - dateB;
+    });
+    return combined;
+}
+
+// Buckets already-sorted upcoming entries into Today / Tomorrow / This
+// Week / Later, using the same daysUntil() calendar-day math the
+// countdown badges themselves use, so the bucket a card lands in always
+// agrees with the badge printed on it.
+function bucketUpcomingItems(entries) {
+    const buckets = { today: [], tomorrow: [], thisWeek: [], later: [] };
+    entries.forEach(entry => {
+        const date = entry.type === 'tv' ? entry.episode.releaseDate : entry.item.releaseDate;
+        const days = daysUntil(date);
+        if (days <= 0) buckets.today.push(entry);
+        else if (days === 1) buckets.tomorrow.push(entry);
+        else if (days <= 7) buckets.thisWeek.push(entry);
+        else buckets.later.push(entry);
+    });
+    return buckets;
+}
+
+function createUpcomingCard(entry) {
+    const item = entry.item;
+    const episode = entry.episode;
+    const date = entry.type === 'tv' ? episode.releaseDate : item.releaseDate;
+
+    const hasPoster = item.poster && item.poster.trim() !== "";
+    const posterHTML = hasPoster
+        ? `<img src="${tmdbThumb(item.poster, 'w342')}" class="continue-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+        : `<div class="continue-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${continuePlaceholderIcon(entry.type)}</div>`;
+
+    const metaHTML = entry.type === 'tv'
+        ? `<span>S${episode.season}</span><span>•</span><span>E${episode.number}</span><span>•</span><span>${escapeHTML(formatDateWithReleaseTime(date))}</span>`
+        : `<span>${escapeHTML(item.year || 'N/A')}</span><span>•</span><span>Movie</span><span>•</span><span>${escapeHTML(formatDateWithReleaseTime(date))}</span>`;
+
+    const nameHTML = entry.type === 'tv'
+        ? `<div class="continue-episode-name">${escapeHTML(episode.title)}</div>`
+        : '';
+
+    return `
+        <div class="continue-card-wrap">
+            <div class="continue-card upcoming-card" data-id="${item.id}" onclick="openDetails('${item.id}')">
+                ${posterHTML}
+                <div class="continue-body">
+                    <div class="continue-title">${escapeHTML(item.title)}</div>
+                    <div class="continue-meta-line">${metaHTML}</div>
+                    ${nameHTML}
+                </div>
+                <div class="upcoming-countdown-badge" title="${escapeHTML(formatDateWithReleaseTime(date))}">${getCountdown(date)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderUpcomingGroup(title, entries) {
+    return `
+        <div class="continue-group">
+            <div class="continue-group-title"><span>${escapeHTML(title)}</span></div>
+            ${entries.map(entry => createUpcomingCard(entry)).join("")}
+        </div>
+    `;
+}
+
+function renderUpcomingTab() {
+    const container = document.getElementById("upcomingList");
+    if (!container) return;
+
+    if (!libraryLoaded) {
+        setInnerHTMLIfChanged(container, skeletonRows(3));
+        return;
+    }
+
+    const items = getUpcomingItems();
+    if (items.length === 0) {
+        setInnerHTMLIfChanged(container, emptyState(
+            "Nothing Upcoming",
+            "New episodes and movie releases from your library will show up here.",
+            { label: "Browse Discover", onclick: "showPage('discover', null, true)" }
+        ));
+        return;
+    }
+
+    const buckets = bucketUpcomingItems(items);
+    let html = "";
+    if (buckets.today.length > 0) html += renderUpcomingGroup("Today", buckets.today);
+    if (buckets.tomorrow.length > 0) html += renderUpcomingGroup("Tomorrow", buckets.tomorrow);
+    if (buckets.thisWeek.length > 0) html += renderUpcomingGroup("This Week", buckets.thisWeek);
+    if (buckets.later.length > 0) html += renderUpcomingGroup("Later", buckets.later);
+
+    setInnerHTMLIfChanged(container, html);
+}
+
 // Pointer-based swipe-to-dismiss: dragging a card left or right past the
 // threshold triggers an action and lets it fly off; a short drag springs
 // back. A vertical drag (scrolling) is left alone.
@@ -4920,7 +5517,10 @@ async function markContinueItemWatched(type, itemId, epId) {
         if (remaining > 0) {
             showToast(`${remaining} episode${remaining === 1 ? '' : 's'} left in ${item.title}`, 'success');
         } else {
-            showToast(`${item.title} is all caught up!`, 'success');
+            // "Up to date" - same word used for the Library category
+            // (isTVUpToDate) so this toast and that category always agree
+            // on the term for "nothing released left to watch".
+            showToast(`${item.title} is up to date!`, 'success');
         }
     }
 }
@@ -5220,7 +5820,7 @@ async function addModalItemToLibrary() {
 function openShortcutTabFromURL() {
     const params = new URLSearchParams(window.location.search);
     const shortcut = params.get('shortcut');
-    if (!['discover', 'library'].includes(shortcut)) return;
+    if (!['discover', 'library', 'upcoming'].includes(shortcut)) return;
 
     window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
     showPage(shortcut);
@@ -5608,7 +6208,7 @@ function renderEpisodesList(container) {
 
     const seasonEpisodes = currentItem.episodes.filter(ep => ep.season === selectedSeason);
     const nextEp = getNextUnwatchedEpisode(currentItem);
-    const seasonReleasedEpisodes = seasonEpisodes;
+    const seasonReleasedEpisodes = seasonEpisodes.filter(ep => isReleased(ep.releaseDate));
     const seasonFullyWatched = seasonReleasedEpisodes.length > 0 && seasonReleasedEpisodes.every(ep => ep.watched);
     const showSeasonRewatchButton = isCurrentItemInLibrary();
 
@@ -5638,12 +6238,15 @@ function renderEpisodesList(container) {
         <div class="episodes-list">
             ${seasonEpisodes.map(ep => {
                 const hasStill = ep.still && ep.still.trim() !== "";
-                const watchedText = ep.watched ? "Watched" : "Unwatched";
-                const watchedColor = ep.watched ? "var(--success)" : "var(--danger)";
+                const isFuture = !isReleased(ep.releaseDate);
+                // A future episode shows when it's due instead of a
+                // Watched/Unwatched state - it can't be either yet.
+                const watchedText = isFuture ? getCountdown(ep.releaseDate) : (ep.watched ? "Watched" : "Unwatched");
+                const watchedColor = isFuture ? "var(--text-muted)" : (ep.watched ? "var(--success)" : "var(--danger)");
                 const isUpNext = nextEp && nextEp.id === ep.id;
 
                 return `
-                    <div class="episode ${isUpNext ? 'episode-up-next' : ''}" data-ep-id="${ep.id}" onclick="openEpisodeDetails('${ep.id}')">
+                    <div class="episode ${isUpNext ? 'episode-up-next' : ''} ${isFuture ? 'episode-future' : ''}" data-ep-id="${ep.id}" onclick="openEpisodeDetails('${ep.id}')">
                         <div class="episode-main">
                             <div class="episode-left">
                                 ${hasStill ? `
@@ -5655,7 +6258,7 @@ function renderEpisodesList(container) {
                                     <div class="episode-title">E${ep.number} • ${escapeHTML(ep.title)}</div>
                                     <div class="episode-overview">${escapeHTML(ep.overview)}</div>
                                     <div class="episode-meta">
-                                        ${ep.runtime || '45 min'} &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${ep.watched ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
+                                        ${ep.runtime || '45 min'} &bull; <span style="color: ${watchedColor}; font-weight:700;">${watchedText}</span>${(ep.watched && !isFuture) ? ` &bull; <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${ep.id}')">Rewatched \u00d7${ep.rewatchCount || 0}</span>` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -6052,7 +6655,7 @@ async function toggleEntireSeasonWatched(seasonNumber) {
     const seasonEps = currentItem.episodes.filter(ep => ep.season === seasonNumber);
     if (seasonEps.length === 0) return;
 
-    const releasedEps = seasonEps;
+    const releasedEps = seasonEps.filter(ep => isReleased(ep.releaseDate));
     if (releasedEps.length === 0) {
         showToast("No released episodes in this season yet.", "error");
         return;
@@ -6086,7 +6689,7 @@ async function markAllReleasedEpisodesWatched() {
         return;
     }
 
-    const toMark = currentItem.episodes.filter(ep => !ep.watched);
+    const toMark = currentItem.episodes.filter(ep => !ep.watched && isReleased(ep.releaseDate));
     if (toMark.length === 0) {
         showToast("Already up to date.", "success");
         return;
@@ -6122,15 +6725,24 @@ function openEpisodeDetails(epId) {
     
     document.getElementById("episodeModalDescription").textContent = currentEpisode.overview || "No description available.";
     
+    // A future, not-yet-released episode can't be marked watched - the
+    // button instead shows when it's due, matching how the episode list
+    // row itself displays it (see renderEpisodesList).
     const btn = document.getElementById("episodeWatchedToggleBtn");
-    btn.textContent = currentEpisode.watched ? "Mark as Unwatched" : "Mark as Watched";
-    btn.disabled = false;
+    const isFuture = !isReleased(currentEpisode.releaseDate);
+    if (isFuture && !currentEpisode.watched) {
+        btn.textContent = `Releases ${getCountdown(currentEpisode.releaseDate)}`;
+        btn.disabled = true;
+    } else {
+        btn.textContent = currentEpisode.watched ? "Mark as Unwatched" : "Mark as Watched";
+        btn.disabled = false;
+    }
 
-    // Only offer the catch-up shortcut when there's actually an earlier
-    // unwatched episode for it to do anything useful with.
+    // Only offer the catch-up shortcut when there's actually an earlier,
+    // released, unwatched episode for it to do anything useful with.
     const upToHereBtn = document.getElementById("episodeMarkUpToHereBtn");
     const hasEarlierUnwatched = currentItem.episodes.some(ep => {
-        if (ep.watched) return false;
+        if (ep.watched || !isReleased(ep.releaseDate)) return false;
         return ep.season < currentEpisode.season || (ep.season === currentEpisode.season && ep.number <= currentEpisode.number);
     });
     upToHereBtn.style.display = hasEarlierUnwatched ? "flex" : "none";
@@ -6150,10 +6762,15 @@ function openEpisodeDetails(epId) {
 // body scroll permanently locked after closing everything.
 function refreshEpisodeModalMeta() {
     if (!currentEpisode) return;
+    const isFuture = !isReleased(currentEpisode.releaseDate);
     document.getElementById("episodeModalMeta").innerHTML = `
         <span>Season ${currentEpisode.season}</span>
         <span>•</span>
         <span>${currentEpisode.runtime || '45 min'}</span>
+        ${currentEpisode.releaseDate ? `
+            <span>•</span>
+            <span>${escapeHTML(formatDateWithReleaseTime(currentEpisode.releaseDate))}</span>
+        ` : ''}
         ${(currentEpisode.watched && isCurrentItemInLibrary()) ? `
             <span>•</span>
             <span class="rewatch-count-tap" onclick="event.stopPropagation(); openRewatchPopup('${currentEpisode.id}')">Rewatched \u00d7${currentEpisode.rewatchCount || 0}</span>
@@ -6177,6 +6794,11 @@ async function toggleCurrentEpisodeWatched() {
         showToast("Add this to your library first.", "error");
         return;
     }
+    // Defensive - the button is already disabled for this case in
+    // openEpisodeDetails, this just guards any other path to this function.
+    if (!currentEpisode.watched && !isReleased(currentEpisode.releaseDate)) {
+        return;
+    }
     setEpisodeWatched(currentEpisode, !currentEpisode.watched);
     await saveItem(currentItem);
     closeEpisodeModal();
@@ -6196,7 +6818,7 @@ async function markWatchedUpToCurrentEpisode() {
 
     let count = 0;
     currentItem.episodes.forEach(ep => {
-        if (ep.watched) return;
+        if (ep.watched || !isReleased(ep.releaseDate)) return;
         const isUpToHere = ep.season < currentEpisode.season || (ep.season === currentEpisode.season && ep.number <= currentEpisode.number);
         if (isUpToHere) {
             setEpisodeWatched(ep, true);
