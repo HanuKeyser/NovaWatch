@@ -5331,6 +5331,22 @@ function renderUpcomingGroup(title, entries) {
     `;
 }
 
+// TV Shows and Movies are split into their own top-level sections first
+// (different rhythms - a library can easily have a dozen queued TV
+// episodes and zero upcoming movies, or vice versa - mixing them into
+// one undifferentiated list buried that distinction), with the
+// Today/Tomorrow/This Week/Later day-buckets nested inside each type
+// section rather than the other way around.
+function renderUpcomingTypeSection(typeLabel, entries) {
+    const buckets = bucketUpcomingItems(entries);
+    let html = `<div class="section-header"><div class="section-title">${escapeHTML(typeLabel)}</div></div>`;
+    if (buckets.today.length > 0) html += renderUpcomingGroup("Today", buckets.today);
+    if (buckets.tomorrow.length > 0) html += renderUpcomingGroup("Tomorrow", buckets.tomorrow);
+    if (buckets.thisWeek.length > 0) html += renderUpcomingGroup("This Week", buckets.thisWeek);
+    if (buckets.later.length > 0) html += renderUpcomingGroup("Later", buckets.later);
+    return html;
+}
+
 function renderUpcomingTab() {
     const container = document.getElementById("upcomingList");
     if (!container) return;
@@ -5350,12 +5366,12 @@ function renderUpcomingTab() {
         return;
     }
 
-    const buckets = bucketUpcomingItems(items);
+    const tvEntries = items.filter(entry => entry.type === 'tv');
+    const movieEntries = items.filter(entry => entry.type === 'movie');
+
     let html = "";
-    if (buckets.today.length > 0) html += renderUpcomingGroup("Today", buckets.today);
-    if (buckets.tomorrow.length > 0) html += renderUpcomingGroup("Tomorrow", buckets.tomorrow);
-    if (buckets.thisWeek.length > 0) html += renderUpcomingGroup("This Week", buckets.thisWeek);
-    if (buckets.later.length > 0) html += renderUpcomingGroup("Later", buckets.later);
+    if (tvEntries.length > 0) html += renderUpcomingTypeSection("TV Shows", tvEntries);
+    if (movieEntries.length > 0) html += renderUpcomingTypeSection("Movies", movieEntries);
 
     setInnerHTMLIfChanged(container, html);
 }
