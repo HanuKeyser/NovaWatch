@@ -1201,6 +1201,39 @@ img {
     border-color: rgba(52, 199, 89, 0.35);
 }
 
+/* UPCOMING TAB - a read-only variant of the Continue Watching card
+   (same markup family, .continue-card etc.) - nothing to swipe or mark
+   watched on something that hasn't released yet, so this swaps the
+   check button for a small countdown badge instead. */
+.upcoming-card {
+    cursor: pointer;
+}
+
+.upcoming-card .continue-body {
+    padding-right: 66px;
+}
+
+.upcoming-countdown-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--glass-sheen), var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
+    color: var(--blue);
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+html[data-theme="dark"] .upcoming-countdown-badge {
+    color: var(--blue-light);
+}
+
 /* =========================================================
    BOTTOM NAV (Floating Pill)
 ========================================================= */
@@ -1215,7 +1248,7 @@ img {
     height: 70px;
     padding: 7px;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 4px;
     /* The drag-to-switch gesture (initNavBarDragToSwitch in app.js) needs
        to own horizontal pointer movement on this bar itself, rather than
@@ -2066,6 +2099,16 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .episode-up-next {
     background: rgba(0, 102, 204, 0.06);
+}
+
+/* A not-yet-released episode - dimmed so it visually reads as "not here
+   yet" rather than looking identical to a normal unwatched episode. */
+.episode-future {
+    opacity: 0.6;
+}
+
+.episode-future:active {
+    opacity: 0.5;
 }
 
 .episode-main {
