@@ -11,10 +11,29 @@
     -webkit-tap-highlight-color: transparent;
     -ms-overflow-style: none !important;
     scrollbar-width: none !important;
+    /* App-wide: nothing should be selectable via long-press/click-drag,
+       and iOS's long-press text-selection callout menu (Copy/Look Up/
+       Share) shouldn't appear anywhere - this is meant to feel like an
+       installed app, not a web page of selectable text. Scoped per-
+       element rules already existed in a few places (posters, cards,
+       episode rows) before this - this is the same treatment applied
+       globally instead of needing to be remembered per new component.
+       Actual text inputs are explicitly re-enabled right below, since a
+       person still needs to select/copy/paste what THEY type. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 *::-webkit-scrollbar {
     display: none !important;
+}
+
+input,
+textarea {
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 body {
@@ -137,6 +156,14 @@ img {
     align-items: center;
     justify-content: space-between;
     margin: 0 0 14px;
+}
+
+/* When a second type-section header (e.g. "Movies") follows another
+   section's content directly in the DOM (Upcoming tab - see
+   renderUpcomingTypeSection), give it real breathing room from what's
+   above it instead of running straight into the last row. */
+.continue-group + .section-header {
+    margin-top: 28px;
 }
 
 .section-title {
@@ -1201,37 +1228,105 @@ img {
     border-color: rgba(52, 199, 89, 0.35);
 }
 
-/* UPCOMING TAB - a read-only variant of the Continue Watching card
-   (same markup family, .continue-card etc.) - nothing to swipe or mark
-   watched on something that hasn't released yet, so this swaps the
-   check button for a small countdown badge instead. */
-.upcoming-card {
+/* UPCOMING TAB - deliberately NOT boxed cards. A bare listed row per
+   episode/movie, separated from the next by a hairline divider only -
+   no per-row background, border, or shadow - closer to how a native
+   "up next" schedule list reads than a stack of individual glass
+   panels. The poster is the only strong visual element; everything
+   else is quiet text so a long list of upcoming releases doesn't turn
+   into a wall of repeated card chrome. */
+.upcoming-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 2px;
     cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: opacity 0.15s ease;
 }
 
-.upcoming-card .continue-body {
-    padding-right: 66px;
+.upcoming-group .upcoming-row:last-child {
+    border-bottom: none;
 }
 
-.upcoming-countdown-badge {
-    position: absolute;
-    top: 14px;
-    right: 14px;
-    padding: 5px 10px;
-    border-radius: var(--radius-sm);
-    background: var(--glass-sheen), var(--surface-2);
-    border: 1px solid var(--glass-border-subtle);
-    color: var(--blue);
-    font-size: 10.5px;
-    font-weight: 800;
-    letter-spacing: 0.2px;
+.upcoming-row:active {
+    opacity: 0.55;
+}
+
+.upcoming-row-poster {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-xs);
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--surface-2);
+}
+
+.upcoming-row-poster-placeholder {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-xs);
+    flex-shrink: 0;
+    background: var(--surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.upcoming-row-poster-placeholder .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.upcoming-row-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.upcoming-row-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
     white-space: nowrap;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-html[data-theme="dark"] .upcoming-countdown-badge {
+.upcoming-row-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upcoming-row-trailing {
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.upcoming-row-countdown {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: -0.1px;
+    white-space: nowrap;
+}
+
+html[data-theme="dark"] .upcoming-row-countdown {
     color: var(--blue-light);
+}
+
+.upcoming-row-exact-date {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    opacity: 0.55;
+    margin-top: 2px;
+    white-space: nowrap;
 }
 
 /* =========================================================
@@ -1456,10 +1551,15 @@ html[data-theme="dark"] .modal-sheet-compact {
    plain .modal (z-index 200) - without this, stacking among same-z-index
    fixed elements falls back to DOM order, and all three happen to sit
    earlier in the markup than #settingsModal, so they'd render invisibly
-   behind it instead of on top. */
+   behind it instead of on top. Notification Types and Library Display
+   are opened from Settings the exact same way, so they need the same
+   override - without it they were opening "behind" Settings and only
+   becoming visible once Settings itself closed. */
 #avatarPickerModal,
 #achievementsModal,
-#novaWrappedModal {
+#novaWrappedModal,
+#notificationPrefsModal,
+#libraryDisplayModal {
     z-index: 250;
 }
 
