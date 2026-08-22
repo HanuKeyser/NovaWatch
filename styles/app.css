@@ -113,7 +113,7 @@ img {
 }
 
 /* Settings' own inner content wrapper reuses the exact same padding as
-   .page (Home/Discover/Library/Upcoming) - same "outer margin" everywhere
+   .page (Home/Discover/Library) - same "outer margin" everywhere
    the person is - but as its own class rather than reusing .page itself:
    showPage() does `querySelectorAll(".page").forEach(remove "active")`
    globally on every tab switch, which would have permanently hidden
@@ -439,7 +439,6 @@ img {
 .poster img,
 .search-card-poster,
 .continue-poster,
-.upcoming-poster img,
 .poster-picker-item img {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -770,7 +769,7 @@ img {
     grid-template-columns: repeat(3, 1fr);
 }
 
-/* Modern filled-pill segmented control, used on Discover/Library/Upcoming.
+/* Modern filled-pill segmented control, used on Discover/Library.
    Deliberately separate from .search-type-toggle/.search-type-btn so the
    Sign In / Join tabs on the auth screen stay pixel-identical. */
 .segmented-toggle {
@@ -845,7 +844,7 @@ img {
     width: 66px;
     height: 94px;
     /* Was a hardcoded 14px - every other poster thumbnail in the app
-       (Library grid, Discover carousel, Continue Watching, Upcoming)
+       (Library grid, Discover carousel, Continue Watching)
        used a different radius each, so the same conceptual "poster
        thumbnail" visibly changed shape depending which tab it was on.
        Unified to --radius-lg, which tokens.css already documented as
@@ -999,109 +998,6 @@ img {
 .skeleton-grid-item {
     aspect-ratio: 2 / 3;
     border-radius: var(--radius-md);
-}
-
-/* =========================================================
-   UPCOMING CARDS
-========================================================= */
-.upcoming-card {
-    position: relative;
-    display: flex;
-    gap: 14px;
-    padding: 14px 6px;
-    align-items: flex-start;
-    border-radius: var(--radius-md);
-    border: none;
-    box-shadow: none;
-    cursor: pointer;
-    transition: background 0.2s ease, transform 0.15s ease;
-}
-
-.upcoming-card:active {
-    transform: scale(0.98);
-    background: var(--surface-2);
-}
-
-.upcoming-poster {
-    flex: 0 0 66px;
-    width: 66px;
-    height: 94px;
-    overflow: hidden;
-    /* Unified with the rest of the app's poster thumbnails - see the
-       comment on .search-card-poster above. */
-    border-radius: var(--radius-lg);
-    background: var(--surface-2);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-}
-
-.upcoming-poster img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: inherit;
-}
-
-.upcoming-poster-placeholder {
-    width: 100%;
-    height: 100%;
-    padding: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--text-secondary);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.upcoming-info {
-    flex: 1;
-    min-width: 0;
-    padding-right: 34px;
-    padding-top: 2px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-.upcoming-title {
-    font-size: 14.5px;
-    font-weight: 800;
-    letter-spacing: -0.2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.upcoming-date {
-    color: var(--text-secondary);
-    font-size: 11.5px;
-    line-height: 1.5;
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.upcoming-countdown {
-    color: var(--blue);
-    font-weight: 750;
-    font-size: 11px;
-    margin-top: 4px;
-}
-
-.upcoming-group-title {
-    font-size: 12px;
-    font-weight: 800;
-    color: var(--blue);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin: 0 0 12px;
-}
-
-.upcoming-group + .upcoming-group .upcoming-group-title {
-    margin-top: 24px;
 }
 
 /* =========================================================
@@ -2172,6 +2068,13 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: rgba(0, 102, 204, 0.06);
 }
 
+/* Applied to episodes TMDB hasn't released yet (see ep.released) - just
+   a subtle dim, the same visual language the row's own "Not Yet
+   Released" text/color already carries, no date or countdown attached. */
+.episode-not-released {
+    opacity: 0.55;
+}
+
 .episode-main {
     display: flex;
     align-items: center;
@@ -2484,7 +2387,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 /* Appearance reuses the app's standard full-width .segmented-toggle
-   component (same one Library/Discover/Upcoming use) rather than a
+   component (same one Library/Discover use) rather than a
    separate compact toggle - one less one-off component, and more
    breathing room for 3 options than a squeezed inline row gave. Its
    default margin-bottom (meant for a toggle followed by more content
