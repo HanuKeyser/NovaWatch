@@ -1215,7 +1215,7 @@ img {
     height: 70px;
     padding: 7px;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 4px;
     /* The drag-to-switch gesture (initNavBarDragToSwitch in app.js) needs
        to own horizontal pointer movement on this bar itself, rather than
@@ -2066,13 +2066,6 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .episode-up-next {
     background: rgba(0, 102, 204, 0.06);
-}
-
-/* Applied to episodes TMDB hasn't released yet (see ep.released) - just
-   a subtle dim, the same visual language the row's own "Not Yet
-   Released" text/color already carries, no date or countdown attached. */
-.episode-not-released {
-    opacity: 0.55;
 }
 
 .episode-main {
