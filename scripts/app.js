@@ -496,6 +496,13 @@ function renderNotificationPrefsModal() {
 
     container.innerHTML = NOTIFICATION_CATEGORIES.map(cat => {
         const isOn = !!prefs[cat.key];
+        // Same green (on) / red (off) treatment as the Library Display
+        // toggles - one consistent on/off visual language everywhere a
+        // person is choosing to show/receive vs hide/silence something,
+        // rather than each toggle picking its own scheme.
+        const btnStyle = isOn
+            ? 'min-width: 72px; background: var(--green-gradient); color: #fff; box-shadow: none;'
+            : 'min-width: 72px; background: var(--red-gradient); color: #fff; box-shadow: none;';
         return `
             <div class="analytics-card settings-card" style="padding: 14px;">
                 <div class="settings-row" style="padding: 0;">
@@ -503,7 +510,7 @@ function renderNotificationPrefsModal() {
                         <div class="settings-row-title">${escapeHTML(cat.title)}</div>
                         <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
                     </div>
-                    <button class="hero-pill-btn" style="min-width: 72px; ${isOn ? '' : 'background: var(--surface-2); color: var(--text-muted); box-shadow: none;'}" onclick="setNotificationPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
+                    <button class="hero-pill-btn" style="${btnStyle}" onclick="setNotificationPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
                 </div>
             </div>
         `;
@@ -2721,7 +2728,10 @@ function refreshActivePage() {
         if (currentLibraryView === 'movies') renderMovieLibrarySection();
     }
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
-    if (document.getElementById("upcomingPage").classList.contains("active")) renderUpcomingTab();
+    if (document.getElementById("upcomingPage").classList.contains("active")) {
+        if (currentUpcomingView === 'tv') renderUpcomingTVSection();
+        if (currentUpcomingView === 'movies') renderUpcomingMovieSection();
+    }
     updateHomeUI();
     checkAchievements();
 }
@@ -4553,7 +4563,7 @@ function isTVFinished(show) {
 // EPISODE RELEASE TIMING block near tmdbDateToISO). This used to be a
 // "most recently watched" substitute back when TV episodes didn't carry
 // a release date at all - that substitute is gone now that the real
-// thing is available again. Ascending (oldest first).
+// thing is available again. Descending (newest first, oldest last).
 function getLatestAiredEpisodeDate(show) {
     if (!show.episodes || show.episodes.length === 0) return 0;
     const released = show.episodes.filter(ep => ep.releaseDate && isReleased(ep.releaseDate));
@@ -4562,7 +4572,7 @@ function getLatestAiredEpisodeDate(show) {
 }
 
 function sortTVShowsByLatestAired(shows) {
-    return shows.sort((a, b) => getLatestAiredEpisodeDate(a) - getLatestAiredEpisodeDate(b));
+    return shows.sort((a, b) => getLatestAiredEpisodeDate(b) - getLatestAiredEpisodeDate(a));
 }
 
 function sortMoviesByWatchedDate(movies) {
@@ -4618,7 +4628,7 @@ function showPage(page, subType = null, focusSearch = false) {
         }
     }
     if (page === "home") renderHomeTab();
-    if (page === "upcoming") renderUpcomingTab();
+    if (page === "upcoming") setUpcomingView(subType || currentUpcomingView);
 }
 
 // Slides the shared glass capsule under whichever nav button is active,
@@ -4842,11 +4852,6 @@ function setLibraryView(view) {
     if (view === 'movies') renderMovieLibrarySection();
 }
 
-/* =========================================================
-   1. UPCOMING TAB RENDER
-========================================================= */
-// Buckets items into Today / Tomorrow / This Week / Later so the list reads
-// like a schedule instead of one long undifferentiated feed.
 /* =========================================================
    HOME TAB RENDER
 ========================================================= */
@@ -5238,15 +5243,15 @@ function renderContinueWatching(containerId = "continueWatchingList") {
 
 /* =========================================================
    UPCOMING TAB
-   Not-yet-released movies and TV episodes from the library - the
-   mirror image of Continue Watching (what's still ahead, rather than
-   what's already out and unwatched). Every not-yet-released episode for
-   every tracked show (see getUpcomingTVEpisodes - not just the next one
-   per show), plus every not-yet-released, unwatched movie - sorted
-   soonest first and bucketed into Today/Tomorrow/This Week/Later so it
-   reads like a schedule rather than one long list.
+   Not-yet-released movies and TV episodes from the library - split
+   into the same TV Shows/Movies segmented toggle the Library tab uses
+   (setUpcomingView), and rendered with the exact same category-block/
+   poster-grid card components as Library, just bucketed by
+   Today/Tomorrow/This Week/Later instead of watch status. One
+   consistent card system across the app instead of a bespoke design
+   for this one tab.
 ========================================================= */
-// Every not-yet-released TV episode across the whole library, one row
+// Every not-yet-released TV episode across the whole library, one entry
 // per episode - not just the next one per show, so a show with several
 // unreleased episodes queued up (a season mid-air) shows all of them,
 // not just the soonest.
@@ -5278,8 +5283,8 @@ function getUpcomingItems() {
 
 // Buckets already-sorted upcoming entries into Today / Tomorrow / This
 // Week / Later, using the same daysUntil() calendar-day math the
-// countdown badges themselves use, so the bucket a card lands in always
-// agrees with the badge printed on it.
+// countdown captions themselves use, so the bucket a card lands in
+// always agrees with the countdown printed on it.
 function bucketUpcomingItems(entries) {
     const buckets = { today: [], tomorrow: [], thisWeek: [], later: [] };
     entries.forEach(entry => {
@@ -5293,62 +5298,57 @@ function bucketUpcomingItems(entries) {
     return buckets;
 }
 
-function createUpcomingRow(entry) {
+// Same poster-card markup as the Library grid's createCard() - a bare
+// poster, long-press disabled the same way (see the shared .poster
+// selector in app.css) - plus a caption line underneath for what
+// Library cards don't need to show (a show/movie you already added
+// doesn't need its release status spelled out under the poster; an
+// upcoming one does).
+function createUpcomingLibraryCard(entry) {
     const item = entry.item;
     const episode = entry.episode;
     const date = entry.type === 'tv' ? episode.releaseDate : item.releaseDate;
-
     const hasPoster = item.poster && item.poster.trim() !== "";
-    const posterHTML = hasPoster
-        ? `<img src="${tmdbThumb(item.poster, 'w185')}" class="upcoming-row-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
-        : `<div class="upcoming-row-poster-placeholder">${continuePlaceholderIcon(entry.type)}</div>`;
 
-    const metaHTML = entry.type === 'tv'
-        ? `S${episode.season} E${episode.number} &bull; ${escapeHTML(episode.title)}`
-        : `${escapeHTML(item.year || 'N/A')} &bull; Movie`;
+    const placeholderIcon = entry.type === 'movie'
+        ? `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
+        : `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>`;
+
+    const captionHTML = entry.type === 'tv'
+        ? `S${episode.season} E${episode.number} &bull; ${getCountdown(date)}`
+        : getCountdown(date);
 
     return `
-        <div class="upcoming-row" data-id="${item.id}" onclick="openDetails('${item.id}')">
-            ${posterHTML}
-            <div class="upcoming-row-body">
-                <div class="upcoming-row-title">${escapeHTML(item.title)}</div>
-                <div class="upcoming-row-meta">${metaHTML}</div>
+        <div class="card" onclick="openDetails('${item.id}')" data-id="${item.id}" title="${escapeHTML(formatDateWithReleaseTime(date))}">
+            <div class="poster">
+                ${hasPoster ? `
+                    <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
+                ` : `
+                    <div class="poster-placeholder">${placeholderIcon}</div>
+                `}
             </div>
-            <div class="upcoming-row-trailing">
-                <div class="upcoming-row-countdown">${getCountdown(date)}</div>
-                <div class="upcoming-row-exact-date">${escapeHTML(formatDateWithReleaseTime(date))}</div>
+            <div class="card-title">${escapeHTML(item.title)}</div>
+            <div class="upcoming-card-caption">${captionHTML}</div>
+        </div>
+    `;
+}
+
+function renderUpcomingCategoryBlock(title, entries) {
+    return `
+        <div class="category-block">
+            <div class="category-title">
+                <span>${escapeHTML(title)}</span>
+                <span class="category-count">${entries.length}</span>
+            </div>
+            <div class="library-grid">
+                ${entries.map(entry => createUpcomingLibraryCard(entry)).join("")}
             </div>
         </div>
     `;
 }
 
-function renderUpcomingGroup(title, entries) {
-    return `
-        <div class="continue-group">
-            <div class="continue-group-title"><span>${escapeHTML(title)}</span></div>
-            ${entries.map(entry => createUpcomingRow(entry)).join("")}
-        </div>
-    `;
-}
-
-// TV Shows and Movies are split into their own top-level sections first
-// (different rhythms - a library can easily have a dozen queued TV
-// episodes and zero upcoming movies, or vice versa - mixing them into
-// one undifferentiated list buried that distinction), with the
-// Today/Tomorrow/This Week/Later day-buckets nested inside each type
-// section rather than the other way around.
-function renderUpcomingTypeSection(typeLabel, entries) {
-    const buckets = bucketUpcomingItems(entries);
-    let html = `<div class="section-header"><div class="section-title">${escapeHTML(typeLabel)}</div></div>`;
-    if (buckets.today.length > 0) html += renderUpcomingGroup("Today", buckets.today);
-    if (buckets.tomorrow.length > 0) html += renderUpcomingGroup("Tomorrow", buckets.tomorrow);
-    if (buckets.thisWeek.length > 0) html += renderUpcomingGroup("This Week", buckets.thisWeek);
-    if (buckets.later.length > 0) html += renderUpcomingGroup("Later", buckets.later);
-    return html;
-}
-
-function renderUpcomingTab() {
-    const container = document.getElementById("upcomingList");
+function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOnclick) {
     if (!container) return;
 
     if (!libraryLoaded) {
@@ -5356,24 +5356,55 @@ function renderUpcomingTab() {
         return;
     }
 
-    const items = getUpcomingItems();
-    if (items.length === 0) {
-        setInnerHTMLIfChanged(container, emptyState(
-            "Nothing Upcoming",
-            "New episodes and movie releases from your library will show up here.",
-            { label: "Browse Discover", onclick: "showPage('discover', null, true)" }
-        ));
+    if (entries.length === 0) {
+        setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Browse Discover", onclick: emptyOnclick }));
         return;
     }
 
-    const tvEntries = items.filter(entry => entry.type === 'tv');
-    const movieEntries = items.filter(entry => entry.type === 'movie');
-
+    const buckets = bucketUpcomingItems(entries);
     let html = "";
-    if (tvEntries.length > 0) html += renderUpcomingTypeSection("TV Shows", tvEntries);
-    if (movieEntries.length > 0) html += renderUpcomingTypeSection("Movies", movieEntries);
-
+    if (buckets.today.length > 0) html += renderUpcomingCategoryBlock("Today", buckets.today);
+    if (buckets.tomorrow.length > 0) html += renderUpcomingCategoryBlock("Tomorrow", buckets.tomorrow);
+    if (buckets.thisWeek.length > 0) html += renderUpcomingCategoryBlock("This Week", buckets.thisWeek);
+    if (buckets.later.length > 0) html += renderUpcomingCategoryBlock("Later", buckets.later);
     setInnerHTMLIfChanged(container, html);
+}
+
+function renderUpcomingTVSection() {
+    const items = getUpcomingItems().filter(entry => entry.type === 'tv');
+    renderUpcomingBuckets(
+        document.getElementById("upcomingTVCategories"),
+        items,
+        "Nothing Upcoming",
+        "New episodes from your TV shows will show up here.",
+        "showPage('discover', 'tv')"
+    );
+}
+
+function renderUpcomingMovieSection() {
+    const items = getUpcomingItems().filter(entry => entry.type === 'movie');
+    renderUpcomingBuckets(
+        document.getElementById("upcomingMovieCategories"),
+        items,
+        "Nothing Upcoming",
+        "New movie releases from your library will show up here.",
+        "showPage('discover', 'movie')"
+    );
+}
+
+// Same TV Shows/Movies segmented-toggle pattern as setLibraryView.
+let currentUpcomingView = 'tv';
+function setUpcomingView(view) {
+    currentUpcomingView = view;
+
+    document.getElementById("upcomingTabTV").classList.toggle("active", view === 'tv');
+    document.getElementById("upcomingTabMovies").classList.toggle("active", view === 'movies');
+
+    document.getElementById("upcomingViewTV").style.display = view === 'tv' ? 'block' : 'none';
+    document.getElementById("upcomingViewMovies").style.display = view === 'movies' ? 'block' : 'none';
+
+    if (view === 'tv') renderUpcomingTVSection();
+    if (view === 'movies') renderUpcomingMovieSection();
 }
 
 // Pointer-based swipe-to-dismiss: dragging a card left or right past the
