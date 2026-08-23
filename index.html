@@ -41,6 +41,15 @@
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 
+<!-- OneSignal Web SDK - delivers real push notifications even when the
+     app/tab is fully closed (see the ONESIGNAL NOTIFICATIONS block in
+     app.js for the client-side wiring, and the separate server-side
+     scheduled job that actually decides what to send). Requires a real
+     OneSignal App ID before this does anything - see ONESIGNAL_APP_ID
+     in app.js. Safe to leave the placeholder in while that's not set up
+     yet; every call site checks isOneSignalConfigured() first. -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
 <!-- Firebase App & Services CDNs -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -85,6 +94,11 @@
             <div class="auth-actions">
                 <button id="authSignInBtn" class="auth-btn" onclick="handleSignIn()">Sign In</button>
             </div>
+        </div>
+
+        <div class="auth-terms-row" id="authTermsRow" style="display: none;">
+            <input type="checkbox" id="authTermsCheckbox" class="auth-terms-checkbox">
+            <label for="authTermsCheckbox">I agree to the <a href="#" onclick="event.preventDefault(); openPageOverlay('privacy-terms/');">Terms of Service &amp; Privacy Notice</a></label>
         </div>
 
         <div class="auth-divider">
@@ -311,6 +325,10 @@
                     <div>
                         <div class="stat-label" style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Total Watch Time</div>
                         <div id="totalWatchTime" class="stat-value highlight">0 Days, 0 Hours, 0 Minutes</div>
+                        <div id="currentStreakBadge" class="streak-badge inactive">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+                            <span id="currentStreak">No Active Streak</span>
+                        </div>
                     </div>
                 </div>
                 <div id="dashboardStats" class="stats"></div>
@@ -344,11 +362,35 @@
 
     <!-- TV Shows sub-view -->
     <div id="upcomingViewTV" class="library-subview">
+        <div class="library-toolbar">
+            <div class="search-box">
+                <svg class="icon search-icon" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4-4"/>
+                </svg>
+                <input id="upcomingTVSearchInput" type="text" inputmode="search" placeholder="Search upcoming TV shows..." autocomplete="off" enterkeyhint="search">
+                <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingTVSearchInput')" aria-label="Clear search">
+                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
         <div id="upcomingTVCategories"></div>
     </div>
 
     <!-- Movies sub-view -->
     <div id="upcomingViewMovies" class="library-subview" style="display: none;">
+        <div class="library-toolbar">
+            <div class="search-box">
+                <svg class="icon search-icon" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-4-4"/>
+                </svg>
+                <input id="upcomingMovieSearchInput" type="text" inputmode="search" placeholder="Search upcoming movies..." autocomplete="off" enterkeyhint="search">
+                <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingMovieSearchInput')" aria-label="Clear search">
+                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
         <div id="upcomingMovieCategories"></div>
     </div>
 </main>
