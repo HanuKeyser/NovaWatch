@@ -1,0 +1,44 @@
+# Runs send-release-notifications.js once a day, for free, without
+# needing a Firebase Blaze plan upgrade or any other hosting - this is
+# one option, not the only one; any host that can run Node on a
+# schedule works the same way. Delete this file if you'd rather run it
+# somewhere else (a Cloud Function + Cloud Scheduler, a cron job on a
+# server you already have, etc).
+#
+# Before this will do anything, add three repository secrets (this
+# repo's Settings -> Secrets and variables -> Actions -> New repository
+# secret):
+#   FIREBASE_SERVICE_ACCOUNT_JSON  - the full service account JSON, as one string
+#   ONESIGNAL_APP_ID               - same value as ONESIGNAL_APP_ID in scripts/app.js
+#   ONESIGNAL_REST_API_KEY         - from OneSignal dashboard -> Settings -> Keys & IDs
+#
+# The schedule below runs at 13:00 UTC daily - since the script checks
+# each account's own timezone internally (see send-release-notifications.js),
+# the exact time here isn't critical, just that it runs at least once
+# every 24 hours. Adjust the cron expression if you'd rather it run at a
+# different UTC hour.
+
+name: Send release notifications
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install
+
+      - run: node send-release-notifications.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
+          ONESIGNAL_REST_API_KEY: ${{ secrets.ONESIGNAL_REST_API_KEY }}
