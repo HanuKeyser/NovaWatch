@@ -651,20 +651,37 @@ async function checkNotificationPermissionState() {
     const btn = document.getElementById("notificationBtn");
     if (!btn) return;
 
+    // Same green (on) / red (off) language as the Library Display and
+    // Notification Type toggles - this is really the same kind of on/off
+    // status report as those, just reported by the browser instead of a
+    // stored preference. "Unsupported" is neither on nor off (the device
+    // simply can't), so it gets a neutral muted look instead of red -
+    // red should mean "you turned this off," not "this can't work here."
     if (!("Notification" in window)) {
         btn.textContent = "Unsupported";
+        btn.style.background = "var(--surface-2)";
+        btn.style.color = "var(--text-muted)";
+        btn.style.boxShadow = "none";
         btn.disabled = true;
         return;
     }
     if (Notification.permission === "granted") {
         btn.textContent = "Enabled";
+        btn.style.background = "var(--green-gradient)";
         btn.style.color = "white";
+        btn.style.boxShadow = "none";
         btn.disabled = true;
     } else if (Notification.permission === "denied") {
         btn.textContent = "Blocked";
+        btn.style.background = "var(--red-gradient)";
+        btn.style.color = "white";
+        btn.style.boxShadow = "none";
         btn.disabled = true;
     } else {
         btn.textContent = "Enable";
+        btn.style.background = "";
+        btn.style.color = "";
+        btn.style.boxShadow = "";
         btn.disabled = false;
     }
 }
@@ -5298,12 +5315,13 @@ function bucketUpcomingItems(entries) {
     return buckets;
 }
 
-// Same poster-card markup as the Library grid's createCard() - a bare
-// poster, long-press disabled the same way (see the shared .poster
-// selector in app.css) - plus a caption line underneath for what
-// Library cards don't need to show (a show/movie you already added
-// doesn't need its release status spelled out under the poster; an
-// upcoming one does).
+// Same poster-card markup as the Library grid's createCard() - including
+// the same long-press-to-change-poster gesture (these are already-
+// tracked library items, same as a Library card, so the same poster
+// customization makes just as much sense here) - plus a caption line
+// underneath for what Library cards don't need to show (a show/movie
+// you already added doesn't need its release status spelled out under
+// the poster; an upcoming one does).
 function createUpcomingLibraryCard(entry) {
     const item = entry.item;
     const episode = entry.episode;
@@ -5319,8 +5337,16 @@ function createUpcomingLibraryCard(entry) {
         : getCountdown(date);
 
     return `
-        <div class="card" onclick="openDetails('${item.id}')" data-id="${item.id}" title="${escapeHTML(formatDateWithReleaseTime(date))}">
-            <div class="poster">
+        <div class="card" onclick="handleCardClick(event, '${item.id}')" data-id="${item.id}" title="${escapeHTML(formatDateWithReleaseTime(date))}">
+            <div class="poster"
+                 oncontextmenu="return false;"
+                 onmousedown="startPosterPress('${item.id}', '${entry.type}', event)"
+                 onmouseup="endPosterPress()"
+                 onmouseleave="endPosterPress()"
+                 ontouchstart="startPosterPress('${item.id}', '${entry.type}', event)"
+                 ontouchmove="movePosterPress(event)"
+                 ontouchend="endPosterPress()"
+                 ontouchcancel="endPosterPress()">
                 ${hasPoster ? `
                     <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
