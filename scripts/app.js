@@ -292,6 +292,38 @@ const PREMIUM_ACHIEVEMENTS = [
     { id: 'same_week_finish', tier: 'premium', title: 'Binge Finisher', description: 'Finish a show within a week of starting it.', check: (s) => s.sameWeekFinish }
 ];
 
+// Whether a run of consecutive watch-days is still "live" right now -
+// distinct from computeAchievementStats()'s longestStreak, which is an
+// all-time record that never resets even after the streak itself has
+// long since broken. This is the Home tab's "Current Streak" stat
+// instead - 0 the moment a day gets missed, same UTC-calendar-day
+// slicing as watchedAt/lastWatchedAt use everywhere else (see
+// setEpisodeWatched, computeAchievementStats' longestStreak) so this
+// and the streak achievement always agree on where a day boundary
+// falls.
+function getCurrentWatchStreak(watchedDates) {
+    if (!watchedDates || watchedDates.size === 0) return 0;
+
+    const sortedDates = [...watchedDates].sort();
+    const mostRecent = sortedDates[sortedDates.length - 1];
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+
+    // Nothing watched today or yesterday - the streak is broken, not
+    // just "old".
+    if (dayGap(mostRecent, todayStr) > 1) return 0;
+
+    let streak = 1;
+    for (let i = sortedDates.length - 1; i > 0; i--) {
+        if (dayGap(sortedDates[i - 1], sortedDates[i]) === 1) {
+            streak++;
+        } else {
+            break;
+        }
+    }
+    return streak;
+}
+
 function computeAchievementStats() {
     let moviesWatched = 0;
     let showsCompleted = 0;
@@ -496,13 +528,10 @@ function renderNotificationPrefsModal() {
 
     container.innerHTML = NOTIFICATION_CATEGORIES.map(cat => {
         const isOn = !!prefs[cat.key];
-        // Same green (on) / red (off) treatment as the Library Display
-        // toggles - one consistent on/off visual language everywhere a
-        // person is choosing to show/receive vs hide/silence something,
-        // rather than each toggle picking its own scheme.
-        const btnStyle = isOn
-            ? 'min-width: 72px; background: var(--green-gradient); color: #fff; box-shadow: none;'
-            : 'min-width: 72px; background: var(--red-gradient); color: #fff; box-shadow: none;';
+        // Same green (on) / red (off) pill classes used everywhere else
+        // an on/off status is reported (Library Display, the
+        // notification-permission button) - see .hero-pill-btn.pill-on
+        // /.pill-off in app.css.
         return `
             <div class="analytics-card settings-card" style="padding: 14px;">
                 <div class="settings-row" style="padding: 0;">
@@ -510,7 +539,7 @@ function renderNotificationPrefsModal() {
                         <div class="settings-row-title">${escapeHTML(cat.title)}</div>
                         <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
                     </div>
-                    <button class="hero-pill-btn" style="${btnStyle}" onclick="setNotificationPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
+                    <button class="hero-pill-btn ${isOn ? 'pill-on' : 'pill-off'}" onclick="setNotificationPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
                 </div>
             </div>
         `;
@@ -584,13 +613,9 @@ function renderLibraryDisplayModal() {
 
     container.innerHTML = LIBRARY_VISIBILITY_CATEGORIES.map(cat => {
         const isOn = !!prefs[cat.key];
-        // On = green, Off = red - a clearer at-a-glance signal than the
-        // neutral blue/gray used for the notification-type toggles, since
-        // this one is specifically about showing (green) vs hiding (red)
-        // content, not just an arbitrary on/off preference.
-        const btnStyle = isOn
-            ? 'min-width: 72px; background: var(--green-gradient); color: #fff; box-shadow: none;'
-            : 'min-width: 72px; background: var(--red-gradient); color: #fff; box-shadow: none;';
+        // Same on/off pill classes as Notification Types and the
+        // notification-permission button - see
+        // .hero-pill-btn.pill-on/.pill-off in app.css.
         return `
             <div class="analytics-card settings-card" style="padding: 14px;">
                 <div class="settings-row" style="padding: 0;">
@@ -598,7 +623,7 @@ function renderLibraryDisplayModal() {
                         <div class="settings-row-title">${escapeHTML(cat.title)}</div>
                         <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
                     </div>
-                    <button class="hero-pill-btn" style="${btnStyle}" onclick="setLibraryVisibilityPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
+                    <button class="hero-pill-btn ${isOn ? 'pill-on' : 'pill-off'}" onclick="setLibraryVisibilityPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
                 </div>
             </div>
         `;
@@ -647,41 +672,139 @@ let libSearchDebounceTimers = {};
 /* =========================================================
    NOTIFICATIONS SYSTEM
 ========================================================= */
+/* =========================================================
+   ONESIGNAL (real push notifications, even when the app is fully closed)
+   The app's existing notification system (sendAppNotification,
+   checkTodaysReleases) only ever fires while a tab is open or recently
+   backgrounded - there's no way for a plain web app to wake up and
+   notify someone once the browser/app is fully closed. OneSignal
+   handles that: it runs its own push infrastructure, so this device can
+   receive a real push sent from a server at any time.
+
+   This only handles the DEVICE side (subscribing, and tying this device
+   to the signed-in account via OneSignal's "external ID" so a server
+   can target it). It does NOT decide what to send or when - that's a
+   separate, small scheduled server-side job (not part of this client
+   code, since a browser tab can't run on a schedule while closed - see
+   the accompanying server script) that reads each account's library and
+   notification preferences (now synced to Firestore - see
+   getNotificationPrefs/saveUserProfile) and calls OneSignal's REST API.
+
+   Every function here checks isOneSignalConfigured() first, so leaving
+   ONESIGNAL_APP_ID as the placeholder is completely safe - OneSignal
+   simply never initializes, and the app behaves exactly as it did
+   before (foreground/backgrounded-tab notifications only, via the
+   existing system untouched above).
+========================================================= */
+// Replace with the real App ID from OneSignal's dashboard (Settings ->
+// Keys & IDs) once the account exists.
+const ONESIGNAL_APP_ID = "754197a4-aa86-4c1a-bde1-f287f98547a5";
+
+function isOneSignalConfigured() {
+    return !!ONESIGNAL_APP_ID && ONESIGNAL_APP_ID !== "YOUR_ONESIGNAL_APP_ID";
+}
+
+// OneSignal's own queuing mechanism - the SDK script tag loads with
+// `defer`, so window.OneSignal isn't guaranteed to exist yet wherever
+// this is called from. Every OneSignal call in this app goes through
+// this same queue rather than assuming window.OneSignal is ready.
+function withOneSignal(callback) {
+    if (!isOneSignalConfigured()) return;
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(callback);
+}
+
+function initOneSignal() {
+    withOneSignal(async (OneSignal) => {
+        await OneSignal.init({ appId: ONESIGNAL_APP_ID });
+
+        // Keeps the "Stay in the loop" button (checkNotificationPermissionState)
+        // in sync with OneSignal's own subscription state, since that's
+        // the real source of truth for whether push can reach this
+        // device once OneSignal is configured.
+        OneSignal.User.PushSubscription.addEventListener("change", () => {
+            checkNotificationPermissionState();
+        });
+
+        // If someone's already signed in by the time this finishes
+        // initializing (e.g. a fast reload), tie this device to their
+        // account right away rather than waiting for the next sign-in.
+        if (auth && auth.currentUser) oneSignalLogin(auth.currentUser.uid);
+    });
+}
+
+// Associates this device's push subscription with the signed-in
+// person's Firebase uid (OneSignal's "external ID") - this is what lets
+// the server-side push job target a specific NovaWatch account rather
+// than just an anonymous device.
+function oneSignalLogin(uid) {
+    if (!uid) return;
+    withOneSignal(async (OneSignal) => {
+        try {
+            await OneSignal.login(uid);
+        } catch (e) {
+            console.warn("OneSignal login failed:", e);
+        }
+    });
+}
+
+function oneSignalLogout() {
+    withOneSignal(async (OneSignal) => {
+        try {
+            await OneSignal.logout();
+        } catch (e) {
+            console.warn("OneSignal logout failed:", e);
+        }
+    });
+}
+
 async function checkNotificationPermissionState() {
     const btn = document.getElementById("notificationBtn");
     if (!btn) return;
 
-    // Same green (on) / red (off) language as the Library Display and
-    // Notification Type toggles - this is really the same kind of on/off
-    // status report as those, just reported by the browser instead of a
-    // stored preference. "Unsupported" is neither on nor off (the device
-    // simply can't), so it gets a neutral muted look instead of red -
-    // red should mean "you turned this off," not "this can't work here."
+    // Same on/off pill classes as Notification Types and Library
+    // Display - see .hero-pill-btn.pill-on/.pill-off/.pill-neutral in
+    // app.css. "Unsupported" is neither on nor off (the device simply
+    // can't), so it gets the neutral variant instead of red - red
+    // should mean "you turned this off," not "this can't work here."
+    btn.classList.remove("pill-on", "pill-off", "pill-neutral");
+
     if (!("Notification" in window)) {
         btn.textContent = "Unsupported";
-        btn.style.background = "var(--surface-2)";
-        btn.style.color = "var(--text-muted)";
-        btn.style.boxShadow = "none";
+        btn.classList.add("pill-neutral");
         btn.disabled = true;
         return;
     }
+
+    // Once OneSignal is actually configured (see ONESIGNAL_APP_ID), its
+    // own push-subscription state is the real source of truth - it's
+    // what actually determines whether a real push can reach this
+    // device, not just whether the browser's raw permission is granted.
+    // Falls through to the plain Notification API check below until
+    // then, or if this read fails for any reason.
+    if (isOneSignalConfigured() && window.OneSignal && window.OneSignal.User) {
+        try {
+            if (window.OneSignal.User.PushSubscription.optedIn) {
+                btn.textContent = "Enabled";
+                btn.classList.add("pill-on");
+                btn.disabled = true;
+                return;
+            }
+        } catch (e) {
+            // Fall through to the Notification API check below.
+        }
+    }
+
     if (Notification.permission === "granted") {
         btn.textContent = "Enabled";
-        btn.style.background = "var(--green-gradient)";
-        btn.style.color = "white";
-        btn.style.boxShadow = "none";
+        btn.classList.add("pill-on");
         btn.disabled = true;
     } else if (Notification.permission === "denied") {
         btn.textContent = "Blocked";
-        btn.style.background = "var(--red-gradient)";
-        btn.style.color = "white";
-        btn.style.boxShadow = "none";
+        btn.classList.add("pill-off");
         btn.disabled = true;
     } else {
         btn.textContent = "Enable";
-        btn.style.background = "";
-        btn.style.color = "";
-        btn.style.boxShadow = "";
         btn.disabled = false;
     }
 }
@@ -692,9 +815,20 @@ async function requestNotificationPermission() {
         return;
     }
     try {
-        const permission = await Notification.requestPermission();
+        if (isOneSignalConfigured() && window.OneSignal && window.OneSignal.Notifications) {
+            // OneSignal's own requestPermission() drives the same native
+            // browser prompt, then additionally registers the real push
+            // subscription the server-side job needs to actually reach
+            // this device - the plain Notification.requestPermission()
+            // below only gets the prompt, nothing to deliver a closed-app
+            // push through.
+            await window.OneSignal.Notifications.requestPermission();
+        } else {
+            await Notification.requestPermission();
+        }
+
         checkNotificationPermissionState();
-        if (permission === "granted") {
+        if (Notification.permission === "granted") {
             // No confirmation notification here on purpose - a notification
             // whose entire content is "you'll get notifications now" is
             // pure noise. The toast below is confirmation enough.
@@ -819,6 +953,8 @@ function clearSearch(inputId) {
     if (inputId === "onlineSearchInput") fetchForYou();
     if (inputId === "tvLibrarySearchInput") renderTVLibrarySection();
     if (inputId === "movieLibrarySearchInput") renderMovieLibrarySection();
+    if (inputId === "upcomingTVSearchInput") renderUpcomingTVSection();
+    if (inputId === "upcomingMovieSearchInput") renderUpcomingMovieSection();
     if (inputId === "regionSearchInput") filterRegionOptions("");
 }
 
@@ -830,10 +966,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (getSavedThemeMode() === 'auto') setupOSThemeListener();
     syncThemeToggleUI();
 
+    initOneSignal();
+
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
 
-    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'regionSearchInput'];
+    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'upcomingTVSearchInput', 'upcomingMovieSearchInput', 'regionSearchInput'];
     
     searchInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -1311,16 +1449,22 @@ function formatDate(dateStr) {
 
 /* =========================================================
    NOTIFICATION PREFERENCES (customization)
-   Device-level, same storage pattern as the dark-mode setting - which
-   categories of release-day notification the person actually wants.
-   Independent of the browser's own Notification permission: this only
-   filters WHICH notifications get sent once permission is already
-   granted, it doesn't request or track permission itself.
+   Which categories of release-day notification the person actually
+   wants. Synced to Firestore (via saveUserProfile, on state.notificationPrefs)
+   as well as cached in localStorage - previously device-only, but the
+   server-side push job (see the ONESIGNAL NOTIFICATIONS block near
+   sendAppNotification) has no access to localStorage, so this needs to
+   be readable from the person's account doc. localStorage stays as a
+   fast local cache and offline fallback. Independent of the browser's
+   own Notification permission: this only filters WHICH notifications
+   get sent once permission is already granted, it doesn't request or
+   track permission itself.
 ========================================================= */
 const NOTIFICATION_PREFS_KEY = "novawatch-notificationPrefs";
 const DEFAULT_NOTIFICATION_PREFS = { newEpisodes: true, showPremieres: true, movieReleases: true };
 
 function getNotificationPrefs() {
+    if (state.notificationPrefs) return { ...DEFAULT_NOTIFICATION_PREFS, ...state.notificationPrefs };
     try {
         const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY);
         if (!raw) return { ...DEFAULT_NOTIFICATION_PREFS };
@@ -1333,11 +1477,13 @@ function getNotificationPrefs() {
 function setNotificationPref(key, value) {
     const prefs = getNotificationPrefs();
     prefs[key] = value;
+    state.notificationPrefs = prefs;
     try {
         localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs));
     } catch (e) {
         // Non-fatal - worst case the preference doesn't stick this session.
     }
+    saveUserProfile();
     renderNotificationPrefsModal();
 }
 
@@ -1504,7 +1650,22 @@ async function saveUserProfile() {
         const payload = {
             profiles: state.profiles,
             activeProfileId: state.activeProfileId,
-            region: state.region
+            region: state.region,
+            // Synced (not just device-level localStorage) so the
+            // server-side push job (see the ONESIGNAL NOTIFICATIONS block
+            // near sendAppNotification) can read which categories this
+            // person actually wants before sending a real push, and so
+            // the preference now follows them across devices too.
+            notificationPrefs: state.notificationPrefs || getNotificationPrefs(),
+            // The server-side push job has no browser to infer "today"
+            // from the way daysUntil()/getLocalTodayParts() do here - it
+            // needs each account's real IANA timezone to compute their
+            // own local "today" correctly (the whole point of the TV
+            // timing work is that this differs by viewer). Cheap to
+            // compute, no permission needed, so this is refreshed on
+            // every save rather than asked for once and left to go stale
+            // if someone moves/travels.
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
         };
         // Only ever written once state.username is actually known - a
         // blind `username: state.username || null` here would overwrite
@@ -1759,6 +1920,20 @@ async function handleGoogleSignIn() {
         return;
     }
 
+    // Only gated in Join mode - a returning user signing back in via
+    // Google shouldn't be blocked by a consent checkbox they already
+    // agreed to the first time (see setAuthMode, which hides this same
+    // row outside of Join mode). This can't perfectly distinguish a
+    // brand-new Google account started from the Sign In tab, but Join
+    // is the explicit, labeled path for creating an account.
+    if (currentAuthMode === 'signup') {
+        const termsCheckbox = document.getElementById("authTermsCheckbox");
+        if (termsCheckbox && !termsCheckbox.checked) {
+            showToast("Please agree to the Terms of Service & Privacy Notice to continue.", "error");
+            return;
+        }
+    }
+
     try {
         const provider = new firebase.auth.GoogleAuthProvider();
         await auth.signInWithPopup(provider);
@@ -1784,6 +1959,13 @@ function setAuthMode(mode) {
     const usernameInput = document.getElementById("authUsername");
     if (usernameInput) {
         usernameInput.style.display = mode === 'signup' ? '' : 'none';
+    }
+
+    // Same for the Terms/Privacy consent row - only relevant when actually
+    // creating an account, not on a routine returning-user sign-in.
+    const termsRow = document.getElementById("authTermsRow");
+    if (termsRow) {
+        termsRow.style.display = mode === 'signup' ? '' : 'none';
     }
 
     const actionBtn = document.getElementById("authSignInBtn");
@@ -1979,6 +2161,12 @@ async function handleSignUp() {
     // Password must be at least 6 characters
     if (password.length < 6) {
         showPasswordError("Password is too short. It must be at least 6 characters.");
+        return;
+    }
+
+    const termsCheckbox = document.getElementById("authTermsCheckbox");
+    if (termsCheckbox && !termsCheckbox.checked) {
+        showToast("Please agree to the Terms of Service & Privacy Notice to continue.", "error");
         return;
     }
 
@@ -3661,10 +3849,12 @@ if (auth) {
             }
 
             hideVerifyScreen();
+            oneSignalLogin(user.uid);
             await proceedToApp(user, authScreen, mainApp);
         } else {
             hideVerifyScreen();
             hideChooseUsernameScreen();
+            oneSignalLogout();
 
             // User is logged out: Show Auth Screen, Hide Main App
             authScreen.style.display = "flex";
@@ -3939,6 +4129,20 @@ function initSearchPage() {
     if (movieLibInput) {
         movieLibInput.addEventListener("input", () => {
             debounceLibraryFilter("movieLib", () => renderMovieLibrarySection());
+        });
+    }
+
+    const upcomingTVInput = document.getElementById("upcomingTVSearchInput");
+    if (upcomingTVInput) {
+        upcomingTVInput.addEventListener("input", () => {
+            debounceLibraryFilter("upcomingTV", () => renderUpcomingTVSection());
+        });
+    }
+
+    const upcomingMovieInput = document.getElementById("upcomingMovieSearchInput");
+    if (upcomingMovieInput) {
+        upcomingMovieInput.addEventListener("input", () => {
+            debounceLibraryFilter("upcomingMovie", () => renderUpcomingMovieSection());
         });
     }
 
@@ -4886,6 +5090,8 @@ function renderHomeTab() {
     
     let totalWatchedEpisodes = 0;
     let totalMinutes = 0;
+    let totalRewatches = 0;
+    const watchedDates = new Set();
 
     state.library.forEach(item => {
         if (item.type === 'movie') {
@@ -4898,6 +5104,8 @@ function renderHomeTab() {
                 // rewatch time folds into this total rather than getting
                 // its own separate stat.
                 totalMinutes += mins * (1 + rewatches);
+                totalRewatches += rewatches;
+                if (item.lastWatchedAt) watchedDates.add(item.lastWatchedAt.slice(0, 10));
             }
         } else if (item.episodes) {
             let watchedEps = item.episodes.filter(ep => ep.watched);
@@ -4908,6 +5116,8 @@ function renderHomeTab() {
                 const mins = match ? parseInt(match[1], 10) : 45;
                 const rewatches = ep.rewatchCount || 0;
                 totalMinutes += mins * (1 + rewatches);
+                totalRewatches += rewatches;
+                if (ep.watchedAt) watchedDates.add(ep.watchedAt.slice(0, 10));
             });
         }
     });
@@ -4917,6 +5127,12 @@ function renderHomeTab() {
     const minutes = totalMinutes % 60;
     
     document.getElementById("totalWatchTime").textContent = `${days} days, ${hours} hours, ${minutes} minutes`;
+
+    const streakDays = getCurrentWatchStreak(watchedDates);
+    document.getElementById("currentStreak").textContent = streakDays > 0
+        ? `${streakDays} Day${streakDays === 1 ? '' : 's'} Streak`
+        : "No Active Streak";
+    document.getElementById("currentStreakBadge").classList.toggle("inactive", streakDays === 0);
 
     document.getElementById("dashboardStats").innerHTML = `
         <div class="stat">
@@ -4933,6 +5149,11 @@ function renderHomeTab() {
             <svg class="icon stat-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             <div class="stat-value">${totalWatchedEpisodes}</div>
             <div class="stat-label">Episodes</div>
+        </div>
+        <div class="stat">
+            <svg class="icon stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <div class="stat-value">${totalRewatches}</div>
+            <div class="stat-label">Rewatches</div>
         </div>
     `;
 
@@ -4957,7 +5178,16 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
     }
 
     if (!items.length) {
-        setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'tv')" }));
+        // Query-aware: if a search actually filtered everything out, say
+        // that - "your library is empty" is simply false when there ARE
+        // shows in the library and the search just didn't match any of
+        // them. This branch used to always claim the whole library was
+        // empty regardless of why the filtered list came up empty.
+        if (query) {
+            setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
+        } else {
+            setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'tv')" }));
+        }
         return;
     }
 
@@ -5018,7 +5248,14 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
     }
 
     if (!items.length) {
-        setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'movie')" }));
+        // Same query-aware fix as renderTVLibrarySection - "your library
+        // is empty" is false when the library has movies and the search
+        // just didn't match any of them.
+        if (query) {
+            setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
+        } else {
+            setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'movie')" }));
+        }
         return;
     }
 
@@ -5374,7 +5611,7 @@ function renderUpcomingCategoryBlock(title, entries) {
     `;
 }
 
-function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOnclick) {
+function renderUpcomingBuckets(container, entries, query, emptyTitle, emptySub, emptyOnclick, matchingTitle, matchingSub) {
     if (!container) return;
 
     if (!libraryLoaded) {
@@ -5383,7 +5620,14 @@ function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOn
     }
 
     if (entries.length === 0) {
-        setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Browse Discover", onclick: emptyOnclick }));
+        // Same query-aware distinction as the Library empty states -
+        // "nothing upcoming at all" and "your search matched nothing"
+        // are different situations and shouldn't share one message.
+        if (query) {
+            setInnerHTMLIfChanged(container, emptyState(matchingTitle, matchingSub));
+        } else {
+            setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Browse Discover", onclick: emptyOnclick }));
+        }
         return;
     }
 
@@ -5397,24 +5641,40 @@ function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOn
 }
 
 function renderUpcomingTVSection() {
-    const items = getUpcomingItems().filter(entry => entry.type === 'tv');
+    const searchInput = document.getElementById("upcomingTVSearchInput");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+    let items = getUpcomingItems().filter(entry => entry.type === 'tv');
+    if (query) items = items.filter(entry => entry.item.title.toLowerCase().includes(query));
+
     renderUpcomingBuckets(
         document.getElementById("upcomingTVCategories"),
         items,
+        query,
         "Nothing Upcoming",
         "New episodes from your TV shows will show up here.",
-        "showPage('discover', 'tv')"
+        "showPage('discover', 'tv')",
+        "No TV Shows Matching",
+        "No upcoming TV shows match your search query."
     );
 }
 
 function renderUpcomingMovieSection() {
-    const items = getUpcomingItems().filter(entry => entry.type === 'movie');
+    const searchInput = document.getElementById("upcomingMovieSearchInput");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+    let items = getUpcomingItems().filter(entry => entry.type === 'movie');
+    if (query) items = items.filter(entry => entry.item.title.toLowerCase().includes(query));
+
     renderUpcomingBuckets(
         document.getElementById("upcomingMovieCategories"),
         items,
+        query,
         "Nothing Upcoming",
         "New movie releases from your library will show up here.",
-        "showPage('discover', 'movie')"
+        "showPage('discover', 'movie')",
+        "No Movies Matching",
+        "No upcoming movies match your search query."
     );
 }
 
@@ -7334,8 +7594,19 @@ updateOfflineBanner();
 ========================================================= */
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js").catch(err => {
-            console.warn("Service worker registration failed:", err);
-        });
+        // Once OneSignal is configured (see ONESIGNAL_APP_ID), its SDK
+        // registers its own combined service worker itself
+        // (OneSignalSDKWorker.js at the site root, which importScripts
+        // both OneSignal's worker code and this app's own
+        // service-worker.js - see that file's header comment). A second,
+        // separate registration of service-worker.js directly here would
+        // fight it for control of the same scope. Only register directly
+        // while OneSignal isn't set up yet, so offline caching and
+        // installability still work before that's configured.
+        if (!isOneSignalConfigured()) {
+            navigator.serviceWorker.register("service-worker.js").catch(err => {
+                console.warn("Service worker registration failed:", err);
+            });
+        }
     });
 }
