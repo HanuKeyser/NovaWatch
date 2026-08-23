@@ -10,21 +10,29 @@ Live at `https://www.novawatch.site/`. Mobile-first by design — no desktop/tab
 
 ```
 / (novawatch.site root)
-├── index.html              The app itself — auth, Home/Discover/Library tabs,
-│                            Settings, and every modal (including NovaWrapped)
+├── index.html              The app itself — auth, Home/Discover/Library/Upcoming
+│                            tabs, Settings, and every modal (including NovaWrapped)
 ├── manifest.json           PWA manifest — installability, icons, home-screen shortcuts
 ├── service-worker.js       Offline app-shell caching + notification click handling
+├── OneSignalSDKWorker.js   Combines OneSignal's push service worker with the one
+│                            above, once OneSignal is configured (see Notifications
+│                            below) — inert, harmless to deploy even before then
 ├── styles/
 │   ├── tokens.css          Shared design tokens (colors, light/dark palette) — the one
 │   │                       source both HTML pages link, so they can't drift apart
 │   └── app.css             index.html's component styles
 ├── scripts/
-│   └── app.js              index.html's application logic (~6,600 lines, classic script —
+│   └── app.js              index.html's application logic (~7,600 lines, classic script —
 │                            not type="module", since the markup calls global functions
 │                            directly via inline onclick="...")
-└── privacy-terms/
-    └── index.html          Privacy Notice & Terms of Service, opened in-app as a full-
-                             screen overlay (openPageOverlay('privacy-terms/'))
+├── privacy-terms/
+│   └── index.html          Privacy Notice & Terms of Service, opened in-app as a full-
+│                            screen overlay (openPageOverlay('privacy-terms/'))
+├── send-release-notifications.js  Server-side scheduled job — not loaded by the app
+│                            itself — that decides what to notify about and sends via
+│                            OneSignal. See PUSH_NOTIFICATIONS_SETUP.md.
+└── .github/workflows/release-notifications.yml  Optional free daily schedule for the
+                             script above, via GitHub Actions
 ```
 
 `privacy-terms/index.html` deploys one folder level deeper than `index.html` (i.e. `novawatch.site/privacy-terms/`) and links `styles/tokens.css` as `../styles/tokens.css` to account for that. It also keeps its own copies of a handful of `app.css` component classes (`.analytics-card`, `.section-title`, `.section-header`) so it matches the rest of the app's visual language without linking the full stylesheet, whose global `body`/`h1`/`a` rules are tuned for the app shell specifically.
@@ -58,7 +66,7 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Library & search** — TMDB-backed search; add movies/TV shows; mark watched with a single tap (no rating/reaction popup in the way).
 
-**Rewatch tracking** — per-episode for TV, per-title for movies, via a tap-to-manage popup (Add/Remove Rewatch) rather than a one-way counter. Unwatching something clears its rewatch history. A season can also be bulk-rewatched (or have its rewatches cleared) once every released episode in it has been watched at least once — gated behind a long-press on that season's tab, or the "Mark All Released Episodes Watched" button for the whole show at once.
+**Rewatch tracking** — per-episode for TV, per-title for movies, via a tap-to-manage popup (Add/Remove Rewatch) rather than a one-way counter. Unwatching something clears its rewatch history. A season can also be bulk-rewatched (or have its rewatches cleared) once every released episode in it has been watched at least once — gated behind a long-press on that season's tab, or the "Mark All Episodes Watched" button for the whole show at once.
 
 **Opening a TV show's details** — lands on the season containing the next released-but-unwatched episode (`getCurrentSeasonForShow`) and auto-scrolls the episode list straight to that row, rather than opening at the top of Season 1 and leaving the person to hunt for where they left off. A caught-up show lands on the season of its most recently watched episode instead. A show with nothing released and unwatched yet (nothing to scroll to) simply opens at the top, same as it always did.
 
@@ -76,7 +84,7 @@ Only the calendar DATE this produces is meant to be trusted per viewer timezone 
 
 **Collection/franchise info** — for movies that TMDB has flagged as belonging to a collection (e.g. "Part of The Dark Knight Collection"), shown in the details modal. Movie-only; TV doesn't have an equivalent concept in TMDB.
 
-**Viewing Analytics** (Home) — total watch time (including rewatch passes) and counts of watched movies/shows/episodes.
+**Viewing Analytics** (Home) — total watch time (including rewatch passes), with a current-streak badge underneath it (consecutive calendar days with at least one watch/rewatch logged - resets to zero the moment a day is missed, distinct from the all-time-record "longest streak" the streak achievements track - lit orange while live, a neutral muted pill when there's no active streak), and counts of watched movies/shows/episodes/rewatches in the tile grid below.
 
 **Achievements** — computed client-side from library data on every load, not stored as separate synced records; only the small "which ones are unlocked" array is persisted. Bidirectional — unwatching something can revoke an achievement it had unlocked, not just grant new ones. Four free-tier achievements are currently active (10 movies watched, 10 shows completed, a 7-day watch streak, first rewatch logged); a second, larger premium tier exists in code (`PREMIUM_ACHIEVEMENTS`) but isn't switched on.
 
@@ -84,13 +92,17 @@ Only the calendar DATE this produces is meant to be trusted per viewer timezone 
 
 **Unique usernames & display names** — every account reserves a unique, lowercase-only username (`[a-z0-9._]`, 3–20 characters), chosen at signup or via a blocking "Choose a username" screen for Google sign-in / any pre-existing account without one. Separate from that is a freely-editable **display name**, shown everywhere in the UI instead of the username — both are visible together in Settings (`Display Name` / `@username`). See `firestore-rules.md` for how username uniqueness is actually enforced.
 
-**Settings** — reachable via the button on Home's identity card, which becomes a close (X) button while Settings is open. Covers appearance, streaming region, notifications (including Notification Types and Library Display sub-screens), achievements, NovaWrapped, sign-out, account deletion, and Privacy & Terms. Structurally matches every other tab (same padding, same section-title sizing, same spacing rhythm) rather than being a visually separate design.
+**Settings** — reachable via the button on Home's identity card, which becomes a close (X) button while Settings is open. Organized into three sections: **Preferences** (appearance, streaming region), **Notifications** (enable, Notification Types), and **Library** (Library Display, achievements) — plus NovaWrapped, sign-out, account deletion, and Privacy & Terms below those. Structurally matches every other tab (same padding, same section-title sizing, same spacing rhythm) rather than being a visually separate design.
 
 **Streaming region** — a full ISO 3166-1 country picker, still fully manual and editable at any time; auto-detected on first sign-in via the browser's real Geolocation API (reverse-geocoded to a country through a free client-side lookup) when available and granted, falling back to a locale-string guess for every failure mode - no geolocation support, permission denied, a timed-out/failed lookup, or an unsupported country. Drives which "where to watch" info TMDB/JustWatch returns.
 
 **Dark mode** — a three-way Light/Dark/Auto toggle in Settings. Saved to `localStorage` (device-level, not synced across devices) and applied before first paint via an inline script in each page's `<head>`, so there's no light-then-dark flash. Auto follows the OS setting live via a `matchMedia` listener.
 
-**Notifications** — opt-in browser notifications for new episodes, show premieres, and movie releases, requested from the same Settings row. Only ever fires on the actual release day (an exact per-item day check against the item's real release instant, deduplicated so the same item never re-notifies the same day) - never at the moment TMDB/TVmaze data merely mentions something, and never for episodes that were already out when a show was added, since a freshly-added show's full episode list is already in hand at add time. Every category shares one notification title, "New Release" — the body carries the specifics ("Show Name - Season X Episode X release" for TV, "Movie Name - Movie Release" for movies). A separate "Notification Types" row lets each category (New Episodes / Show Premieres / Movie Releases) be turned off independently, stored device-side the same way the theme preference is. No "you'll be notified..." confirmation notifications anywhere - enabling notifications or adding an item only ever shows a toast/button-state change, not a notification whose entire content is announcing a future notification. The "Stay in the loop" button itself, and every other on/off-style status in the app (Notification Types, Library Display), share one green (on/enabled) / red (off/blocked) visual language - a device that can't support notifications at all shows a neutral muted state instead of red, since that's a device limitation, not something the person chose to turn off.
+**Notifications** — opt-in, for new episodes, show premieres, and movie releases, requested from the same Settings row. Two delivery paths, layered:
+- **Foreground/backgrounded tab** — the original mechanism: fires locally while a tab is open or was recently open, via an exact per-item day check against the item's real release instant, deduplicated so the same item never re-notifies the same day. Works with no setup.
+- **Real push, even when the app is fully closed** — via OneSignal (`ONESIGNAL_APP_ID` in `scripts/app.js`), inert until that's actually configured (see `PUSH_NOTIFICATIONS_SETUP.md`). The client only handles subscribing a device and tying it to the account; a separate server-side script (`send-release-notifications.js`, not loaded by the app) does the actual "what to send, to whom, today" decision on a schedule, since a closed browser tab can't run anything itself.
+
+Never at the moment TMDB/TVmaze data merely mentions something, and never for episodes that were already out when a show was added, since a freshly-added show's full episode list is already in hand at add time. Every category shares one notification title, "New Release" — the body carries the specifics ("Show Name - Season X Episode X release" for TV, "Movie Name - Movie Release" for movies) — on both delivery paths. A separate "Notification Types" row lets each category (New Episodes / Show Premieres / Movie Releases) be turned off independently; synced to Firestore (not just device-side) so the server-side path can read the same preferences. No "you'll be notified..." confirmation notifications anywhere - enabling notifications or adding an item only ever shows a toast/button-state change, not a notification whose entire content is announcing a future notification. The "Stay in the loop" button itself, and every other on/off-style status in the app (Notification Types, Library Display), share one green (on/enabled) / red (off/blocked) visual language - a device that can't support notifications at all shows a neutral muted state instead of red, since that's a device limitation, not something the person chose to turn off.
 
 **Library Display** (Settings) — Finished, Unwatched, and Stopped Watching (the three TV Library categories that hide content the person is done with, hasn't started, or chose to stop, one way or another) can each be shown or hidden independently - on (green) by default, off (red) once the person turns one off - stored device-side the same way notification preferences are. Purely a display filter - hiding a category never touches the underlying watched/stopped data, it just skips rendering that category block.
 
@@ -98,7 +110,7 @@ Only the calendar DATE this produces is meant to be trusted per viewer timezone 
 
 **PWA install shortcuts** — long-pressing the installed app's icon offers Discover/Library/Upcoming as direct shortcuts (Home is skipped, since it's already the default landing).
 
-**Upcoming** (4th bottom-nav tab) — every not-yet-released movie and TV episode from the library (every queued-up episode per show, not just the next one). Same structure as Library: a TV Shows/Movies segmented toggle (`setUpcomingView`), each sub-view rendered with the exact same category-block/poster-grid card component Library uses (including the same long-press-to-change-poster gesture, since these are already-tracked library items), just bucketed by Today/Tomorrow/This Week/Later instead of watch status. Each card adds one single-line caption under the title (season/episode + countdown, or just the countdown for movies) since an upcoming item needs its release status spelled out in a way an already-added Library item doesn't. Tapping a card opens the usual details modal.
+**Upcoming** (4th bottom-nav tab) — every not-yet-released movie and TV episode from the library (every queued-up episode per show, not just the next one). Same structure as Library: a TV Shows/Movies segmented toggle (`setUpcomingView`), the same search box per sub-view (filters by title, same debounce), each sub-view rendered with the exact same category-block/poster-grid card component Library uses (including the same long-press-to-change-poster gesture, since these are already-tracked library items), just bucketed by Today/Tomorrow/This Week/Later instead of watch status. Each card adds one single-line caption under the title (season/episode + countdown, or just the countdown for movies) since an upcoming item needs its release status spelled out in a way an already-added Library item doesn't. Tapping a card opens the usual details modal.
 
 **Bottom navigation** — a floating "Liquid Glass" pill bar, 4 tabs (Home/Discover/Library/Upcoming). Supports both tapping a tab and dragging a finger across the bar to switch tabs, with the pill indicator tracking the finger continuously during a drag and settling into place on release. The indicator measures whichever button is active at render time, so it isn't hardcoded to any particular tab count.
 
