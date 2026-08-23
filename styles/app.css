@@ -213,6 +213,14 @@ img {
     gap: 10px;
 }
 
+/* Home's Viewing Analytics has a 4th tile (Rewatches) that NovaWrapped's
+   3-tile version of this same .stats layout doesn't - scoped to just
+   this one instance rather than changing the shared 3-column default,
+   which NovaWrapped still needs. */
+#dashboardStats.stats {
+    grid-template-columns: repeat(2, 1fr);
+}
+
 .stat {
     padding: 16px 10px;
     text-align: center;
@@ -249,6 +257,41 @@ img {
     color: var(--blue);
     margin-top: 2px;
     letter-spacing: -0.3px;
+}
+
+/* A small accent badge under the hero number, not a second hero row -
+   a "current streak" is a lighter, secondary fact next to total watch
+   time, and the app's own badge/pill language (countdown badges,
+   category counts) is already the established way to surface a
+   supporting number without competing with the primary metric next to
+   it. Orange (fire) while a streak is actually live; a muted neutral
+   version when there isn't one, same "not active" treatment already
+   used for the Unsupported notification-permission state. */
+.streak-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 999px;
+    background: var(--glass-sheen), var(--orange-gradient);
+    color: white;
+    font-size: 11.5px;
+    font-weight: 800;
+    letter-spacing: -0.1px;
+    box-shadow: 0 4px 10px rgba(255, 149, 0, 0.25);
+}
+
+.streak-badge .icon {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.streak-badge.inactive {
+    background: var(--glass-sheen), var(--surface-2);
+    color: var(--text-muted);
+    box-shadow: none;
 }
 
 /* =========================================================
@@ -2473,6 +2516,34 @@ html[data-theme="dark"] .modal-sheet-compact {
     transform: scale(0.96);
 }
 
+/* Reusable on/off/neutral variants of the same pill - used anywhere a
+   status is reported as active/enabled (green), off/blocked (red), or
+   simply unavailable rather than chosen (neutral) - Notification Types,
+   Library Display, and the notification-permission button all share
+   these rather than each hand-rolling its own colors. Same sheen+
+   gradient layering and glow shadow recipe as the default blue pill
+   (see .hero-pill-btn above), just recolored - dropping the sheen
+   layer here would make these look like a flat color chip sitting next
+   to every other genuinely-glass control in the app. */
+.hero-pill-btn.pill-on {
+    min-width: 72px;
+    background: var(--glass-sheen), var(--green-gradient);
+    box-shadow: 0 8px 20px rgba(52, 199, 89, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.hero-pill-btn.pill-off {
+    min-width: 72px;
+    background: var(--glass-sheen), var(--red-gradient);
+    box-shadow: 0 8px 20px rgba(255, 59, 48, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+
+.hero-pill-btn.pill-neutral {
+    min-width: 72px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    box-shadow: none;
+}
+
 /* The region control itself is just .hero-pill-btn with a max-width/ellipsis
    so a long country name (e.g. "United Arab Emirates") can't blow out the
    hero card's layout - the actual picker is a bottom sheet below, styled
@@ -2712,6 +2783,41 @@ html[data-theme="dark"] .avatar-edit-badge {
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 700;
+}
+
+/* Consent checkbox for account creation - shown only in Join mode (see
+   setAuthMode) since a routine returning-user sign-in doesn't need it
+   re-shown every time. */
+.auth-terms-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 0 2px;
+}
+
+.auth-terms-checkbox {
+    flex-shrink: 0;
+    width: 17px;
+    height: 17px;
+    margin-top: 1px;
+    accent-color: var(--blue);
+}
+
+.auth-terms-row label {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+.auth-terms-row a {
+    color: var(--blue);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.auth-terms-row a:hover {
+    text-decoration: underline;
 }
 
 .auth-divider::before,
