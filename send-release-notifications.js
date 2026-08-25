@@ -60,6 +60,27 @@ function utcDateString(date) {
     return date.toISOString().slice(0, 10);
 }
 
+// True if it's currently somewhere in the 8:00-8:59 local hour for this
+// timezone. 08:00 UTC is the base anchor for when notifications go out,
+// adjusted per account rather than firing everyone's at the same UTC
+// instant regardless of where they actually are - this is the actual
+// mechanism behind that (see the hourly schedule in
+// .github/workflows/release-notifications.yml, and the call site in
+// run() below).
+function isLocal8AMHour(timeZone) {
+    try {
+        const hourStr = new Date().toLocaleString('en-US', { timeZone, hour: '2-digit', hour12: false });
+        const hour = parseInt(hourStr, 10) % 24; // toLocaleString can return "24" for midnight in some locales
+        return hour === 8;
+    } catch (e) {
+        // An unrecognized timezone string (shouldn't happen - it's
+        // always Intl's own resolvedOptions().timeZone from the client)
+        // falls back to matching on 08:00 UTC specifically, rather than
+        // silently never notifying that account at all.
+        return new Date().getUTCHours() === 8;
+    }
+}
+
 // Same local-calendar-day comparison as daysUntil() in app.js, just for
 // an arbitrary IANA timezone (each account's own stored timeZone - see
 // saveUserProfile in app.js) instead of always the browser's. This is
@@ -203,14 +224,12 @@ function hasContinueWatchingBacklog(libraryItems) {
 // above). Two independent checks, each with its own dedup/cooldown so
 // neither turns into a daily nag - see that function's own comment for
 // why each condition is what it is.
-async function checkEngagementRemindersForUser(uid, libraryItems, prefs, todayStr) {
-    if (!prefs.streakReminders && !prefs.continueWatchingReminders) return;
-
+async function checkEngagementRemindersForUser(uid, libraryItems, todayStr) {
     const watchedDates = buildWatchedDatesSet(libraryItems);
     const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
     const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 
-    if (prefs.streakReminders && mostRecentWatch && mostRecentWatch !== todayStr) {
+    if (mostRecentWatch && mostRecentWatch !== todayStr) {
         const streak = getCurrentWatchStreak(watchedDates);
         if (streak > 0) {
             const notifiedRef = db.collection('users').doc(uid).collection('_internal').doc('notifiedReleases');
@@ -230,7 +249,7 @@ async function checkEngagementRemindersForUser(uid, libraryItems, prefs, todaySt
         }
     }
 
-    if (prefs.continueWatchingReminders && hasContinueWatchingBacklog(libraryItems)) {
+    if (hasContinueWatchingBacklog(libraryItems)) {
         const daysSinceLastWatch = mostRecentWatch ? dayGap(mostRecentWatch, todayStr) : Infinity;
 
         if (daysSinceLastWatch >= 3) {
@@ -270,7 +289,14 @@ async function run() {
         // refreshes it), which is still far better than never notifying
         // that account at all.
         const timeZone = userData.timeZone || 'UTC';
-        const prefs = userData.notificationPrefs || { newEpisodes: true, showPremieres: true, movieReleases: true, streakReminders: true, continueWatchingReminders: true };
+
+        // 08:00 UTC is the reference anchor, adjusted to each account's
+        // own local time rather than sending everyone's notifications at
+        // the same UTC instant regardless of where they are - this job
+        // runs hourly (see the workflow), but a given account is only
+        // ever actually processed during the one run each day that lands
+        // on ITS OWN local 8am hour.
+        if (!isLocal8AMHour(timeZone)) { skipped++; continue; }
 
         const librarySnapshot = await db.collection('users').doc(uid).collection('library').get();
         const libraryItems = librarySnapshot.docs.map(d => d.data());
@@ -282,7 +308,7 @@ async function run() {
         // get a look-in on a day with nothing actually releasing for
         // this account at all - never alongside a real release.
         if (releases.length === 0) {
-            await checkEngagementRemindersForUser(uid, libraryItems, prefs, todayStr);
+            await checkEngagementRemindersForUser(uid, libraryItems, todayStr);
             continue;
         }
 
@@ -298,7 +324,6 @@ async function run() {
         const newlyNotified = [...alreadyNotifiedToday];
 
         for (const release of releases) {
-            if (!prefs[release.category]) { skipped++; continue; }
             if (alreadyNotifiedToday.includes(release.releaseId)) { skipped++; continue; }
 
             try {
@@ -315,7 +340,7 @@ async function run() {
         }
     }
 
-    console.log(`Done. Sent ${sent} notification(s), skipped ${skipped} (already sent today or turned off).`);
+    console.log(`Done. Sent ${sent} notification(s), skipped ${skipped} (not this account's local 8am hour yet, or already sent today).`);
 }
 
 run().catch(err => {
