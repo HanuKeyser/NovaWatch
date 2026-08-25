@@ -129,7 +129,7 @@ function setTheme(theme) {
     } catch (e) { /* localStorage unavailable - theme just won't persist */ }
 
     const metaTheme = document.getElementById('metaThemeColor');
-    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#000000' : '#F3F4F9');
+    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#0a0d14' : '#e8edf4');
 
     syncThemeToggleUI();
 }
@@ -518,7 +518,9 @@ function closeAchievementsModalOutside(event) {
 const NOTIFICATION_CATEGORIES = [
     { key: 'newEpisodes', title: 'New Episodes', sub: 'A tracked show has a new episode out.' },
     { key: 'showPremieres', title: 'Show Premieres', sub: 'A tracked show\'s first episode is out.' },
-    { key: 'movieReleases', title: 'Movie Releases', sub: 'A tracked movie is out.' }
+    { key: 'movieReleases', title: 'Movie Releases', sub: 'A tracked movie is out.' },
+    { key: 'streakReminders', title: 'Streak Reminders', sub: 'Your watch streak is about to break.' },
+    { key: 'continueWatchingReminders', title: 'Continue Watching', sub: 'A nudge if you\'ve been away a while.' }
 ];
 
 function renderNotificationPrefsModal() {
@@ -665,7 +667,6 @@ let scrollToNextEpisodeOnRender = false;
 let currentSearchType = 'tv';
 let currentAuthMode = 'signin';
 let currentLibraryView = 'tv';
-let toastTimer = null;
 let searchDebounceTimer = null;
 let libSearchDebounceTimers = {};
 
@@ -890,60 +891,12 @@ function tmdbThumb(url, size) {
     return url.replace(/\/t\/p\/(w\d+|original)\//, `/t/p/${size}/`);
 }
 
-let toastActionHandler = null;
-
-function showToast(message, type = null, action = null) {
-    const toast = document.getElementById("toast");
-    if (!toast) return;
-    document.getElementById("toastMessage").textContent = message;
-
-    const icon = document.getElementById("toastIcon");
-    if (icon) {
-        if (type === "success") {
-            icon.style.display = "flex";
-            icon.className = "toast-icon success";
-            icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-        } else if (type === "error") {
-            icon.style.display = "flex";
-            icon.className = "toast-icon error";
-            icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-        } else {
-            icon.style.display = "none";
-            icon.innerHTML = "";
-        }
-    }
-
-    const actionBtn = document.getElementById("toastAction");
-    if (actionBtn) {
-        if (action && action.label) {
-            actionBtn.textContent = action.label;
-            actionBtn.style.display = "block";
-            toastActionHandler = action.onClick;
-        } else {
-            actionBtn.style.display = "none";
-            toastActionHandler = null;
-        }
-    }
-
-    toast.classList.add("show");
-    clearTimeout(toastTimer);
-    // Give toasts with an undo action a beat longer, since there's an
-    // extra decision (tap Undo or let it stand) instead of just reading it.
-    toastTimer = setTimeout(() => {
-        toast.classList.remove("show");
-        toastActionHandler = null;
-    }, action ? 4500 : 3000);
-}
-
-function handleToastAction(event) {
-    event.stopPropagation();
-    const toast = document.getElementById("toast");
-    const handler = toastActionHandler;
-    toastActionHandler = null;
-    clearTimeout(toastTimer);
-    if (toast) toast.classList.remove("show");
-    if (handler) handler();
-}
+// Toast notifications were removed entirely (kept as a no-op rather than
+// deleting all ~100 call sites across the app, which would have meant
+// touching almost every action in the codebase for no functional gain -
+// every call site still works exactly as before, it just no longer
+// displays anything).
+function showToast(message, type = null, action = null) {}
 
 function clearSearch(inputId) {
     const input = document.getElementById(inputId);
@@ -1461,7 +1414,7 @@ function formatDate(dateStr) {
    track permission itself.
 ========================================================= */
 const NOTIFICATION_PREFS_KEY = "novawatch-notificationPrefs";
-const DEFAULT_NOTIFICATION_PREFS = { newEpisodes: true, showPremieres: true, movieReleases: true };
+const DEFAULT_NOTIFICATION_PREFS = { newEpisodes: true, showPremieres: true, movieReleases: true, streakReminders: true, continueWatchingReminders: true };
 
 function getNotificationPrefs() {
     if (state.notificationPrefs) return { ...DEFAULT_NOTIFICATION_PREFS, ...state.notificationPrefs };
@@ -1535,9 +1488,116 @@ function getReleasesForDay(daysOffset = 0) {
 // preferences.
 const TODAYS_RELEASE_NOTIFIED_KEY = "novawatch_notifiedReleaseDay";
 
+/* =========================================================
+   ENGAGEMENT REMINDERS
+   Separate from release-day notifications above, and only ever checked
+   on a day with nothing actually releasing (see checkTodaysReleases) -
+   two categories, each with its own condition and its own frequency, so
+   this never turns into a daily nag:
+     - Streak reminder: once, only when there's a real streak already
+       built (from watching yesterday) that hasn't been extended yet
+       today - genuinely at risk of breaking, not just "you could watch
+       something".
+     - Continue Watching reminder: only after real inactivity (3+ days
+       since anything was watched) AND with its own separate 7-day
+       cooldown, so it nudges roughly weekly during a lull rather than
+       every single day nothing releases.
+========================================================= */
+const CONTINUE_WATCHING_REMINDER_KEY = "novawatch_lastContinueWatchingReminder";
+
+// Same "every calendar day with a watch or rewatch logged" set used for
+// the streak achievement and the Home tab's Current Streak badge (see
+// computeAchievementStats/renderHomeTab) - a standalone copy here since
+// this runs from the notification check, not either of those render
+// paths.
+function buildWatchedDatesSet() {
+    const watchedDates = new Set();
+    state.library.forEach(item => {
+        if (item.type === 'movie') {
+            if (item.watched && item.lastWatchedAt) watchedDates.add(item.lastWatchedAt.slice(0, 10));
+        } else if (item.episodes) {
+            item.episodes.forEach(ep => {
+                if (ep.watched && ep.watchedAt) watchedDates.add(ep.watchedAt.slice(0, 10));
+            });
+        }
+    });
+    return watchedDates;
+}
+
+function checkEngagementReminders() {
+    const prefs = getNotificationPrefs();
+    if (!prefs.streakReminders && !prefs.continueWatchingReminders) return;
+
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+
+    const watchedDates = buildWatchedDatesSet();
+    const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
+
+    if (prefs.streakReminders && mostRecentWatch) {
+        const streak = getCurrentWatchStreak(watchedDates);
+        // Only when today hasn't already extended it - not the moment a
+        // first-ever watch would already count as a "streak", and not
+        // once they've already watched something today.
+        if (streak > 0 && mostRecentWatch !== todayISO) {
+            let alreadySentToday = false;
+            try {
+                const raw = localStorage.getItem(TODAYS_RELEASE_NOTIFIED_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    const t = getLocalTodayParts();
+                    alreadySentToday = parsed && parsed.day === `${t.y}-${t.m}-${t.d}` && parsed.ids.includes('streak-reminder');
+                }
+            } catch (e) { /* treat as not yet sent */ }
+
+            if (!alreadySentToday) {
+                sendAppNotification("Keep Your Streak Going!", { body: `You're on a ${streak}-day watch streak - watch something today to keep it going.` });
+                try {
+                    const t = getLocalTodayParts();
+                    const todayStamp = `${t.y}-${t.m}-${t.d}`;
+                    const raw = localStorage.getItem(TODAYS_RELEASE_NOTIFIED_KEY);
+                    const parsed = raw ? JSON.parse(raw) : null;
+                    const record = (parsed && parsed.day === todayStamp) ? parsed : { day: todayStamp, ids: [] };
+                    record.ids.push('streak-reminder');
+                    localStorage.setItem(TODAYS_RELEASE_NOTIFIED_KEY, JSON.stringify(record));
+                } catch (e) { /* non-fatal - worst case this repeats next check today */ }
+            }
+        }
+    }
+
+    if (prefs.continueWatchingReminders) {
+        const { tvItems, movieItems } = getContinueWatchingItems();
+        const hasBacklog = tvItems.length > 0 || movieItems.length > 0;
+        // No watch history at all reads as maximally inactive (always
+        // eligible), rather than being unable to compute a gap at all.
+        const daysSinceLastWatch = mostRecentWatch ? dayGap(mostRecentWatch, todayISO) : Infinity;
+
+        if (hasBacklog && daysSinceLastWatch >= 3) {
+            let lastReminderDay = null;
+            try { lastReminderDay = localStorage.getItem(CONTINUE_WATCHING_REMINDER_KEY); } catch (e) { /* treat as never reminded */ }
+            const daysSinceLastReminder = lastReminderDay ? dayGap(lastReminderDay, todayISO) : Infinity;
+
+            if (daysSinceLastReminder >= 7) {
+                sendAppNotification("Pick Up Where You Left Off", { body: "You've got episodes waiting in Continue Watching." });
+                try {
+                    localStorage.setItem(CONTINUE_WATCHING_REMINDER_KEY, todayISO);
+                } catch (e) { /* non-fatal - worst case this repeats sooner than the intended 7-day gap */ }
+            }
+        }
+    }
+}
+
 function checkTodaysReleases() {
     const releases = getReleasesForDay(0);
-    if (releases.length === 0) return;
+
+    // Nothing releasing today for anything in the library at all - this
+    // is the one case checkEngagementReminders() is meant for (see its
+    // own comment) - a day with an actual release never also gets a
+    // "come back and watch something" nudge alongside it.
+    if (releases.length === 0) {
+        checkEngagementReminders();
+        return;
+    }
 
     const prefs = getNotificationPrefs();
     const t = getLocalTodayParts();
