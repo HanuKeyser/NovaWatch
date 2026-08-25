@@ -1,6 +1,6 @@
 # NovaWatch — Patch Notes
 
-## v1.0.0
+## v1.0.0 (pre-launch)
 
 Everything below is still part of getting to the v1.0.0 launch — nothing here has shipped as a separate release yet.
 
@@ -74,3 +74,10 @@ Everything below is still part of getting to the v1.0.0 launch — nothing here 
 - Every fixed-position full-screen surface (the main tab pages, Settings, the floating bottom nav, floating modal close buttons, the auth/confirm overlays) now folds the real device safe-area inset into its existing padding/positioning, so content clears the Dynamic Island, notch, status bar, home indicator, and gesture nav area on every device - without hardcoding spacing for any specific device. Only content is inset this way; backgrounds stay full-bleed.
 - `manifest.json` gained `display_override: ["standalone", "fullscreen", "minimal-ui"]` for broader Android/Chromium standalone-launch compliance.
 - `100vh` upgraded to `100dvh` (with a `100vh` fallback) on the two full-height containers, for correct dynamic viewport sizing.
+
+### Fixed: glass and color consistency
+- The bottom nav's glass treatment had quietly drifted ahead of the `--glass-chrome-*` tokens meant to share its language (blur/saturation values didn't actually match between them). The tokens now match the nav bar's real values exactly, in both light and dark mode.
+- Toasts upgraded to the nav bar's full glass recipe (the soft top-left highlight, the diffuse top-edge glow, the same subtle shimmer sweep) instead of the flatter chrome-token approximation - the closest sibling to the nav bar (a floating, non-interactive, borderless pill), so the most natural candidate to fully match it.
+- Fixed 6 hardcoded colors that had drifted from or never adopted the shared theme tokens - meaning they stayed stuck on their light-mode value in dark mode, or in one case (`.offline-banner`) used a slightly wrong shade of orange that didn't match `--orange-gradient` at all: the offline banner, both toast status icons, the auth error text/border, and the "signed in" status dot's ring (which now also matches its sibling avatar-edit badge's ring exactly, rather than being a slightly different near-white). All now reference the actual shared tokens (`var(--orange-gradient)`, `var(--green-gradient)`, `var(--red-gradient)`, `var(--danger)`) instead of hand-copied literals.
+- Gave the avatar-initials gradient's third color stop a proper dark-mode counterpart (it only had a light-mode-appropriate value before).
+- Confirmed the remaining hardcoded colors in the stylesheet are intentional, not bugs: the Appearance toggle's icon tile (deliberately inverted light/dark by design) and the Google sign-in button (Google's own brand colors are required to stay fixed regardless of app theme).
