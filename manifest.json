@@ -7,6 +7,7 @@
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "handle_links": "preferred",
   "launch_handler": {
     "client_mode": "navigate-existing"
