@@ -55,7 +55,11 @@
        shares its underlying glass language instead of a visibly more
        opaque, more bordered variant of it. */
     --glass-chrome-fill: rgba(255, 255, 255, 0.26);
-    --glass-chrome-blur: blur(72px) saturate(280%);
+    /* Matches .bottom-nav's own actual blur/saturation exactly now (it
+       had quietly drifted ahead of this token to a punchier 300% while
+       everything consuming this token - the search bar, the toast -
+       stayed at a flatter 280%). */
+    --glass-chrome-blur: blur(72px) saturate(300%);
     --glass-chrome-border: rgba(255, 255, 255, 0.5);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
@@ -137,7 +141,10 @@ html[data-theme="dark"] {
     --glass-shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
     --glass-chrome-fill: rgba(40, 40, 46, 0.5);
-    --glass-chrome-blur: blur(70px) saturate(220%);
+    /* Same fix as the light-mode token above - matches .bottom-nav's
+       actual dark-mode blur/saturation exactly (blur72/sat230, not the
+       blur70/sat220 this token had drifted to). */
+    --glass-chrome-blur: blur(72px) saturate(230%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.42), 0 28px 60px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
