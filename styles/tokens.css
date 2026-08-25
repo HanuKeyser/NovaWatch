@@ -15,19 +15,21 @@
        actual color and light to refract rather than white-on-white.
        Kept low-saturation/low-opacity so it still reads as premium and
        quiet rather than busy - four soft corner tints (blue, peach,
-       lavender, mint) over a cool near-white base, not primary colors.
-       background-attachment: fixed keeps it still as the page scrolls,
-       so the refraction reads as consistent, not scrolling text. */
+       lavender, mint) over a cool blue-grey base (not pure white - a
+       pure-white base kills the glass effect, since blur has no
+       contrast to show against). background-attachment: fixed keeps it
+       still as the page scrolls, so the refraction reads as consistent,
+       not scrolling text. */
     --bg-mesh:
         radial-gradient(at 12% 8%, rgba(120, 170, 255, 0.22) 0px, transparent 50%),
         radial-gradient(at 88% 6%, rgba(255, 190, 150, 0.16) 0px, transparent 50%),
         radial-gradient(at 92% 80%, rgba(170, 140, 255, 0.15) 0px, transparent 55%),
         radial-gradient(at 8% 90%, rgba(130, 220, 195, 0.13) 0px, transparent 55%),
         radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.5) 0px, transparent 65%),
-        #F3F4F9;
-    --surface: rgba(255, 255, 255, 0.32);
-    --surface-2: rgba(255, 255, 255, 0.20);
-    --surface-3: rgba(255, 255, 255, 0.12);
+        #e8edf4;
+    --surface: rgba(255, 255, 255, 0.45);
+    --surface-2: rgba(255, 255, 255, 0.28);
+    --surface-3: rgba(255, 255, 255, 0.17);
 
     /* Borders across the app are now much fainter, moving toward the
        bottom nav bar's own borderless treatment - a real 1px border was
@@ -36,37 +38,39 @@
        outline. Not dropped to zero: a hairline is still useful for edge
        definition at rounded corners over similarly-toned backgrounds
        (dark-on-dark especially), just far softer than before. */
-    --glass-border: rgba(255, 255, 255, 0.38);
-    --glass-border-subtle: rgba(255, 255, 255, 0.2);
-    --glass-shadow: 0 24px 54px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    --glass-shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.6);
+    --glass-border-subtle: rgba(255, 255, 255, 0.32);
+    --glass-shadow: 0 8px 32px rgba(31, 41, 55, 0.08);
+    --glass-shadow-sm: 0 4px 16px rgba(31, 41, 55, 0.06);
+    /* The general content-surface glass recipe (cards, sheets, modals) -
+       genuinely see-through with just enough blur/saturation to stay
+       legible. Deliberately one full step lighter than the chrome tier
+       right below - that's what gives floating controls (the nav bar,
+       toasts) a distinct, elevated feel instead of every surface in the
+       app reading identically. */
+    --glass-blur: blur(24px) saturate(180%);
 
     /* =====================================================
        LIQUID GLASS "CHROME" SYSTEM
-       These tokens now match the bottom nav bar's own recipe (see
-       .bottom-nav in app.css) rather than sitting a notch behind it -
-       lower fill opacity (genuinely see-through, not just tinted),
-       heavier blur+saturation to compensate and stay legible at that
-       opacity, and a much softer border. The nav bar itself is still the
-       one surface pushed furthest (fully borderless, its own bespoke
-       highlight/shimmer layers) since it's a floating control rather
-       than a content-backing surface, but everything else in the app -
-       sheets, toasts, pill controls, cards via --surface above - now
-       shares its underlying glass language instead of a visibly more
-       opaque, more bordered variant of it. */
+       The floating-control tier - the bottom nav bar, and everything
+       meant to share its exact language (the search bar, the active
+       Discover toggle, toasts). Lower fill opacity than --surface above
+       (genuinely see-through, not just tinted), heavier blur+saturation
+       to compensate and stay legible at that opacity, and no border at
+       all - an elevation shadow instead of a ring is what reads as
+       "floating" rather than "outlined". These tokens are kept in exact
+       sync with .bottom-nav's own actual values in app.css, since that
+       bar is the reference implementation this whole tier is built to
+       match, not the other way around. */
     --glass-chrome-fill: rgba(255, 255, 255, 0.26);
-    /* Matches .bottom-nav's own actual blur/saturation exactly now (it
-       had quietly drifted ahead of this token to a punchier 300% while
-       everything consuming this token - the search bar, the toast -
-       stayed at a flatter 280%). */
     --glass-chrome-blur: blur(72px) saturate(300%);
     --glass-chrome-border: rgba(255, 255, 255, 0.5);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
 
-    --blue: #0066cc;      /* Apple System Blue */
-    --blue-light: #4792ff; 
-    --blue-dark: #004c99;
+    --blue: #3b82f6;
+    --blue-light: #60a5fa;
+    --blue-dark: #2563eb;
     /* Canonical "primary" fill for every blue action button in the app
        (Add to Library, Mark Watched, empty-state CTAs, active segmented
        pills, etc) - a subtle two-tone gradient instead of a flat fill so
@@ -77,26 +81,28 @@
     /* A separate, flatter blue (no two-tone gradient) used specifically
        for Trailer / Sign In / Join / Sign Out, so that group of buttons
        shares one consistent look distinct from the --blue-gradient
-       "primary" family used elsewhere. */
-    --flat-blue: #0088ff;
+       "primary" family used elsewhere. Same accent blue as --blue -
+       "flat" describes the treatment (no gradient), not a different hue. */
+    --flat-blue: #3b82f6;
     /* Same "filled glass" recipe as blue, just in the other accent colors -
        used anywhere a warning/danger/success action needs the same solid,
        sheen-lit glass feel as a primary blue button. */
-    --orange-gradient: linear-gradient(135deg, #ffb15c, #ff9500);
-    --red-gradient: linear-gradient(135deg, #ff6961, #ff3b30);
-    --green-gradient: linear-gradient(135deg, #34d472, #1fa851);
+    --orange-gradient: linear-gradient(135deg, #fb923c, #f97316);
+    --red-gradient: linear-gradient(135deg, #f87171, #ef4444);
+    --green-gradient: linear-gradient(135deg, #4ade80, #22c55e);
 
-    /* Pure black/white, not a near-black/near-white or a gray - text
-       colors here are literally #000/#fff, both light and dark mode
-       (see the dark-mode override below), no in-between shades at all. */
-    --text: #000000;
-    --text-secondary: #000000;
-    --text-muted: #000000;
+    /* A soft near-black rather than pure #000, and near-white rather
+       than pure #fff in dark mode below - enough contrast to stay
+       fully readable while feeling a shade warmer/less stark than true
+       black-on-white. */
+    --text: #1a1d23;
+    --text-secondary: #1a1d23;
+    --text-muted: #1a1d23;
 
     --border: rgba(0, 0, 0, 0.08);
 
-    --success: #34c759;
-    --danger: #ff3b30;
+    --success: #22c55e;
+    --danger: #ef4444;
 
     --radius: 20px;
 
@@ -116,13 +122,17 @@
 }
 
 html {
-    background: #F3F4F9;
+    background: #e8edf4;
     color-scheme: light;
 }
 
 html[data-theme="dark"] {
     color-scheme: dark;
-    background: #000000;
+    /* Near-black with a faint blue undertone, not pure #000 - a true
+       black makes translucent glass surfaces look muddy/flat instead of
+       luminous, since there's no depth in the base for the blur to
+       read against. */
+    background: #0a0d14;
 
     --bg-mesh:
         radial-gradient(at 15% 12%, rgba(50, 58, 78, 0.55) 0px, transparent 48%),
@@ -130,44 +140,41 @@ html[data-theme="dark"] {
         radial-gradient(at 90% 75%, rgba(42, 48, 66, 0.4) 0px, transparent 50%),
         radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.5) 0px, transparent 50%),
         radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.5) 0px, transparent 65%),
-        #000000;
+        #0a0d14;
     --surface: rgba(255, 255, 255, 0.06);
     --surface-2: rgba(255, 255, 255, 0.04);
     --surface-3: rgba(255, 255, 255, 0.025);
 
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-border-subtle: rgba(255, 255, 255, 0.05);
-    --glass-shadow: 0 24px 54px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-    --glass-shadow-sm: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-border-subtle: rgba(255, 255, 255, 0.06);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --glass-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
 
     --glass-chrome-fill: rgba(40, 40, 46, 0.5);
-    /* Same fix as the light-mode token above - matches .bottom-nav's
-       actual dark-mode blur/saturation exactly (blur72/sat230, not the
-       blur70/sat220 this token had drifted to). */
     --glass-chrome-blur: blur(72px) saturate(230%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.42), 0 28px 60px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
 
-    --blue: #0a84ff;
-    --blue-light: #64a8ff;
-    --blue-dark: #0060c9;
-    --flat-blue: #0a84ff;
+    --blue: #60a5fa;
+    --blue-light: #93c5fd;
+    --blue-dark: #3b82f6;
+    --flat-blue: #60a5fa;
 
-    --orange-gradient: linear-gradient(135deg, #ffbf6b, #ff9f0a);
-    --red-gradient: linear-gradient(135deg, #ff6961, #ff453a);
-    --green-gradient: linear-gradient(135deg, #30d158, #26a648);
+    --orange-gradient: linear-gradient(135deg, #fdba74, #fb923c);
+    --red-gradient: linear-gradient(135deg, #fca5a5, #f87171);
+    --green-gradient: linear-gradient(135deg, #86efac, #4ade80);
 
-    /* Same pure black/white rule as light mode - #fff here, not a
-       near-white or a gray, for all three text tiers. */
-    --text: #ffffff;
-    --text-secondary: #ffffff;
-    --text-muted: #ffffff;
+    /* Same near-white rule as light mode's near-black above - #e6e9ef
+       here, not a true #fff, for all three text tiers. */
+    --text: #e6e9ef;
+    --text-secondary: #e6e9ef;
+    --text-muted: #e6e9ef;
 
     --border: rgba(255, 255, 255, 0.1);
 
-    --success: #30d158;
-    --danger: #ff453a;
+    --success: #4ade80;
+    --danger: #f87171;
 }
 
 html[data-theme="dark"] body {
