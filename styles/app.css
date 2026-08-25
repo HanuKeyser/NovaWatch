@@ -44,11 +44,16 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
-    /* Bottom nav floats near the true bottom edge (see .bottom-nav) - its
-       own safe-area-aware offset already clears the home indicator/
-       gesture area, so this just needs to clear the floating bar itself
-       consistently, not add a second safe-area on top of that. */
-    padding-bottom: 100px;
+    /* Was 100px. That stacked on TOP of .page's own bottom padding
+       (20px + safe-area) instead of replacing it, so the real gap below
+       the last card before the floating nav even began was closer to
+       28px of genuinely empty space - more than the nav actually needs
+       to clear. Nav bar's own top edge sits at 92px + safe-area from the
+       true bottom (22px offset + 70px height - see .bottom-nav); this
+       80px, plus .page's already-existing 20px, lands just at that same
+       line with a small ~8px breathing gap, instead of double-padding on
+       top of what .page already provides. */
+    padding-bottom: 80px;
     -webkit-font-smoothing: antialiased;
     /* Stops a vertical drag at the very top/bottom of the page from
        rubber-banding into the browser's own pull-to-refresh/overscroll
@@ -1271,8 +1276,8 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     box-shadow: var(--glass-shadow-sm);
     flex-shrink: 0;
     transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
@@ -1638,8 +1643,8 @@ html[data-theme="dark"] .modal-sheet-compact {
     border-radius: 50%;
     background: var(--glass-sheen), var(--surface);
     color: var(--text);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
@@ -1659,8 +1664,8 @@ html[data-theme="dark"] .modal-sheet-compact {
     border-radius: 50%;
     background: var(--glass-sheen), var(--surface);
     color: var(--blue);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
@@ -1799,8 +1804,8 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .confirm-btn.cancel {
     background: var(--glass-sheen), var(--surface);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     color: var(--text);
     box-shadow: var(--glass-shadow-sm);
@@ -2016,8 +2021,8 @@ html[data-theme="dark"] .modal-sheet-compact {
     padding: 0 8px;
     border-radius: var(--radius-sm);
     background: var(--glass-sheen), var(--surface);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     color: var(--text);
     border: 1px solid var(--glass-border);
     font-size: 12px;
@@ -2330,7 +2335,7 @@ html[data-theme="dark"] .modal-sheet-compact {
        sibling badge's own ring color, and stayed that same near-white in
        dark mode too instead of switching to match the dark page
        background the way the edit badge's ring correctly does). */
-    border: 2.5px solid #F3F4F9;
+    border: 2.5px solid #e8edf4;
     box-shadow: 0 2px 6px rgba(52, 199, 89, 0.55);
     display: none;
 }
@@ -2690,16 +2695,16 @@ html[data-theme="dark"] .modal-sheet-compact {
     align-items: center;
     justify-content: center;
     color: white;
-    border: 2px solid #F3F4F9;
+    border: 2px solid #e8edf4;
     box-shadow: 0 3px 8px rgba(0, 102, 204, 0.3);
 }
 
 html[data-theme="dark"] .avatar-edit-badge {
-    border-color: #000000;
+    border-color: #0a0d14;
 }
 
 html[data-theme="dark"] .avatar-status-dot {
-    border-color: #000000;
+    border-color: #0a0d14;
 }
 
 /* Dark-mode counterpart for .large-avatar's third gradient stop (a
@@ -2950,8 +2955,8 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-btn.secondary {
     background: var(--glass-sheen), var(--surface);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     color: var(--text-secondary);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm);
@@ -3061,104 +3066,10 @@ html[data-theme="dark"] .large-avatar {
     line-height: 1.3;
 }
   
-/* Glass Toast */
-.toast {
-    position: fixed;
-    left: 50%;
-    /* Nav bar sits at bottom:22px with height:70px, so its top edge is at
-       92px - this keeps the toast a consistent, intentional 12px above
-       that edge instead of floating in the middle of the screen. */
-    bottom: 104px;
-    z-index: 500;
-    transform: translateX(-50%) translateY(14px) scale(0.92);
-    opacity: 0;
-    pointer-events: none;
-    padding: 13px 22px;
-    /* Matches the bottom nav's corner radius, since the two sit stacked
-       right above one another as the app's floating chrome layer. */
-    border-radius: var(--radius-2xl);
-    /* Deliberately NOT overflow:hidden here to clip the shimmer/highlight
-       layers below - overflow:hidden + backdrop-filter on a
-       position:fixed element is a known WebKit rendering trap (can make
-       the element vanish or stop repainting, especially mid-scroll - see
-       the same note on .bottom-nav::before). The shimmer pseudo-element
-       clips to its own border-radius: inherit instead, which needs no
-       parent overflow at all. */
-    /* Same full recipe as .bottom-nav now, not just the flatter
-       chrome-fill token approximation - a soft top-left highlight (light
-       catching curved glass) plus a diffuse top-edge glow, layered over
-       the same sheen+fill everything else uses. Both are borderless
-       background layers, not a shadow ring. */
-    background:
-        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
-        var(--glass-sheen),
-        var(--glass-chrome-fill);
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
-    color: var(--text);
-    font-size: 13.5px;
-    font-weight: 700;
-    letter-spacing: -0.1px;
-    line-height: 1.35;
-    transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-    width: calc(100% - 36px);
-    max-width: 420px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    gap: 10px;
-    white-space: normal;
-    word-break: break-word;
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.05),
-        var(--glass-chrome-shadow);
-}
-
-html[data-theme="dark"] .toast {
-    background:
-        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.14), transparent 65%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
-        var(--glass-sheen),
-        var(--glass-chrome-fill);
-}
-
-/* Same subtle diagonal shimmer sweep as .bottom-nav (reuses the same
-   navGlassShimmer animation rather than a duplicate keyframe) - a toast
-   is transient, non-interactive chrome exactly like the nav bar, so the
-   same little flourish fits here without competing with anything the
-   person needs to read closely, the way it would on an editable input. */
-.toast::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
-    background-size: 260% 260%;
-    opacity: 0.16;
-    pointer-events: none;
-    z-index: 2;
-    animation: navGlassShimmer 10s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .toast::before {
-        animation: none;
-    }
-}
-
-.toast.show {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0) scale(1);
-}
-
 /* Offline banner - a slim, non-dismissible bar pinned to the very top of
    the screen (the same overlay treatment iOS/Android use for their own
-   "No Internet" indicator) rather than a normal toast, since it needs to
-   stay up for as long as the connection is actually down, not fade after
-   a few seconds. */
+   "No Internet" indicator) - stays up for as long as the connection is
+   actually down, not a transient message. */
 .offline-banner {
     position: fixed;
     top: 0;
@@ -3187,59 +3098,6 @@ html[data-theme="dark"] .toast {
 
 .offline-banner.show {
     display: flex;
-}
-
-.toast-icon {
-    flex-shrink: 0;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-}
-
-.toast-icon svg {
-    width: 12px;
-    height: 12px;
-}
-
-.toast-icon.success {
-    /* var(--green-gradient) instead of a hardcoded copy of its light-mode
-       value - the hardcoded version never switched to the correct dark-
-       mode green, unlike every other green-gradient surface. */
-    background: var(--green-gradient);
-    box-shadow: 0 3px 8px rgba(31, 168, 81, 0.4);
-}
-
-.toast-icon.error {
-    /* Same fix as .success above, for var(--red-gradient). */
-    background: var(--red-gradient);
-    box-shadow: 0 3px 8px rgba(255, 59, 48, 0.4);
-}
-
-#toastMessage {
-    flex: 1;
-    min-width: 0;
-}
-
-.toast-action {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    padding: 4px 2px;
-    margin: -4px -2px;
-    color: var(--blue-light);
-    font-size: 13.5px;
-    font-weight: 800;
-    letter-spacing: -0.1px;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-}
-
-.toast-action:active {
-    opacity: 0.6;
 }
 
 .auth-field {
