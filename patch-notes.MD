@@ -1,83 +1,64 @@
-# NovaWatch — Patch Notes
+# NovaWatch — v1.0.0
 
-## v1.0.0 (pre-launch)
+What's included, top to bottom.
 
-Everything below is still part of getting to the v1.0.0 launch — nothing here has shipped as a separate release yet.
+## Tracking & Library
 
-### New: Upcoming tab
-- A 4th bottom-nav tab. Same structure as Library — a TV Shows/Movies segmented toggle, the same search box, the same poster-grid cards (including long-press to change poster) — just bucketed by Today/Tomorrow/This Week/Later instead of watch status.
-- Shows **every** not-yet-released episode per show, not just the next one.
-- Read-only — nothing to mark watched on something that hasn't released yet.
+- Search and add TV shows and movies, mark them watched with a single tap.
+- Rewatch tracking, per-episode for TV and per-title for movies, via a tap-to-manage popup rather than a one-way counter. A season can be bulk-rewatched once every released episode in it has been watched at least once.
+- Library organized into In Progress, Up to Date, Finished, Unwatched, Coming Soon, and Stopped Watching, sorted by each show's real most-recently-aired episode.
+- Finished, Unwatched, and Stopped Watching can each be shown or hidden independently in Settings.
+- Continue Watching on Home surfaces the next unwatched episode for every in-progress show, plus any unwatched movies, with swipe actions to mark watched or stop watching.
+- Opening a show's details lands on and scrolls straight to the episode you actually need to watch next, rather than the top of Season 1.
+- Discover → For You, recommendations seeded from your library.
+- Deep links for sharing a show, movie, or a specific episode.
+- Unique usernames alongside a freely editable display name.
 
-### New: real TV episode release dates, timezone-correct
-- TV episodes carry a real release instant again (this had been fully removed in an earlier version after repeated accuracy problems).
-- **Broadcast/cable shows** get a real, network-announced airtime from TVmaze, converted DST-aware to the viewer's own timezone.
-- **Streaming shows** (or anything TVmaze doesn't have) use the same midnight-Pacific convention movies already used — deliberately the *latest* common release time, so a date can under-promise (show "not released yet" a few hours early on some platforms) but never over-promise (claim something's out before it verifiably is, anywhere).
-- Verified with direct timezone tests: a 6PM Pacific Wednesday release correctly lands as Thursday for a South African viewer; a DST-transition-week date correctly used the real seasonal offset instead of a hardcoded fallback.
-- A future episode can no longer be marked watched, doesn't count toward progress anywhere (Library, Continue Watching, achievements), and shows a countdown instead of "Unwatched" in the episode list and details modal.
+## Release Timing
 
-### New: notification overhaul
-- Notifications now only fire on the actual release day, checked against the episode/movie's real release instant — never at the moment TMDB/TVmaze data merely mentions something coming.
-- Removed every "you'll be notified..." confirmation notification (enabling notifications, adding a movie, adding a show) — pure noise, now just a toast/button-state change instead.
-- New **Notification Types** screen (Settings) — New Episodes, Show Premieres, and Movie Releases can each be turned off independently.
-- Every notification now shares one title, "New Release" — the body carries the specifics ("Show Name - Season X Episode X release").
-- Fixed a backgrounded-tab reliability gap: returning to a backgrounded tab now immediately re-checks for releases instead of waiting on a timer that mobile browsers throttle heavily.
+- TV episodes carry a real, timezone-correct release date. Broadcast and cable shows use a real, network-announced airtime; streaming shows use a consistent midnight-Pacific convention, the same one movies use — calibrated to never claim something's released before it verifiably is, anywhere.
+- A future episode can't be marked watched, doesn't count toward progress anywhere in the app, and shows a countdown instead of "Unwatched."
+- An Upcoming tab lists every not-yet-released episode and movie in the library, organized the same way as the Library tab (a TV Shows/Movies toggle, search, poster grid), bucketed into Today/Tomorrow/This Week/Later.
 
-### New: Library Display (Settings)
-- Independently show/hide the Finished, Unwatched, and Stopped Watching Library categories. On (green) by default.
+## Notifications
 
-### New: Viewing Analytics additions (Home)
-- **Current watch streak** — a small badge under Total Watch Time, lit while a streak (consecutive days with a watch/rewatch logged) is active, muted when it isn't. Distinct from the all-time-record streak achievement, which never resets.
-- **Rewatches** — total rewatch count, now shown as its own tile (was already tracked internally, never surfaced).
+- Two delivery paths: notifications fire locally while the app is open or was recently backgrounded, and real push delivery reaches a device even when the app is fully closed.
+- Notifications fire only on the actual release day, checked against the real release instant for that specific viewer — never at the moment metadata merely mentions something coming, and never for episodes that were already out when a show was added.
+- On a day when nothing in your library is releasing, an optional reminder can nudge you about an at-risk watch streak, or about episodes waiting in Continue Watching after a few days away — each with its own separate condition so neither becomes a daily nag.
+- Every category — new episodes, show premieres, movie releases, streak reminders, Continue Watching reminders — can be turned on or off independently in Settings, synced to your account so the preference follows you across devices.
 
-### New: smarter region auto-detection
-- Region auto-detect now tries the browser's real Geolocation API first (reverse-geocoded to a country), falling back to the old locale-string guess for every failure case. The manual region picker is unchanged.
+## Home & Viewing Analytics
 
-### Fixed
-- Movie details modal and episode details modal were calling `formatDateWithReleaseTime()`/`formatDate()` — neither existed, so opening either would throw. Both now exist.
-- Notification Types and Library Display modals only rendered *after* closing Settings — a z-index stacking bug (they were missing from the override list that lets modals-opened-from-Settings render above Settings itself).
-- Library's "No TV/Movies Found" empty state incorrectly claimed the library was empty when a search query simply matched nothing — now shows the correct "no matches" message instead.
-- The on/off toggle buttons (Notification Types, Library Display, the notification-permission button) were missing the app's signature glass-sheen layer and glow shadow that every other colored button has — now share one proper `.pill-on`/`.pill-off`/`.pill-neutral` treatment.
-- Removed a duplicate function definition introduced mid-session (`getLatestAiredEpisodeDate` was accidentally defined twice).
+- Total watch time, including rewatch passes.
+- Current watch streak, shown as a badge — lit while a streak is active, muted when it isn't. Distinct from the all-time-record streak achievement, which never resets.
+- Counts of watched movies, shows, episodes, and rewatches.
+- Achievements for library and viewing milestones.
 
-### Changed
-- TV Library sort: now based on each show's real most-recently-aired episode (previously a "most recently watched" substitute, from when episodes didn't carry real dates), newest first.
-- Upcoming's card titles clamp to 1 line instead of 2.
-- Opening a TV show's details lands on and auto-scrolls to the next episode you need to watch (already existed, verified working — not new this release).
-- Settings reorganized into three sections: Preferences, Notifications, Library.
-- Text selection and iOS's long-press copy callout are now disabled app-wide by default (real `<input>`/`<textarea>` fields are unaffected).
+## NovaWrapped
 
-### Docs
-- Removed the "Not yet built" roadmap section from the README — kept it to what's actually in the code.
-- Fixed a stale line count and a stale button label ("Mark All Released Episodes Watched" → "Mark All Episodes Watched") in the README.
-- Privacy Notice & Terms updated to disclose TVmaze, BigDataCloud (region auto-detection), and the location permission prompt.
+A yearly recap, tracking January 1 – December 31 in your own timezone, with a grace period after account creation so bulk-adding existing watch history doesn't count as binge-watching.
 
-### New: Terms & Privacy consent at signup
-- A required "I agree to the Terms of Service & Privacy Notice" checkbox, linking to the real Privacy/Terms page, shown when creating an account (email/password Join, and Google sign-in while in Join mode). Not shown on a routine returning-user sign-in.
+## Settings
 
-### Fixed (this round)
-- Audited every SVG icon in the app for sizing/color issues - none found. The handful of icons that don't use the shared `.icon` class (the Google "G" logo, toast icons, swipe-action icons) all have their own correct, deliberate sizing already; nothing was rendering broken or oversized.
+- Appearance: Light, Dark, or automatic based on your device.
+- Streaming region: a full country picker, auto-detected from your device's location on first sign-in (with a browser-locale fallback), always editable manually afterward — drives which "where to watch" information you see.
+- Notification Types and Library Display, each with independent per-category control.
+- Account: sign-out, account deletion with re-authentication, and Privacy Notice & Terms of Service.
 
-### New: real push notifications (OneSignal) — now live client-side
-- Client-side OneSignal Web SDK integration - subscribes a device to push and ties it to the signed-in account (`oneSignalLogin`/`oneSignalLogout`), keeps the "Stay in the loop" button in sync with real subscription state.
-- **`ONESIGNAL_APP_ID` is now the real App ID** - the client-side integration is live, not just scaffolded. This also means `app.js` now registers `OneSignalSDKWorker.js` (via OneSignal's own SDK) instead of registering `service-worker.js` directly - see `PUSH_NOTIFICATIONS_SETUP.md` for why that makes deploying `OneSignalSDKWorker.js` to the site root load-bearing now, not optional.
-- `OneSignalSDKWorker.js` - combines OneSignal's service worker with this app's existing one, so offline caching isn't lost.
-- `send-release-notifications.js` - a standalone server-side script (not loaded by the app) that decides what to send and calls OneSignal's REST API. Mirrors `getReleasesForDay()`'s categories and wording, computed per account in that account's own real timezone (not the server's). Still needs its own credentials (REST API key, Firebase service account) before it can run - see the setup doc.
-- Notification preferences and each account's IANA timezone now sync to Firestore (previously localStorage-only) - needed so the server-side script can read them.
-- `.github/workflows/release-notifications.yml` - one free way to run the script daily; optional, not the only option.
-- Confirmed directly from OneSignal's own docs: Firebase/FCM credentials are only required for native Android apps distributed via Google Play - not needed for NovaWatch (a PWA). See the setup doc if your OneSignal dashboard is asking for it anyway.
-- See `PUSH_NOTIFICATIONS_SETUP.md` for what's left before this is fully live end-to-end.
+## Account & Privacy
 
-### Fixed: full-screen/safe-area support for the installed PWA
-- The root cause of the background not extending behind the Dynamic Island/notch on iPhone: the viewport meta tag was missing `viewport-fit=cover` - without it, `env(safe-area-inset-*)` values are meaningless and the whole page stays confined to the safe rectangle below the cutout, regardless of any CSS.
-- `apple-mobile-web-app-status-bar-style` changed from `default` to `black-translucent` - required for the page's own background to draw behind the status bar at all, instead of iOS reserving a fixed opaque bar there.
-- Every fixed-position full-screen surface (the main tab pages, Settings, the floating bottom nav, floating modal close buttons, the auth/confirm overlays) now folds the real device safe-area inset into its existing padding/positioning, so content clears the Dynamic Island, notch, status bar, home indicator, and gesture nav area on every device - without hardcoding spacing for any specific device. Only content is inset this way; backgrounds stay full-bleed.
-- `manifest.json` gained `display_override: ["standalone", "fullscreen", "minimal-ui"]` for broader Android/Chromium standalone-launch compliance.
-- `100vh` upgraded to `100dvh` (with a `100vh` fallback) on the two full-height containers, for correct dynamic viewport sizing.
+- Email/password and Google sign-in, with email verification and password reset.
+- A Terms of Service & Privacy Notice consent step when creating an account.
+- Account deletion available directly in the app.
 
-### Fixed: glass and color consistency
-- The bottom nav's glass treatment had quietly drifted ahead of the `--glass-chrome-*` tokens meant to share its language (blur/saturation values didn't actually match between them). The tokens now match the nav bar's real values exactly, in both light and dark mode.
-- Toasts upgraded to the nav bar's full glass recipe (the soft top-left highlight, the diffuse top-edge glow, the same subtle shimmer sweep) instead of the flatter chrome-token approximation - the closest sibling to the nav bar (a floating, non-interactive, borderless pill), so the most natural candidate to fully match it.
-- Fixed 6 hardcoded colors that had drifted from or never adopted the shared theme tokens - meaning they stayed stuck on their light-mode value in dark mode, or in one case (`.offline-banner`) used a slightly wrong shade of orange that didn't match `--orange-gradient` at all: the offline banner, both toast status icons, the auth error text/border, and the "signed in" status dot's ring (which now also matches its sibling avatar-edit badge's ring exactly, rather than being a slightly different near-white). All now reference the actual shared tokens (`var(--orange-gradient)`, `var(--green-gradient)`, `var(--red-gradient)`, `var(--danger)`) instead of hand-copied literals.
-- Gave the avatar-initials gradient's third color stop a proper dark-mode counterpart (it only had a light-mode-appropriate value before).
-- Confirmed the remaining hardcoded colors in the stylesheet are intentional, not bugs: the Appearance toggle's icon tile (deliberately inverted light/dark by design) and the Google sign-in button (Google's own brand colors are required to stay fixed regardless of app theme).
+## Design
+
+- A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the floating navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
+- Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
+- Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
+- Dark mode throughout, applied before first paint so there's no flash between themes on load.
+
+## Platform
+
+- Installable as a PWA on iOS and Android, with home-screen shortcuts to Discover, Library, and Upcoming.
+- Offline app-shell caching, so a repeat visit still loads something during a brief connection drop.
