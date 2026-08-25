@@ -513,59 +513,6 @@ function closeAchievementsModalOutside(event) {
 }
 
 /* =========================================================
-   NOTIFICATION TYPES MODAL
-========================================================= */
-const NOTIFICATION_CATEGORIES = [
-    { key: 'newEpisodes', title: 'New Episodes', sub: 'A tracked show has a new episode out.' },
-    { key: 'showPremieres', title: 'Show Premieres', sub: 'A tracked show\'s first episode is out.' },
-    { key: 'movieReleases', title: 'Movie Releases', sub: 'A tracked movie is out.' },
-    { key: 'streakReminders', title: 'Streak Reminders', sub: 'Your watch streak is about to break.' },
-    { key: 'continueWatchingReminders', title: 'Continue Watching', sub: 'A nudge if you\'ve been away a while.' }
-];
-
-function renderNotificationPrefsModal() {
-    const container = document.getElementById('notificationPrefsList');
-    if (!container) return;
-    const prefs = getNotificationPrefs();
-
-    container.innerHTML = NOTIFICATION_CATEGORIES.map(cat => {
-        const isOn = !!prefs[cat.key];
-        // Same green (on) / red (off) pill classes used everywhere else
-        // an on/off status is reported (Library Display, the
-        // notification-permission button) - see .hero-pill-btn.pill-on
-        // /.pill-off in app.css.
-        return `
-            <div class="analytics-card settings-card" style="padding: 14px;">
-                <div class="settings-row" style="padding: 0;">
-                    <div class="settings-row-text">
-                        <div class="settings-row-title">${escapeHTML(cat.title)}</div>
-                        <div class="settings-row-sub">${escapeHTML(cat.sub)}</div>
-                    </div>
-                    <button class="hero-pill-btn ${isOn ? 'pill-on' : 'pill-off'}" onclick="setNotificationPref('${cat.key}', ${!isOn})">${isOn ? 'On' : 'Off'}</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function openNotificationPrefsModal() {
-    const modal = document.getElementById('notificationPrefsModal');
-    renderNotificationPrefsModal();
-    if (modal.classList.contains('open')) return;
-    modal.classList.add('open');
-    lockBodyScroll('notificationPrefsModal');
-}
-
-function closeNotificationPrefsModal() {
-    document.getElementById('notificationPrefsModal').classList.remove('open');
-    unlockBodyScroll('notificationPrefsModal');
-}
-
-function closeNotificationPrefsModalOutside(event) {
-    if (event.target.id === 'notificationPrefsModal') closeNotificationPrefsModal();
-}
-
-/* =========================================================
    LIBRARY DISPLAY PREFERENCES (show/hide Finished & Stopped)
    Same device-level storage pattern as notification preferences and
    the theme setting - purely a display filter on the TV Library's
@@ -688,8 +635,7 @@ let libSearchDebounceTimers = {};
    separate, small scheduled server-side job (not part of this client
    code, since a browser tab can't run on a schedule while closed - see
    the accompanying server script) that reads each account's library and
-   notification preferences (now synced to Firestore - see
-   getNotificationPrefs/saveUserProfile) and calls OneSignal's REST API.
+   timezone (synced via saveUserProfile) and calls OneSignal's REST API.
 
    Every function here checks isOneSignalConfigured() first, so leaving
    ONESIGNAL_APP_ID as the placeholder is completely safe - OneSignal
@@ -891,12 +837,129 @@ function tmdbThumb(url, size) {
     return url.replace(/\/t\/p\/(w\d+|original)\//, `/t/p/${size}/`);
 }
 
-// Toast notifications were removed entirely (kept as a no-op rather than
-// deleting all ~100 call sites across the app, which would have meant
-// touching almost every action in the codebase for no functional gain -
-// every call site still works exactly as before, it just no longer
-// displays anything).
-function showToast(message, type = null, action = null) {}
+/* =========================================================
+   NOTIFICATIONS LOG
+   What used to appear as a floating toast now lands here instead -
+   persisted rather than disappearing after a few seconds. showToast()
+   itself (every one of its ~100 existing call sites across the app,
+   left completely untouched) now feeds this log instead of the removed
+   floating toast UI - a real page, opened from the bell icon on Home's
+   hero card, that a person can actually come back to and read.
+========================================================= */
+const NOTIFICATIONS_LOG_KEY = "novawatch-notificationsLog";
+const NOTIFICATIONS_LOG_MAX = 50;
+const NOTIFICATIONS_LAST_READ_KEY = "novawatch-notificationsLastRead";
+
+function getNotificationsLog() {
+    try {
+        const raw = localStorage.getItem(NOTIFICATIONS_LOG_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+// The same message/type every showToast() call already passes - the
+// third `action` param (an undo button on the old floating toast) isn't
+// carried over, since nothing in the app actually used it (every real
+// call site only ever passed a message and a type).
+function showToast(message, type = null) {
+    try {
+        const log = getNotificationsLog();
+        log.unshift({ message, type: type || 'info', at: new Date().toISOString() });
+        if (log.length > NOTIFICATIONS_LOG_MAX) log.length = NOTIFICATIONS_LOG_MAX;
+        localStorage.setItem(NOTIFICATIONS_LOG_KEY, JSON.stringify(log));
+    } catch (e) {
+        // Non-fatal - worst case this particular message doesn't get logged.
+    }
+    updateNotificationsUnreadDot();
+}
+
+function updateNotificationsUnreadDot() {
+    const dot = document.getElementById('notificationsUnreadDot');
+    if (!dot) return;
+    const log = getNotificationsLog();
+    let lastRead = null;
+    try { lastRead = localStorage.getItem(NOTIFICATIONS_LAST_READ_KEY); } catch (e) { /* treat as never read */ }
+    const hasUnread = log.length > 0 && (!lastRead || log[0].at > lastRead);
+    dot.style.display = hasUnread ? 'block' : 'none';
+}
+
+// Short, glanceable relative time for the log list - not trying to be
+// precise to the second, just "roughly how long ago" the way a real
+// notification center reads.
+function formatNotificationLogTime(iso) {
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const diffMin = Math.round(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.round(diffHr / 24);
+    if (diffDay === 1) return 'Yesterday';
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function renderNotificationsLog() {
+    const container = document.getElementById('notificationsLogList');
+    if (!container) return;
+    const log = getNotificationsLog();
+
+    if (log.length === 0) {
+        container.innerHTML = emptyState("Nothing Here Yet", "Messages from the app will show up here.");
+        return;
+    }
+
+    const icons = {
+        success: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+        error: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+        info: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`
+    };
+
+    container.innerHTML = log.map(entry => {
+        const type = icons[entry.type] ? entry.type : 'info';
+        return `
+            <div class="notification-log-row">
+                <div class="notification-log-icon ${type}">${icons[type]}</div>
+                <div class="notification-log-body">
+                    <div class="notification-log-message">${escapeHTML(entry.message)}</div>
+                    <div class="notification-log-time">${formatNotificationLogTime(entry.at)}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function openNotificationsLog() {
+    const modal = document.getElementById('notificationsLogModal');
+    renderNotificationsLog();
+    if (!modal.classList.contains('open')) {
+        modal.classList.add('open');
+        lockBodyScroll('notificationsLogModal');
+    }
+    try {
+        localStorage.setItem(NOTIFICATIONS_LAST_READ_KEY, new Date().toISOString());
+    } catch (e) { /* non-fatal - worst case the unread dot lingers */ }
+    updateNotificationsUnreadDot();
+}
+
+function closeNotificationsLog() {
+    document.getElementById('notificationsLogModal').classList.remove('open');
+    unlockBodyScroll('notificationsLogModal');
+}
+
+function closeNotificationsLogOutside(event) {
+    if (event.target.id === 'notificationsLogModal') closeNotificationsLog();
+}
+
+function clearNotificationsLog() {
+    try {
+        localStorage.removeItem(NOTIFICATIONS_LOG_KEY);
+    } catch (e) { /* non-fatal */ }
+    renderNotificationsLog();
+    updateNotificationsUnreadDot();
+}
 
 function clearSearch(inputId) {
     const input = document.getElementById(inputId);
@@ -920,6 +983,7 @@ document.addEventListener("DOMContentLoaded", () => {
     syncThemeToggleUI();
 
     initOneSignal();
+    updateNotificationsUnreadDot();
 
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
@@ -1401,46 +1465,6 @@ function formatDate(dateStr) {
 }
 
 /* =========================================================
-   NOTIFICATION PREFERENCES (customization)
-   Which categories of release-day notification the person actually
-   wants. Synced to Firestore (via saveUserProfile, on state.notificationPrefs)
-   as well as cached in localStorage - previously device-only, but the
-   server-side push job (see the ONESIGNAL NOTIFICATIONS block near
-   sendAppNotification) has no access to localStorage, so this needs to
-   be readable from the person's account doc. localStorage stays as a
-   fast local cache and offline fallback. Independent of the browser's
-   own Notification permission: this only filters WHICH notifications
-   get sent once permission is already granted, it doesn't request or
-   track permission itself.
-========================================================= */
-const NOTIFICATION_PREFS_KEY = "novawatch-notificationPrefs";
-const DEFAULT_NOTIFICATION_PREFS = { newEpisodes: true, showPremieres: true, movieReleases: true, streakReminders: true, continueWatchingReminders: true };
-
-function getNotificationPrefs() {
-    if (state.notificationPrefs) return { ...DEFAULT_NOTIFICATION_PREFS, ...state.notificationPrefs };
-    try {
-        const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY);
-        if (!raw) return { ...DEFAULT_NOTIFICATION_PREFS };
-        return { ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(raw) };
-    } catch (e) {
-        return { ...DEFAULT_NOTIFICATION_PREFS };
-    }
-}
-
-function setNotificationPref(key, value) {
-    const prefs = getNotificationPrefs();
-    prefs[key] = value;
-    state.notificationPrefs = prefs;
-    try {
-        localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(prefs));
-    } catch (e) {
-        // Non-fatal - worst case the preference doesn't stick this session.
-    }
-    saveUserProfile();
-    renderNotificationPrefsModal();
-}
-
-/* =========================================================
    RELEASE-DAY NOTIFICATIONS
 ========================================================= */
 // Scans the whole library for anything - movies AND TV episodes - whose
@@ -1525,16 +1549,13 @@ function buildWatchedDatesSet() {
 }
 
 function checkEngagementReminders() {
-    const prefs = getNotificationPrefs();
-    if (!prefs.streakReminders && !prefs.continueWatchingReminders) return;
-
     const todayISO = new Date().toISOString().slice(0, 10);
     const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
 
     const watchedDates = buildWatchedDatesSet();
     const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
 
-    if (prefs.streakReminders && mostRecentWatch) {
+    if (mostRecentWatch) {
         const streak = getCurrentWatchStreak(watchedDates);
         // Only when today hasn't already extended it - not the moment a
         // first-ever watch would already count as a "streak", and not
@@ -1565,24 +1586,22 @@ function checkEngagementReminders() {
         }
     }
 
-    if (prefs.continueWatchingReminders) {
-        const { tvItems, movieItems } = getContinueWatchingItems();
-        const hasBacklog = tvItems.length > 0 || movieItems.length > 0;
-        // No watch history at all reads as maximally inactive (always
-        // eligible), rather than being unable to compute a gap at all.
-        const daysSinceLastWatch = mostRecentWatch ? dayGap(mostRecentWatch, todayISO) : Infinity;
+    const { tvItems, movieItems } = getContinueWatchingItems();
+    const hasBacklog = tvItems.length > 0 || movieItems.length > 0;
+    // No watch history at all reads as maximally inactive (always
+    // eligible), rather than being unable to compute a gap at all.
+    const daysSinceLastWatch = mostRecentWatch ? dayGap(mostRecentWatch, todayISO) : Infinity;
 
-        if (hasBacklog && daysSinceLastWatch >= 3) {
-            let lastReminderDay = null;
-            try { lastReminderDay = localStorage.getItem(CONTINUE_WATCHING_REMINDER_KEY); } catch (e) { /* treat as never reminded */ }
-            const daysSinceLastReminder = lastReminderDay ? dayGap(lastReminderDay, todayISO) : Infinity;
+    if (hasBacklog && daysSinceLastWatch >= 3) {
+        let lastReminderDay = null;
+        try { lastReminderDay = localStorage.getItem(CONTINUE_WATCHING_REMINDER_KEY); } catch (e) { /* treat as never reminded */ }
+        const daysSinceLastReminder = lastReminderDay ? dayGap(lastReminderDay, todayISO) : Infinity;
 
-            if (daysSinceLastReminder >= 7) {
-                sendAppNotification("Pick Up Where You Left Off", { body: "You've got episodes waiting in Continue Watching." });
-                try {
-                    localStorage.setItem(CONTINUE_WATCHING_REMINDER_KEY, todayISO);
-                } catch (e) { /* non-fatal - worst case this repeats sooner than the intended 7-day gap */ }
-            }
+        if (daysSinceLastReminder >= 7) {
+            sendAppNotification("Pick Up Where You Left Off", { body: "You've got episodes waiting in Continue Watching." });
+            try {
+                localStorage.setItem(CONTINUE_WATCHING_REMINDER_KEY, todayISO);
+            } catch (e) { /* non-fatal - worst case this repeats sooner than the intended 7-day gap */ }
         }
     }
 }
@@ -1599,7 +1618,6 @@ function checkTodaysReleases() {
         return;
     }
 
-    const prefs = getNotificationPrefs();
     const t = getLocalTodayParts();
     const todayStamp = `${t.y}-${t.m}-${t.d}`;
 
@@ -1616,8 +1634,6 @@ function checkTodaysReleases() {
 
     let changed = false;
     releases.forEach(release => {
-        if (!prefs[release.category]) return;
-
         const releaseId = release.type === 'movie'
             ? `movie:${release.item.id}`
             : `tv:${release.item.id}:${release.episode.id}`;
@@ -1711,12 +1727,6 @@ async function saveUserProfile() {
             profiles: state.profiles,
             activeProfileId: state.activeProfileId,
             region: state.region,
-            // Synced (not just device-level localStorage) so the
-            // server-side push job (see the ONESIGNAL NOTIFICATIONS block
-            // near sendAppNotification) can read which categories this
-            // person actually wants before sending a real push, and so
-            // the preference now follows them across devices too.
-            notificationPrefs: state.notificationPrefs || getNotificationPrefs(),
             // The server-side push job has no browser to infer "today"
             // from the way daysUntil()/getLocalTodayParts() do here - it
             // needs each account's real IANA timezone to compute their
