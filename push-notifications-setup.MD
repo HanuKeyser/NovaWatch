@@ -58,18 +58,23 @@ app. Nothing in this codebase needs FCM.
   Reads every account's library and timezone from Firestore, works out
   what's releasing today *in that account's own timezone*, and calls
   OneSignal's API. This is the piece that needed to exist somewhere
-  outside the browser, since a closed tab can't run on a schedule.
+  outside the browser, since a closed tab can't run on a schedule. Also
+  handles the two engagement reminders (an at-risk streak, a Continue
+  Watching nudge after inactivity) on a day with nothing releasing.
 - **`.github/workflows/release-notifications.yml`**: one free way to run
-  that script daily, via GitHub Actions. Optional — delete it if you'd
-  rather run the script elsewhere.
-- **Notification preferences now sync to Firestore**, not just
-  localStorage (`state.notificationPrefs`, written by `saveUserProfile`)
-  — the server script needs to read them, so they're no longer
-  device-only. This also means preferences now follow an account across
-  devices, as a side benefit.
-- **Each account's IANA timezone is now saved too** (`state.timeZone`),
+  that script hourly, via GitHub Actions. The script itself only
+  actually processes each account during the one run each day that
+  lands on *its own* local 8am hour (08:00 UTC is the reference anchor,
+  adjusted per timezone) — every other run is nearly free for that
+  account. Optional — delete it if you'd rather run the script
+  elsewhere.
+- **Each account's IANA timezone is saved** (`state.timeZone`),
   refreshed every time the profile saves — this is what lets the server
-  script determine "today" correctly per person instead of guessing.
+  script determine "today," and the account's own local 8am, correctly
+  per person instead of guessing.
+- There's a single on/off toggle for notifications, no per-category
+  selection — the server script always sends every category once an
+  account is subscribed.
 
 ## What's still left to do
 
@@ -103,17 +108,9 @@ app. Nothing in this codebase needs FCM.
    `node send-release-notifications.js` manually once (with the env
    vars set) against a library that has something releasing today.
 
-## Two things worth knowing going in
+## One thing worth knowing going in
 
 - **iOS only supports web push for a PWA added to the Home Screen**
   (iOS 16.4+, Safari's "Add to Home Screen" specifically) — a tab open
   in Safari can't receive push at all there. Android and desktop don't
   have this restriction.
-- **Minor duplicate-notification risk**: the existing client-side
-  notifications (for someone with the tab open) and this new
-  server-sent push aren't currently cross-aware of each other — someone
-  who has NovaWatch open right when the daily server job runs could
-  occasionally see a notification from both for the same release. Not
-  a big deal in practice (once a day, and both still respect the same
-  category preferences), but worth knowing rather than assuming it's
-  perfectly deduplicated across both paths.
