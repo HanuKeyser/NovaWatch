@@ -1,6 +1,6 @@
 # NovaWatch — Patch Notes
 
-## v1.0.0 (pre-launch)
+## v1.0.0
 
 Everything below is still part of getting to the v1.0.0 launch — nothing here has shipped as a separate release yet.
 
@@ -67,3 +67,10 @@ Everything below is still part of getting to the v1.0.0 launch — nothing here 
 - `.github/workflows/release-notifications.yml` - one free way to run the script daily; optional, not the only option.
 - Confirmed directly from OneSignal's own docs: Firebase/FCM credentials are only required for native Android apps distributed via Google Play - not needed for NovaWatch (a PWA). See the setup doc if your OneSignal dashboard is asking for it anyway.
 - See `PUSH_NOTIFICATIONS_SETUP.md` for what's left before this is fully live end-to-end.
+
+### Fixed: full-screen/safe-area support for the installed PWA
+- The root cause of the background not extending behind the Dynamic Island/notch on iPhone: the viewport meta tag was missing `viewport-fit=cover` - without it, `env(safe-area-inset-*)` values are meaningless and the whole page stays confined to the safe rectangle below the cutout, regardless of any CSS.
+- `apple-mobile-web-app-status-bar-style` changed from `default` to `black-translucent` - required for the page's own background to draw behind the status bar at all, instead of iOS reserving a fixed opaque bar there.
+- Every fixed-position full-screen surface (the main tab pages, Settings, the floating bottom nav, floating modal close buttons, the auth/confirm overlays) now folds the real device safe-area inset into its existing padding/positioning, so content clears the Dynamic Island, notch, status bar, home indicator, and gesture nav area on every device - without hardcoding spacing for any specific device. Only content is inset this way; backgrounds stay full-bleed.
+- `manifest.json` gained `display_override: ["standalone", "fullscreen", "minimal-ui"]` for broader Android/Chromium standalone-launch compliance.
+- `100vh` upgraded to `100dvh` (with a `100vh` fallback) on the two full-height containers, for correct dynamic viewport sizing.
