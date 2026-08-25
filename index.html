@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#F3F4F9" id="metaThemeColor">
+<meta name="theme-color" content="#e8edf4" id="metaThemeColor">
 <script>
 // Applied synchronously, before the stylesheet/body render, so a saved
 // dark-mode preference takes effect on first paint instead of flashing
@@ -1019,12 +1019,6 @@
             <button class="confirm-btn" id="saveDisplayNameBtn" style="background: var(--glass-sheen), var(--blue-gradient); color: white; box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);" onclick="saveDisplayName()">Save</button>
         </div>
     </div>
-</div>
-
-<div id="toast" class="toast">
-    <div id="toastIcon" class="toast-icon" style="display: none;"></div>
-    <span id="toastMessage"></span>
-    <button id="toastAction" class="toast-action" style="display:none;" onclick="handleToastAction(event)"></button>
 </div>
 
 <script src="scripts/app.js"></script>
