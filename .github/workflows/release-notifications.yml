@@ -1,4 +1,4 @@
-# Runs send-release-notifications.js once a day, for free, without
+# Runs send-release-notifications.js every hour, for free, without
 # needing a Firebase Blaze plan upgrade or any other hosting - this is
 # one option, not the only one; any host that can run Node on a
 # schedule works the same way. Delete this file if you'd rather run it
@@ -12,17 +12,19 @@
 #   ONESIGNAL_APP_ID               - same value as ONESIGNAL_APP_ID in scripts/app.js
 #   ONESIGNAL_REST_API_KEY         - from OneSignal dashboard -> Settings -> Keys & IDs
 #
-# The schedule below runs at 13:00 UTC daily - since the script checks
-# each account's own timezone internally (see send-release-notifications.js),
-# the exact time here isn't critical, just that it runs at least once
-# every 24 hours. Adjust the cron expression if you'd rather it run at a
-# different UTC hour.
+# Runs on the hour, every hour - 08:00 UTC is the reference anchor for
+# when a day's notifications go out, but the script itself (see
+# isLocal8AMHour in send-release-notifications.js) only actually
+# processes each account during the one run each day that lands on ITS
+# OWN local 8am hour, not literally 8am UTC for everyone regardless of
+# timezone. Every other run is nearly free (each account is skipped in a
+# couple of milliseconds until its own local-8am run comes around).
 
 name: Send release notifications
 
 on:
   schedule:
-    - cron: '0 13 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch: {}
 
 jobs:
