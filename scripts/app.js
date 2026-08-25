@@ -619,16 +619,19 @@ let libSearchDebounceTimers = {};
 
 /* =========================================================
    NOTIFICATIONS SYSTEM
+   OneSignal is the only notification delivery mechanism in the app now -
+   real push, delivered by OneSignal's own infrastructure, reaching a
+   device even when the app/browser is fully closed. There is no
+   separate client-side "while the tab is open" notification path
+   anymore (there used to be one - it fired notifications locally via
+   the Notification API while the app was open or recently
+   backgrounded, entirely separate from OneSignal - removed in favor of
+   OneSignal being the single source of truth for both delivery and
+   scheduling, rather than two parallel systems that could disagree or
+   double-notify).
 ========================================================= */
 /* =========================================================
    ONESIGNAL (real push notifications, even when the app is fully closed)
-   The app's existing notification system (sendAppNotification,
-   checkTodaysReleases) only ever fires while a tab is open or recently
-   backgrounded - there's no way for a plain web app to wake up and
-   notify someone once the browser/app is fully closed. OneSignal
-   handles that: it runs its own push infrastructure, so this device can
-   receive a real push sent from a server at any time.
-
    This only handles the DEVICE side (subscribing, and tying this device
    to the signed-in account via OneSignal's "external ID" so a server
    can target it). It does NOT decide what to send or when - that's a
@@ -637,11 +640,10 @@ let libSearchDebounceTimers = {};
    the accompanying server script) that reads each account's library and
    timezone (synced via saveUserProfile) and calls OneSignal's REST API.
 
-   Every function here checks isOneSignalConfigured() first, so leaving
-   ONESIGNAL_APP_ID as the placeholder is completely safe - OneSignal
-   simply never initializes, and the app behaves exactly as it did
-   before (foreground/backgrounded-tab notifications only, via the
-   existing system untouched above).
+   Every function here checks isOneSignalConfigured() first. Until
+   ONESIGNAL_APP_ID is set to a real value, subscribing simply does
+   nothing - there is no fallback notification path anymore, so no
+   notifications of any kind go out until this is configured.
 ========================================================= */
 // Replace with the real App ID from OneSignal's dashboard (Settings ->
 // Keys & IDs) once the account exists.
@@ -756,6 +758,13 @@ async function checkNotificationPermissionState() {
     }
 }
 
+// requestNotificationPermission() below drives both the browser's own
+// permission prompt AND (once configured) OneSignal's push subscription -
+// still needed even though this app no longer fires any notifications of
+// its own locally. Actual notification delivery is entirely OneSignal's
+// job now (see the ONESIGNAL block above and send-release-notifications.js) -
+// nothing in this file calls the Notification API or
+// registration.showNotification() directly anymore.
 async function requestNotificationPermission() {
     if (!("Notification" in window)) {
         showToast("Notifications not supported on this browser/device.", "error");
@@ -786,26 +795,6 @@ async function requestNotificationPermission() {
     } catch (err) {
         console.error("Error requesting notification permission:", err);
         showToast("Could not enable notifications.", "error");
-    }
-}
-
-function sendAppNotification(title, options = {}) {
-    if (!("Notification" in window) || Notification.permission !== "granted") {
-        return;
-    }
-    
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then(registration => {
-            registration.showNotification(title, {
-                icon: "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
-                badge: "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
-                ...options
-            });
-        }).catch(() => {
-            new Notification(title, { icon: "https://www.novawatch.site/images/NovaWatch_App_Icon.png", ...options });
-        });
-    } else {
-        new Notification(title, { icon: "https://www.novawatch.site/images/NovaWatch_App_Icon.png", ...options });
     }
 }
 
@@ -1035,7 +1024,6 @@ document.addEventListener("DOMContentLoaded", () => {
     syncThemeToggleUI();
     checkNotificationPermissionState();
     populateRegionOptions();
-    checkTodaysReleases();
 
     // The installed PWA's manifest uses launch_handler.client_mode:
     // "navigate-existing" (see manifest.json) - reusing the already-open
@@ -1058,12 +1046,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Catches the moment something crosses into "released" for anyone who
     // leaves the app open across it, without needing a network call -
     // isReleased() is now an exact timestamp check (see above), so this
-    // also re-renders whichever tab is open, not just the notification
-    // check, so Upcoming/Continue Watching/Home actually reflect the
-    // change within this window instead of staying stale until the next
-    // navigation or data sync happens to touch them.
+    // re-renders whichever tab is open so Upcoming/Continue Watching/Home
+    // actually reflect the change within this window instead of staying
+    // stale until the next navigation or data sync happens to touch them.
+    // Only a display refresh now - notification delivery is entirely
+    // OneSignal's job (see the ONESIGNAL block above), not something this
+    // client-side timer triggers anymore.
     setInterval(() => {
-        checkTodaysReleases();
         refreshActivePage();
     }, 5 * 60 * 1000);
 
@@ -1084,12 +1073,8 @@ document.addEventListener("DOMContentLoaded", () => {
         // how long the tab was backgrounded - cheap and local-only (no
         // network), and mobile browsers throttle setInterval heavily once
         // a tab is backgrounded, so the 5-minute timer above can't be
-        // trusted alone to catch something that released while this tab
-        // was out of view. Without this, returning to a backgrounded tab
-        // could show the updated "released" state (via refreshActivePage
-        // elsewhere) without ever having actually fired the notification
-        // for it.
-        checkTodaysReleases();
+        // trusted alone to keep Upcoming/Continue Watching/Home current
+        // for something that released while this tab was out of view.
         refreshActivePage();
 
         if (!auth || !auth.currentUser) return;
@@ -1465,199 +1450,6 @@ function formatDate(dateStr) {
 }
 
 /* =========================================================
-   RELEASE-DAY NOTIFICATIONS
-========================================================= */
-// Scans the whole library for anything - movies AND TV episodes - whose
-// real release instant (see the TV EPISODE RELEASE TIMING block near
-// tmdbDateToISO) falls exactly `daysOffset` days from today, in the
-// viewer's own local calendar. This is the ONLY place a "new episode"/
-// "movie out" notification gets triggered from now - deliberately not
-// the moment TMDB/TVmaze data changes (see refreshItemFromTMDBInternal's
-// comment), since data can appear well before something's actually
-// released. A TV episode's own season 1 / episode 1 counts as a show
-// premiere rather than a plain new episode, so the two can be toggled
-// separately in the notification preferences above.
-function getReleasesForDay(daysOffset = 0) {
-    const results = [];
-
-    state.library.forEach(item => {
-        if (item.type === 'movie') {
-            if (item.releaseDate && daysUntil(item.releaseDate) === daysOffset) {
-                results.push({ item, type: 'movie', category: 'movieReleases', title: item.title, subtitle: 'Movie Release', date: new Date(item.releaseDate) });
-            }
-        } else if (item.episodes) {
-            item.episodes.forEach(ep => {
-                if (!ep.releaseDate || daysUntil(ep.releaseDate) !== daysOffset) return;
-                const isPremiere = ep.season === 1 && ep.number === 1;
-                results.push({
-                    item,
-                    episode: ep,
-                    type: 'tv',
-                    category: isPremiere ? 'showPremieres' : 'newEpisodes',
-                    title: item.title,
-                    subtitle: `Season ${ep.season} Episode ${ep.number} release`,
-                    date: new Date(ep.releaseDate)
-                });
-            });
-        }
-    });
-
-    return results;
-}
-
-// Fires a notification for anything releasing today, exactly once per item
-// per day (tracked in localStorage so re-opening the app or re-running the
-// background check doesn't spam the same notification repeatedly), and
-// only for categories the person hasn't turned off in their notification
-// preferences.
-const TODAYS_RELEASE_NOTIFIED_KEY = "novawatch_notifiedReleaseDay";
-
-/* =========================================================
-   ENGAGEMENT REMINDERS
-   Separate from release-day notifications above, and only ever checked
-   on a day with nothing actually releasing (see checkTodaysReleases) -
-   two categories, each with its own condition and its own frequency, so
-   this never turns into a daily nag:
-     - Streak reminder: once, only when there's a real streak already
-       built (from watching yesterday) that hasn't been extended yet
-       today - genuinely at risk of breaking, not just "you could watch
-       something".
-     - Continue Watching reminder: only after real inactivity (3+ days
-       since anything was watched) AND with its own separate 7-day
-       cooldown, so it nudges roughly weekly during a lull rather than
-       every single day nothing releases.
-========================================================= */
-const CONTINUE_WATCHING_REMINDER_KEY = "novawatch_lastContinueWatchingReminder";
-
-// Same "every calendar day with a watch or rewatch logged" set used for
-// the streak achievement and the Home tab's Current Streak badge (see
-// computeAchievementStats/renderHomeTab) - a standalone copy here since
-// this runs from the notification check, not either of those render
-// paths.
-function buildWatchedDatesSet() {
-    const watchedDates = new Set();
-    state.library.forEach(item => {
-        if (item.type === 'movie') {
-            if (item.watched && item.lastWatchedAt) watchedDates.add(item.lastWatchedAt.slice(0, 10));
-        } else if (item.episodes) {
-            item.episodes.forEach(ep => {
-                if (ep.watched && ep.watchedAt) watchedDates.add(ep.watchedAt.slice(0, 10));
-            });
-        }
-    });
-    return watchedDates;
-}
-
-function checkEngagementReminders() {
-    const todayISO = new Date().toISOString().slice(0, 10);
-    const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
-
-    const watchedDates = buildWatchedDatesSet();
-    const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
-
-    if (mostRecentWatch) {
-        const streak = getCurrentWatchStreak(watchedDates);
-        // Only when today hasn't already extended it - not the moment a
-        // first-ever watch would already count as a "streak", and not
-        // once they've already watched something today.
-        if (streak > 0 && mostRecentWatch !== todayISO) {
-            let alreadySentToday = false;
-            try {
-                const raw = localStorage.getItem(TODAYS_RELEASE_NOTIFIED_KEY);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    const t = getLocalTodayParts();
-                    alreadySentToday = parsed && parsed.day === `${t.y}-${t.m}-${t.d}` && parsed.ids.includes('streak-reminder');
-                }
-            } catch (e) { /* treat as not yet sent */ }
-
-            if (!alreadySentToday) {
-                sendAppNotification("Keep Your Streak Going!", { body: `You're on a ${streak}-day watch streak - watch something today to keep it going.` });
-                try {
-                    const t = getLocalTodayParts();
-                    const todayStamp = `${t.y}-${t.m}-${t.d}`;
-                    const raw = localStorage.getItem(TODAYS_RELEASE_NOTIFIED_KEY);
-                    const parsed = raw ? JSON.parse(raw) : null;
-                    const record = (parsed && parsed.day === todayStamp) ? parsed : { day: todayStamp, ids: [] };
-                    record.ids.push('streak-reminder');
-                    localStorage.setItem(TODAYS_RELEASE_NOTIFIED_KEY, JSON.stringify(record));
-                } catch (e) { /* non-fatal - worst case this repeats next check today */ }
-            }
-        }
-    }
-
-    const { tvItems, movieItems } = getContinueWatchingItems();
-    const hasBacklog = tvItems.length > 0 || movieItems.length > 0;
-    // No watch history at all reads as maximally inactive (always
-    // eligible), rather than being unable to compute a gap at all.
-    const daysSinceLastWatch = mostRecentWatch ? dayGap(mostRecentWatch, todayISO) : Infinity;
-
-    if (hasBacklog && daysSinceLastWatch >= 3) {
-        let lastReminderDay = null;
-        try { lastReminderDay = localStorage.getItem(CONTINUE_WATCHING_REMINDER_KEY); } catch (e) { /* treat as never reminded */ }
-        const daysSinceLastReminder = lastReminderDay ? dayGap(lastReminderDay, todayISO) : Infinity;
-
-        if (daysSinceLastReminder >= 7) {
-            sendAppNotification("Pick Up Where You Left Off", { body: "You've got episodes waiting in Continue Watching." });
-            try {
-                localStorage.setItem(CONTINUE_WATCHING_REMINDER_KEY, todayISO);
-            } catch (e) { /* non-fatal - worst case this repeats sooner than the intended 7-day gap */ }
-        }
-    }
-}
-
-function checkTodaysReleases() {
-    const releases = getReleasesForDay(0);
-
-    // Nothing releasing today for anything in the library at all - this
-    // is the one case checkEngagementReminders() is meant for (see its
-    // own comment) - a day with an actual release never also gets a
-    // "come back and watch something" nudge alongside it.
-    if (releases.length === 0) {
-        checkEngagementReminders();
-        return;
-    }
-
-    const t = getLocalTodayParts();
-    const todayStamp = `${t.y}-${t.m}-${t.d}`;
-
-    let record = { day: todayStamp, ids: [] };
-    try {
-        const raw = localStorage.getItem(TODAYS_RELEASE_NOTIFIED_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && parsed.day === todayStamp) record = parsed;
-        }
-    } catch (e) {
-        // If the stored record is corrupt, just fall back to a fresh one for today.
-    }
-
-    let changed = false;
-    releases.forEach(release => {
-        const releaseId = release.type === 'movie'
-            ? `movie:${release.item.id}`
-            : `tv:${release.item.id}:${release.episode.id}`;
-
-        if (record.ids.includes(releaseId)) return;
-
-        // Unified title across every category - the body itself carries the
-        // "what" (season/episode for TV, or the movie label), so the title
-        // doesn't need to vary by category on top of that.
-        sendAppNotification("New Release", { body: `${release.title} - ${release.subtitle}` });
-        record.ids.push(releaseId);
-        changed = true;
-    });
-
-    if (changed) {
-        try {
-            localStorage.setItem(TODAYS_RELEASE_NOTIFIED_KEY, JSON.stringify(record));
-        } catch (e) {
-            // Non-fatal — worst case the notification could repeat next check.
-        }
-    }
-}
-
-/* =========================================================
    LAST-CHECKED TRACKING (for the Upcoming tab's refresh control)
 ========================================================= */
 const LAST_LIBRARY_CHECK_KEY = "novawatch_lastLibraryCheck";
@@ -1986,7 +1778,7 @@ async function submitChosenUsername() {
 
 async function handleGoogleSignIn() {
     if (!auth) {
-        showToast("Cloud sync not configured yet.", "error");
+        showAuthMessage("Cloud sync not configured yet.");
         return;
     }
 
@@ -1999,10 +1791,12 @@ async function handleGoogleSignIn() {
     if (currentAuthMode === 'signup') {
         const termsCheckbox = document.getElementById("authTermsCheckbox");
         if (termsCheckbox && !termsCheckbox.checked) {
-            showToast("Please agree to the Terms of Service & Privacy Notice to continue.", "error");
+            showAuthMessage("Please agree to the Terms of Service & Privacy Notice to continue.");
             return;
         }
     }
+
+    clearAuthMessage();
 
     try {
         const provider = new firebase.auth.GoogleAuthProvider();
@@ -2010,7 +1804,7 @@ async function handleGoogleSignIn() {
         showToast("Signed in with Google!", "success");
     } catch (err) {
         console.error("Google Sign-In Error:", err);
-        showToast(err.message || "Failed to sign in with Google.", "error");
+        showAuthMessage(err.message || "Failed to sign in with Google.");
     }
 }
 
@@ -2096,19 +1890,20 @@ async function handleSignIn() {
     const password = document.getElementById("authPassword").value;
 
     if (!auth) {
-        showToast("Cloud sync not configured yet.", "error");
+        showAuthMessage("Cloud sync not configured yet.");
         return;
     }
 
     clearPasswordError();
+    clearAuthMessage();
 
     if (!email) {
-        showToast("Please enter your email address.", "error");
+        showAuthMessage("Please enter your email address.");
         return;
     }
 
     if (!password) {
-        showToast("Please enter your password.", "error");
+        showAuthMessage("Please enter your password.");
         return;
     }
 
@@ -2127,15 +1922,15 @@ async function handleSignIn() {
         if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
             showPasswordError("Incorrect password. Please try again.");
         } else if (err.code === "auth/user-not-found") {
-            showToast("No account found with that email address.", "error");
+            showAuthMessage("No account found with that email address.");
         } else if (err.code === "auth/invalid-email") {
-            showToast("Please enter a valid email address.", "error");
+            showAuthMessage("Please enter a valid email address.");
         } else if (err.code === "auth/too-many-requests") {
-            showToast("Too many attempts. Please try again later.", "error");
+            showAuthMessage("Too many attempts. Please try again later.");
         } else if (err.code === "auth/user-disabled") {
-            showToast("This account has been disabled.", "error");
+            showAuthMessage("This account has been disabled.");
         } else {
-            showToast(err.message || "Unable to sign in.", "error");
+            showAuthMessage(err.message || "Unable to sign in.");
         }
     } finally {
         if (signInBtn) {
@@ -2156,40 +1951,81 @@ function showPasswordError(message) {
     passwordInput.classList.add("input-error");
 }
 
+// General-purpose version of the same message slot, for anything in the
+// auth flow that isn't specifically about the password field (a missing
+// email, a failed account creation, a sign-in error) - showPasswordError
+// above additionally reddens the password input's own border, which
+// would be misleading for an error that has nothing to do with what's
+// typed there. This is what most of the auth flow's error/success
+// feedback runs through now - showToast() alone stopped being enough
+// once toasts were removed, since it only logs silently and a sign-in
+// error with zero immediate visible feedback is a real problem, not a
+// cosmetic one. Shares its underlying implementation (showInlineMessage
+// below) with any other confirmation/error slot elsewhere in the app
+// that has the same need - see confirmDeleteAccount, for one.
+function showInlineMessage(elementId, message, type = 'error') {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.textContent = message;
+    el.classList.toggle('success', type === 'success');
+    el.classList.add("show");
+}
+
+function clearInlineMessage(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.textContent = "";
+    el.classList.remove("show", "success");
+}
+
+function showAuthMessage(message, type = 'error') {
+    showInlineMessage("authPasswordError", message, type);
+}
+
+function clearAuthMessage() {
+    clearInlineMessage("authPasswordError");
+}
+
 async function handleForgotPassword() {
     if (!auth) {
-        showToast("Cloud sync not configured yet.", "error");
+        showAuthMessage("Cloud sync not configured yet.");
         return;
     }
 
     const emailInput = document.getElementById("authEmail");
     const email = emailInput ? emailInput.value.trim() : "";
 
+    clearAuthMessage();
+
     // Deliberately no window.prompt() fallback here - native browser
     // dialogs (prompt/alert/confirm) are unreliable and often silently do
     // nothing inside an installed standalone PWA on mobile, which is this
     // app's primary context. Asking in-app instead is the reliable path.
     if (!email) {
-        showToast("Enter your email address above first.", "error");
+        showAuthMessage("Enter your email address above first.");
         if (emailInput) emailInput.focus();
         return;
     }
 
     try {
         await auth.sendPasswordResetEmail(email);
-        showToast(`Password reset email sent to ${email}.`, "success");
+        // This action has no screen transition to confirm it worked the
+        // way sign-in/sign-up do (see showAuthMessage's own comment) -
+        // the person stays right here, so this needs to actually say so
+        // rather than relying on the silent notifications log alone.
+        showAuthMessage(`Password reset email sent to ${email}.`, 'success');
     } catch (err) {
         console.error("Password Reset Error:", err);
 
         if (err.code === "auth/user-not-found") {
             // Deliberately vague to avoid confirming which emails have accounts.
-            showToast("If that email has an account, a reset link has been sent.", "success");
+            showAuthMessage("If that email has an account, a reset link has been sent.", 'success');
         } else if (err.code === "auth/invalid-email") {
-            showToast("Please enter a valid email address.", "error");
+            showAuthMessage("Please enter a valid email address.");
         } else if (err.code === "auth/too-many-requests") {
-            showToast("Too many attempts. Please try again later.", "error");
+            showAuthMessage("Too many attempts. Please try again later.");
         } else {
-            showToast(err.message || "Couldn't send reset email right now.", "error");
+            showAuthMessage(err.message || "Couldn't send reset email right now.");
         }
     }
 }
@@ -2200,31 +2036,32 @@ async function handleSignUp() {
     const password = document.getElementById("authPassword").value;
 
     if (!auth) {
-        showToast("Cloud sync not configured yet.", "error");
+        showAuthMessage("Cloud sync not configured yet.");
         return;
     }
 
     clearPasswordError();
+    clearAuthMessage();
 
     // Username validation
     if (!username) {
-        showToast("Please enter a username to register.", "error");
+        showAuthMessage("Please enter a username to register.");
         return;
     }
 
     if (!isValidUsernameFormat(username)) {
-        showToast("Usernames must be 3-20 characters: lowercase letters, numbers, dots, and underscores only.", "error");
+        showAuthMessage("Usernames must be 3-20 characters: lowercase letters, numbers, dots, and underscores only.");
         return;
     }
 
     if (!email) {
-        showToast("Please enter your email address.", "error");
+        showAuthMessage("Please enter your email address.");
         return;
     }
 
     // Password validation
     if (!password) {
-        showToast("Please enter a password.", "error");
+        showAuthMessage("Please enter a password.");
         return;
     }
 
@@ -2236,7 +2073,7 @@ async function handleSignUp() {
 
     const termsCheckbox = document.getElementById("authTermsCheckbox");
     if (termsCheckbox && !termsCheckbox.checked) {
-        showToast("Please agree to the Terms of Service & Privacy Notice to continue.", "error");
+        showAuthMessage("Please agree to the Terms of Service & Privacy Notice to continue.");
         return;
     }
 
@@ -2253,7 +2090,7 @@ async function handleSignUp() {
         // name at the exact same moment - the transaction below does.
         const available = await isUsernameAvailable(username);
         if (!available) {
-            showToast("That username is already taken. Please choose another.", "error");
+            showAuthMessage("That username is already taken. Please choose another.");
             return;
         }
 
@@ -2275,7 +2112,7 @@ async function handleSignUp() {
             } catch (deleteErr) {
                 console.error("Rollback after failed username claim also failed:", deleteErr);
             }
-            showToast("That username was just taken by someone else. Please choose another.", "error");
+            showAuthMessage("That username was just taken by someone else. Please choose another.");
             return;
         }
 
@@ -2325,11 +2162,11 @@ async function handleSignUp() {
         if (err.code === "auth/weak-password") {
             showPasswordError("Password is too short. It must be at least 6 characters.");
         } else if (err.code === "auth/email-already-in-use") {
-            showToast("This email address is already registered.", "error");
+            showAuthMessage("This email address is already registered.");
         } else if (err.code === "auth/invalid-email") {
-            showToast("Please enter a valid email address.", "error");
+            showAuthMessage("Please enter a valid email address.");
         } else {
-            showToast(err.message || "Unable to create your account.", "error");
+            showAuthMessage(err.message || "Unable to create your account.");
         }
     } finally {
         if (signUpBtn) {
@@ -2918,6 +2755,7 @@ function handleDeleteAccount() {
     if (!auth || !auth.currentUser) return;
     const modal = document.getElementById("deleteAccountModal");
     if (modal.classList.contains("open")) return;
+    clearInlineMessage("deleteAccountError");
     modal.classList.add("open");
     lockBodyScroll("deleteAccountModal");
 }
@@ -2940,6 +2778,7 @@ async function confirmDeleteAccount() {
         btn.disabled = true;
         btn.textContent = "Deleting...";
     }
+    clearInlineMessage("deleteAccountError");
 
     async function attemptDelete() {
         await deleteAllUserData(user.uid);
@@ -2954,7 +2793,11 @@ async function confirmDeleteAccount() {
         if (err.code === "auth/requires-recent-login") {
             const reauthed = await reauthenticateCurrentUser(user);
             if (!reauthed) {
-                showToast("Account deletion cancelled - please try again.", "error");
+                // The modal stays open here (reauthentication was
+                // cancelled, not the deletion itself failing) - needs to
+                // actually say so, since nothing else about the screen
+                // changes to indicate it.
+                showInlineMessage("deleteAccountError", "Account deletion cancelled - please try again.");
             } else {
                 try {
                     await attemptDelete();
@@ -2962,12 +2805,12 @@ async function confirmDeleteAccount() {
                     showToast("Your account has been deleted.", "success");
                 } catch (err2) {
                     console.error("Account deletion failed after reauthentication:", err2);
-                    showToast("Couldn't delete your account. Please try again.", "error");
+                    showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
                 }
             }
         } else {
             console.error("Account deletion failed:", err);
-            showToast("Couldn't delete your account. Please try again.", "error");
+            showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
         }
     } finally {
         if (btn) {
@@ -3063,9 +2906,6 @@ async function checkLibraryForUpdates() {
             refreshActivePage();
         }
 
-        // Run regardless of whether anything changed above — the point is to
-        // catch the calendar day rolling over onto a release, not just new data.
-        checkTodaysReleases();
         setLastLibraryCheck(now());
     } finally {
         isSyncingLibrary = false;
@@ -3181,9 +3021,9 @@ async function refreshItemFromTMDBInternal(item) {
                     // here - a new entry in TMDB's season data can (and usually
                     // does) mean an episode TMDB knows about well before it's
                     // actually released, not an episode that just dropped. The
-                    // day-based checkTodaysReleases() check is what actually
-                    // gates real, on-the-day release notifications now that
-                    // episodes carry a real releaseDate again.
+                    // server-side push job (see send-release-notifications.js) is
+                    // what actually gates real, on-the-day release notifications
+                    // now that episodes carry a real releaseDate again.
                     let episodesChanged = false;
                     if (item.episodes && item.episodes.length > 0) {
                         const epMap = new Map();
@@ -7625,7 +7465,7 @@ function clearPasswordError() {
     if (!passwordInput || !passwordError) return;
 
     passwordError.textContent = "";
-    passwordError.classList.remove("show");
+    passwordError.classList.remove("show", "success");
     passwordInput.classList.remove("input-error");
 }
 
