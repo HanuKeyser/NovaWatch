@@ -2325,7 +2325,12 @@ html[data-theme="dark"] .modal-sheet-compact {
     height: 15px;
     border-radius: 50%;
     background: var(--green-gradient);
-    border: 2.5px solid #fdfdfe;
+    /* Same page-background "cutout" ring as .avatar-edit-badge right
+       above (was a fixed near-white #fdfdfe before - didn't match that
+       sibling badge's own ring color, and stayed that same near-white in
+       dark mode too instead of switching to match the dark page
+       background the way the edit badge's ring correctly does). */
+    border: 2.5px solid #F3F4F9;
     box-shadow: 0 2px 6px rgba(52, 199, 89, 0.55);
     display: none;
 }
@@ -2691,6 +2696,19 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 html[data-theme="dark"] .avatar-edit-badge {
     border-color: #000000;
+}
+
+html[data-theme="dark"] .avatar-status-dot {
+    border-color: #000000;
+}
+
+/* Dark-mode counterpart for .large-avatar's third gradient stop (a
+   lighter blue than --blue-light, for the depth effect - see that rule's
+   comment) - was hardcoded to the light-mode-appropriate shade only, so
+   it didn't shift lighter the way --blue-light/--blue themselves do
+   between light and dark. */
+html[data-theme="dark"] .large-avatar {
+    background: linear-gradient(150deg, #8cc0ff 0%, var(--blue-light) 45%, var(--blue) 100%);
 }
 
 .avatar-edit-badge .icon-small {
@@ -3059,7 +3077,23 @@ html[data-theme="dark"] .avatar-edit-badge {
     /* Matches the bottom nav's corner radius, since the two sit stacked
        right above one another as the app's floating chrome layer. */
     border-radius: var(--radius-2xl);
-    background: var(--glass-sheen), var(--glass-chrome-fill);
+    /* Deliberately NOT overflow:hidden here to clip the shimmer/highlight
+       layers below - overflow:hidden + backdrop-filter on a
+       position:fixed element is a known WebKit rendering trap (can make
+       the element vanish or stop repainting, especially mid-scroll - see
+       the same note on .bottom-nav::before). The shimmer pseudo-element
+       clips to its own border-radius: inherit instead, which needs no
+       parent overflow at all. */
+    /* Same full recipe as .bottom-nav now, not just the flatter
+       chrome-fill token approximation - a soft top-left highlight (light
+       catching curved glass) plus a diffuse top-edge glow, layered over
+       the same sheen+fill everything else uses. Both are borderless
+       background layers, not a shadow ring. */
+    background:
+        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
+        var(--glass-sheen),
+        var(--glass-chrome-fill);
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
     color: var(--text);
@@ -3077,7 +3111,41 @@ html[data-theme="dark"] .avatar-edit-badge {
     gap: 10px;
     white-space: normal;
     word-break: break-word;
-    box-shadow: var(--glass-chrome-shadow);
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.05),
+        var(--glass-chrome-shadow);
+}
+
+html[data-theme="dark"] .toast {
+    background:
+        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.14), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
+        var(--glass-sheen),
+        var(--glass-chrome-fill);
+}
+
+/* Same subtle diagonal shimmer sweep as .bottom-nav (reuses the same
+   navGlassShimmer animation rather than a duplicate keyframe) - a toast
+   is transient, non-interactive chrome exactly like the nav bar, so the
+   same little flourish fits here without competing with anything the
+   person needs to read closely, the way it would on an editable input. */
+.toast::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+    background-size: 260% 260%;
+    opacity: 0.16;
+    pointer-events: none;
+    z-index: 2;
+    animation: navGlassShimmer 10s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast::before {
+        animation: none;
+    }
 }
 
 .toast.show {
@@ -3103,7 +3171,12 @@ html[data-theme="dark"] .avatar-edit-badge {
     gap: 7px;
     padding: 9px 16px;
     padding-top: calc(9px + env(safe-area-inset-top, 0px));
-    background: linear-gradient(135deg, #ffb340, #ff9500);
+    /* var(--orange-gradient), not a hand-copied duplicate of it - the
+       duplicate had drifted to a slightly different shade of orange
+       (#ffb340 vs the token's #ffb15c) and, being hardcoded, never
+       switched to the correct darker orange in dark mode the way every
+       other orange-gradient surface in the app does. */
+    background: var(--orange-gradient);
     color: white;
     font-size: 12.5px;
     font-weight: 700;
@@ -3133,12 +3206,16 @@ html[data-theme="dark"] .avatar-edit-badge {
 }
 
 .toast-icon.success {
-    background: linear-gradient(135deg, #34d472, #1fa851);
+    /* var(--green-gradient) instead of a hardcoded copy of its light-mode
+       value - the hardcoded version never switched to the correct dark-
+       mode green, unlike every other green-gradient surface. */
+    background: var(--green-gradient);
     box-shadow: 0 3px 8px rgba(31, 168, 81, 0.4);
 }
 
 .toast-icon.error {
-    background: linear-gradient(135deg, #ff6961, #ff3b30);
+    /* Same fix as .success above, for var(--red-gradient). */
+    background: var(--red-gradient);
     box-shadow: 0 3px 8px rgba(255, 59, 48, 0.4);
 }
 
@@ -3171,7 +3248,9 @@ html[data-theme="dark"] .avatar-edit-badge {
 
 .auth-error {
     display: none;
-    color: #ff3b30;
+    /* var(--danger) instead of a hardcoded copy - the hardcoded value
+       never switched to the correct dark-mode red. */
+    color: var(--danger);
     font-size: 12px;
     font-weight: 600;
     margin-top: 6px;
@@ -3220,7 +3299,10 @@ html[data-theme="dark"] .avatar-edit-badge {
 }
 
 .auth-input.input-error {
-    border: 1px solid #ff3b30 !important;
+    /* var(--danger) instead of a hardcoded copy, same fix as .auth-error
+       above - this had no dark-mode override at all, so it stayed the
+       light-mode red in dark mode. */
+    border: 1px solid var(--danger) !important;
     box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.12);
 }
 /* =========================================================
