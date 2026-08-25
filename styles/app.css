@@ -751,8 +751,16 @@ img {
 }
 
 .search-box:focus-within {
+    /* Deliberately NOT changing background/backdrop-filter here anymore -
+       that's what was still causing the caret misplacement bug at the
+       moment of focus (see the block comment above): changing the
+       wrapper's own background value on focus recomposites its blurred
+       layer right as the caret is being placed, which is exactly the
+       WebKit failure mode this whole wrapper-not-input approach was
+       built to avoid in the first place. Border-color and box-shadow
+       alone are enough to read as "focused" without touching the layer
+       backdrop-filter operates on at all. */
     border-color: var(--blue);
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.9);
     box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15), var(--glass-shadow-sm);
 }
 
@@ -1536,18 +1544,19 @@ html[data-theme="dark"] .modal-sheet-compact {
     display: flex;
 }
 
-/* These three are always opened FROM the Settings sheet, which is also a
+/* These are always opened FROM the Settings sheet, which is also a
    plain .modal (z-index 200) - without this, stacking among same-z-index
    fixed elements falls back to DOM order, and all three happen to sit
    earlier in the markup than #settingsModal, so they'd render invisibly
-   behind it instead of on top. Notification Types and Library Display
-   are opened from Settings the exact same way, so they need the same
-   override - without it they were opening "behind" Settings and only
-   becoming visible once Settings itself closed. */
+   behind it instead of on top. Library Display is opened from Settings
+   the exact same way, so it needs the same override - without it it was
+   opening "behind" Settings and only becoming visible once Settings
+   itself closed. (The Notifications log modal isn't in this list - it's
+   opened directly from Home, not through Settings, so it doesn't have
+   this same stacking problem to begin with.) */
 #avatarPickerModal,
 #achievementsModal,
 #novaWrappedModal,
-#notificationPrefsModal,
 #libraryDisplayModal {
     z-index: 250;
 }
@@ -2370,6 +2379,126 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .settings-entry-btn:active {
     transform: scale(0.9) rotate(30deg);
+}
+
+/* Same size/treatment as .settings-entry-btn right next to it, in the
+   neutral --surface glass rather than blue - this is a browsing/reading
+   destination, not an action button, so it doesn't compete with
+   Settings' primary-blue weight. */
+.notifications-entry-btn {
+    position: relative;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-border);
+    color: var(--text);
+    box-shadow: var(--glass-shadow-sm);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.notifications-entry-btn .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.notifications-entry-btn:active {
+    transform: scale(0.9);
+}
+
+.notifications-unread-dot {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--red-gradient);
+    border: 2px solid var(--surface);
+    box-shadow: 0 1px 4px rgba(239, 68, 68, 0.5);
+}
+
+/* =========================================================
+   NOTIFICATIONS LOG
+========================================================= */
+.notifications-clear-btn {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    color: var(--blue);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.notifications-clear-btn:active {
+    opacity: 0.6;
+}
+
+.notification-log-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    border-radius: var(--radius-md);
+    background: var(--glass-sheen), var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
+}
+
+.notification-log-icon {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin-top: 1px;
+}
+
+.notification-log-icon .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.notification-log-icon.success {
+    background: var(--green-gradient);
+}
+
+.notification-log-icon.error {
+    background: var(--red-gradient);
+}
+
+.notification-log-icon.info {
+    background: var(--blue-gradient);
+}
+
+.notification-log-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-log-message {
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text);
+}
+
+.notification-log-time {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    opacity: 0.6;
+    margin-top: 3px;
+    font-weight: 600;
 }
 
 /* =========================================================
@@ -3238,9 +3367,8 @@ html[data-theme="dark"] .stat {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
 }
 
-html[data-theme="dark"] .search-box:focus-within {
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.08);
-}
+/* No background override here anymore either - see the light-mode
+   .search-box:focus-within comment for why. */
 
 html[data-theme="dark"] .bottom-nav {
     background:
