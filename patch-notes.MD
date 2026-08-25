@@ -22,10 +22,11 @@ What's included, top to bottom.
 
 ## Notifications
 
-- Two delivery paths: notifications fire locally while the app is open or was recently backgrounded, and real push delivery reaches a device even when the app is fully closed.
+- Two delivery paths: notifications fire locally while the app is open or was recently backgrounded, and real push delivery reaches a device even when the app is fully closed. On the push path, each account is notified once daily, timed to land in its own local morning regardless of timezone.
 - Notifications fire only on the actual release day, checked against the real release instant for that specific viewer — never at the moment metadata merely mentions something coming, and never for episodes that were already out when a show was added.
 - On a day when nothing in your library is releasing, an optional reminder can nudge you about an at-risk watch streak, or about episodes waiting in Continue Watching after a few days away — each with its own separate condition so neither becomes a daily nag.
-- Every category — new episodes, show premieres, movie releases, streak reminders, Continue Watching reminders — can be turned on or off independently in Settings, synced to your account so the preference follows you across devices.
+- A single on/off switch, no per-category selection.
+- A Notifications log on Home keeps a running history of app messages — confirmations, errors, achievement unlocks — so nothing is missed just because it wasn't seen the moment it happened.
 
 ## Home & Viewing Analytics
 
@@ -42,7 +43,7 @@ A yearly recap, tracking January 1 – December 31 in your own timezone, with a 
 
 - Appearance: Light, Dark, or automatic based on your device.
 - Streaming region: a full country picker, auto-detected from your device's location on first sign-in (with a browser-locale fallback), always editable manually afterward — drives which "where to watch" information you see.
-- Notification Types and Library Display, each with independent per-category control.
+- Library Display, with independent per-category control.
 - Account: sign-out, account deletion with re-authentication, and Privacy Notice & Terms of Service.
 
 ## Account & Privacy
