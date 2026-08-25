@@ -22,11 +22,11 @@ What's included, top to bottom.
 
 ## Notifications
 
-- Two delivery paths: notifications fire locally while the app is open or was recently backgrounded, and real push delivery reaches a device even when the app is fully closed. On the push path, each account is notified once daily, timed to land in its own local morning regardless of timezone.
+- Real push, delivered even when the app is fully closed, via OneSignal — the only notification delivery mechanism in the app, a single on/off toggle, no separate path that only works while the app happens to be open.
+- Each account is notified once daily, timed to land in its own local morning regardless of timezone.
 - Notifications fire only on the actual release day, checked against the real release instant for that specific viewer — never at the moment metadata merely mentions something coming, and never for episodes that were already out when a show was added.
 - On a day when nothing in your library is releasing, an optional reminder can nudge you about an at-risk watch streak, or about episodes waiting in Continue Watching after a few days away — each with its own separate condition so neither becomes a daily nag.
-- A single on/off switch, no per-category selection.
-- A Notifications log on Home keeps a running history of app messages — confirmations, errors, achievement unlocks — so nothing is missed just because it wasn't seen the moment it happened.
+- A Notifications log on Home keeps a running history of app messages — confirmations, errors, achievement unlocks — so nothing is missed just because it wasn't seen the moment it happened. Separate from the push notifications above; this is a history of in-app feedback, not release alerts.
 
 ## Home & Viewing Analytics
 
@@ -54,7 +54,7 @@ A yearly recap, tracking January 1 – December 31 in your own timezone, with a 
 
 ## Design
 
-- A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the floating navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
+- A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the edge-to-edge navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
 - Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
 - Dark mode throughout, applied before first paint so there's no flash between themes on load.
