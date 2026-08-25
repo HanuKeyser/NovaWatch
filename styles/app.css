@@ -42,7 +42,12 @@ body {
     background-attachment: fixed;
     color: var(--text);
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
+    /* Bottom nav floats near the true bottom edge (see .bottom-nav) - its
+       own safe-area-aware offset already clears the home indicator/
+       gesture area, so this just needs to clear the floating bar itself
+       consistently, not add a second safe-area on top of that. */
     padding-bottom: 100px;
     -webkit-font-smoothing: antialiased;
     /* Stops a vertical drag at the very top/bottom of the page from
@@ -116,15 +121,24 @@ img {
     width: 100%;
     max-width: 600px;
     min-height: 100vh;
+    min-height: 100dvh;
     margin: 0 auto;
 }
 
 /* =========================================================
    PAGES
 ========================================================= */
+/* Top/bottom padding both fold in the real device safe-area inset on
+   top of the existing spacing, rather than replacing it - so content
+   (headers, cards) clears the Dynamic Island/notch/status bar at the
+   top and the home indicator/gesture bar at the bottom, while the
+   background behind it (on body - see above) stays full-bleed since
+   nothing about the background itself is padded, only this content
+   layer. env(...) resolves to 0px on devices/browsers without a safe
+   area (most Android phones, desktop), so this is a no-op there. */
 .page {
     display: none;
-    padding: 36px 18px 20px;
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .page.active {
@@ -138,8 +152,11 @@ img {
    globally on every tab switch, which would have permanently hidden
    Settings' content (via .page's own display:none default) the next
    time any tab changed while sharing that class. */
+/* Same safe-area treatment as .page above - Settings is functionally a
+   5th top-level tab (its own full-height sheet), so it gets the exact
+   same top/bottom logic rather than a separate hardcoded copy. */
 .settings-page-content {
-    padding: 36px 18px 20px;
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .tab-content-wrapper {
@@ -1296,7 +1313,13 @@ html[data-theme="dark"] .upcoming-card-caption {
 .bottom-nav {
     position: fixed;
     left: 50%;
-    bottom: 22px;
+    /* Floats a fixed 22px above whatever the true bottom edge is - on a
+       device with a home indicator, that edge sits further up the
+       screen than the physical bottom, so this needs the real inset
+       folded in too, or the bar (and its drag-to-switch touch target)
+       ends up sitting too close to/under the gesture area. Resolves to
+       just 22px on devices with no inset. */
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
@@ -1587,13 +1610,23 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: linear-gradient(180deg, rgba(248,250,252,0.05) 0%, rgba(248,250,252,0.96) 100%);
 }
 
+/* Full-screen modals (Details, Episode, NovaWrapped, Settings' own
+   entry point elsewhere) sit edge-to-edge, so this floating close/action
+   button needs the real top safe-area inset folded in or it can end up
+   under the Dynamic Island/notch/status bar. Compact modals (below)
+   override this back to the plain value, since those are centered on
+   screen and never actually reach the true top edge. */
 .modal-header-nav {
     position: absolute;
-    top: 14px;
+    top: calc(14px + env(safe-area-inset-top, 0px));
     right: 16px;
     z-index: 10;
     display: flex;
     gap: 10px;
+}
+
+.modal-sheet-compact .modal-header-nav {
+    top: 14px;
 }
 
 .close-button {
@@ -1683,7 +1716,10 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: rgba(0, 0, 0, 0.32);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    padding: 24px;
+    /* Centered card, so this is mostly defensive the same way #authScreen's
+       is - the backdrop itself (inset: 0 above) is already full-bleed
+       regardless. */
+    padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
 }
 
 .confirm-overlay.open {
@@ -2941,7 +2977,11 @@ html[data-theme="dark"] .avatar-edit-badge {
     display: none; /* Hidden by default, controlled via JS */
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    /* Content is centered, not top/bottom-anchored, so this is mostly
+       defensive (a very short viewport could still push the card close
+       to an edge) - the background itself (inset: 0 above) is already
+       correctly full-bleed regardless of this padding. */
+    padding: calc(20px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
 }
 
 /* Blur backdrop overlay */
