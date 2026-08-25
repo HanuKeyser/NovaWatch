@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#F3F4F9" id="metaThemeColor">
 <script>
 // Applied synchronously, before the stylesheet/body render, so a saved
@@ -30,7 +30,14 @@
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- black-translucent (not "default") is what actually lets the page's
+     own background draw behind the status bar / Dynamic Island instead
+     of iOS reserving a fixed opaque bar there - required for the
+     full-bleed background this app now targets (see the safe-area CSS
+     in app.css). The tradeoff: status bar icons/clock render light-
+     colored regardless of app theme, since iOS doesn't expose a way to
+     match that to light vs dark mode automatically. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NovaWatch">
 
 <!-- Preconnect for faster API calls -->
