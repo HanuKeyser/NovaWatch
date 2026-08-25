@@ -15,7 +15,7 @@
 // enable is registration.showNotification() working reliably while the
 // service worker is active (e.g. app open in a background tab).
 
-const CACHE_NAME = "novawatch-shell-v75";
+const CACHE_NAME = "novawatch-shell-v78";
 
 self.addEventListener("install", (event) => {
     // self.registration.scope is the actual folder this worker controls
