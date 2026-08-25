@@ -151,6 +151,106 @@ async function sendOneSignalPush(externalId, title, body) {
     return res.json();
 }
 
+// Same "every calendar day with a watch or rewatch logged" set the
+// client builds (see buildWatchedDatesSet in app.js) - watchedAt/
+// lastWatchedAt are already stored as UTC-sliced date strings on both
+// sides, so this needs no per-account timezone adjustment, unlike the
+// release-date checks above.
+function buildWatchedDatesSet(libraryItems) {
+    const watchedDates = new Set();
+    libraryItems.forEach(item => {
+        if (item.type === 'movie') {
+            if (item.watched && item.lastWatchedAt) watchedDates.add(item.lastWatchedAt.slice(0, 10));
+        } else if (Array.isArray(item.episodes)) {
+            item.episodes.forEach(ep => {
+                if (ep.watched && ep.watchedAt) watchedDates.add(ep.watchedAt.slice(0, 10));
+            });
+        }
+    });
+    return watchedDates;
+}
+
+// Exact mirror of getCurrentWatchStreak() in app.js.
+function getCurrentWatchStreak(watchedDates) {
+    if (!watchedDates || watchedDates.size === 0) return 0;
+    const sortedDates = [...watchedDates].sort();
+    const mostRecent = sortedDates[sortedDates.length - 1];
+    const todayStr = utcDateString(new Date());
+    const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+    if (dayGap(mostRecent, todayStr) > 1) return 0;
+    let streak = 1;
+    for (let i = sortedDates.length - 1; i > 0; i--) {
+        if (dayGap(sortedDates[i - 1], sortedDates[i]) === 1) streak++;
+        else break;
+    }
+    return streak;
+}
+
+// Simplified mirror of getContinueWatchingItems() in app.js - just
+// whether anything qualifies, since the reminder body doesn't need the
+// actual list.
+function hasContinueWatchingBacklog(libraryItems) {
+    return libraryItems.some(item => {
+        if (item.isStopped) return false;
+        if (item.type === 'movie') return !item.watched && item.releaseDate && hasReleased(item.releaseDate);
+        if (!Array.isArray(item.episodes)) return false;
+        return item.episodes.some(ep => !ep.watched && ep.releaseDate && hasReleased(ep.releaseDate));
+    });
+}
+
+// Mirrors checkEngagementReminders() in app.js - only ever called for an
+// account with nothing releasing today (see the call site in run()
+// above). Two independent checks, each with its own dedup/cooldown so
+// neither turns into a daily nag - see that function's own comment for
+// why each condition is what it is.
+async function checkEngagementRemindersForUser(uid, libraryItems, prefs, todayStr) {
+    if (!prefs.streakReminders && !prefs.continueWatchingReminders) return;
+
+    const watchedDates = buildWatchedDatesSet(libraryItems);
+    const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
+    const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+
+    if (prefs.streakReminders && mostRecentWatch && mostRecentWatch !== todayStr) {
+        const streak = getCurrentWatchStreak(watchedDates);
+        if (streak > 0) {
+            const notifiedRef = db.collection('users').doc(uid).collection('_internal').doc('notifiedReleases');
+            const notifiedDoc = await notifiedRef.get();
+            const notifiedData = notifiedDoc.exists ? notifiedDoc.data() : {};
+            const alreadySentToday = notifiedData.day === todayStr && (notifiedData.ids || []).includes('streak-reminder');
+
+            if (!alreadySentToday) {
+                try {
+                    await sendOneSignalPush(uid, 'Keep Your Streak Going!', `You're on a ${streak}-day watch streak - watch something today to keep it going.`);
+                    const ids = (notifiedData.day === todayStr ? notifiedData.ids || [] : []).concat('streak-reminder');
+                    await notifiedRef.set({ day: todayStr, ids });
+                } catch (err) {
+                    console.error(`Failed to send streak reminder to ${uid}:`, err.message);
+                }
+            }
+        }
+    }
+
+    if (prefs.continueWatchingReminders && hasContinueWatchingBacklog(libraryItems)) {
+        const daysSinceLastWatch = mostRecentWatch ? dayGap(mostRecentWatch, todayStr) : Infinity;
+
+        if (daysSinceLastWatch >= 3) {
+            const reminderRef = db.collection('users').doc(uid).collection('_internal').doc('lastContinueWatchingReminder');
+            const reminderDoc = await reminderRef.get();
+            const lastReminderDay = reminderDoc.exists ? reminderDoc.data().day : null;
+            const daysSinceLastReminder = lastReminderDay ? dayGap(lastReminderDay, todayStr) : Infinity;
+
+            if (daysSinceLastReminder >= 7) {
+                try {
+                    await sendOneSignalPush(uid, 'Pick Up Where You Left Off', "You've got episodes waiting in Continue Watching.");
+                    await reminderRef.set({ day: todayStr });
+                } catch (err) {
+                    console.error(`Failed to send Continue Watching reminder to ${uid}:`, err.message);
+                }
+            }
+        }
+    }
+}
+
 async function run() {
     if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
         throw new Error('ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY must both be set as environment variables.');
@@ -170,13 +270,21 @@ async function run() {
         // refreshes it), which is still far better than never notifying
         // that account at all.
         const timeZone = userData.timeZone || 'UTC';
-        const prefs = userData.notificationPrefs || { newEpisodes: true, showPremieres: true, movieReleases: true };
+        const prefs = userData.notificationPrefs || { newEpisodes: true, showPremieres: true, movieReleases: true, streakReminders: true, continueWatchingReminders: true };
 
         const librarySnapshot = await db.collection('users').doc(uid).collection('library').get();
         const libraryItems = librarySnapshot.docs.map(d => d.data());
 
         const releases = getTodaysReleasesForUser(libraryItems, timeZone);
-        if (releases.length === 0) continue;
+
+        // Same rule as the client (see checkTodaysReleases/
+        // checkEngagementReminders in app.js): engagement reminders only
+        // get a look-in on a day with nothing actually releasing for
+        // this account at all - never alongside a real release.
+        if (releases.length === 0) {
+            await checkEngagementRemindersForUser(uid, libraryItems, prefs, todayStr);
+            continue;
+        }
 
         // Same once-per-day-per-item dedup idea as the client's
         // TODAYS_RELEASE_NOTIFIED_KEY, just kept in Firestore here
