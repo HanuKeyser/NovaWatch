@@ -132,27 +132,21 @@ img {
 /* =========================================================
    PAGES
 ========================================================= */
-/* Top/bottom padding both fold in the real device safe-area inset on
-   top of the existing spacing, rather than replacing it - so content
-   (headers, cards) clears the Dynamic Island/notch/status bar at the
-   top and the home indicator/gesture bar at the bottom, while the
-   background behind it (on body - see above) stays full-bleed since
-   nothing about the background itself is padded, only this content
-   layer. env(...) resolves to 0px on devices/browsers without a safe
-   area (most Android phones, desktop), so this is a no-op there.
-   Horizontal padding removed entirely (was 18px both sides) - cards
-   (.hero-card, .analytics-card, .continue-card, .card) already carry
-   their own internal padding, so removing the page's own outer margin
-   lets them span edge to edge instead of floating with a visible gap
-   of page background on either side, matching the bottom nav's own
-   edge-to-edge treatment. Elements that genuinely need a margin of
-   their own for readability/usability (section titles, search bars,
-   segmented toggles - see PAGE INSET below) get it back individually
-   instead of every page having it ambiently, whether it was needed
-   there or not. */
+/* Horizontal padding restored, but meaningfully smaller than the
+   original 18px (12px) rather than either extreme - true zero margin
+   looked broken on cards (.hero-card, .analytics-card): rounded corners
+   read as a mistake rather than a style choice once they're touching
+   the flush screen edge with nothing around them, borders became a
+   colored line running along the physical edge, and box-shadows lost
+   their spread on the sides that had no room left to cast into. 12px is
+   enough room for all of that to read properly again while still
+   cutting the old margin by a third - genuinely tighter, not just
+   technically "edge to edge" while looking unfinished. Pure image
+   content (poster grids - see .library-grid below) doesn't have any of
+   those problems and gets true edge-to-edge treatment instead. */
 .page {
     display: none;
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 0 calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 12px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .page.active {
@@ -166,35 +160,11 @@ img {
    globally on every tab switch, which would have permanently hidden
    Settings' content (via .page's own display:none default) the next
    time any tab changed while sharing that class. */
-/* Same safe-area and edge-to-edge treatment as .page above - Settings is
-   functionally a 5th top-level tab (its own full-height sheet), so it
-   gets the exact same logic rather than a separate hardcoded copy. */
+/* Same safe-area treatment as .page above - Settings is functionally a
+   5th top-level tab (its own full-height sheet), so it gets the exact
+   same logic rather than a separate hardcoded copy. */
 .settings-page-content {
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 0 calc(20px + env(safe-area-inset-bottom, 0px));
-}
-
-/* =========================================================
-   PAGE INSET
-   .page/.settings-page-content lost their own horizontal padding above
-   so cards can go edge to edge - this puts a matching 18px margin back,
-   but only on the specific elements that actually need it: bare text
-   (section titles, category labels) that would otherwise touch the
-   physical screen edge with no breathing room at all, and interactive
-   "chrome" controls (search bars, segmented toggles) that read as an
-   odd, overly-wide touch target if stretched the full raw viewport
-   width the way a poster-grid or a card doesn't. Applied by selector
-   rather than a class added throughout the HTML, so this is one place
-   to tune (or revert) rather than dozens of markup edits.
-========================================================= */
-.page .section-header,
-.page .segmented-toggle,
-.page .library-toolbar,
-.page .category-title,
-.page .continue-group-title,
-.page .search-results-grid,
-.settings-page-content .section-header {
-    padding-left: 18px;
-    padding-right: 18px;
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 12px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .tab-content-wrapper {
@@ -609,6 +579,18 @@ img {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px 12px;
+    /* True edge-to-edge specifically for poster grids (Library and
+       Upcoming both use this class) - escapes .page's own 12px margin
+       via a negative-margin "bleed" rather than inheriting it the way
+       .category-title right above it does. Pure image content doesn't
+       have the problems a full-bleed CARD does (see .page's own
+       comment) - a poster's corner radius is small relative to its own
+       size and reads perfectly fine flush against the true screen edge,
+       the way a card's much larger radius, visible border, and
+       all-around shadow don't. */
+    margin-left: -12px;
+    margin-right: -12px;
+    width: calc(100% + 24px);
 }
 
 .library-grid .card {
