@@ -2,7 +2,7 @@
 
 A mobile-first PWA for tracking TV shows and movies — search, add to a library, mark episodes/movies watched, log rewatches, and get release alerts. Built on Firebase (Auth + Firestore) and the TMDB API, with JustWatch-sourced "where to watch" availability.
 
-Live at `https://www.novawatch.site/`. Mobile-first by design — no desktop/tablet layout is planned.
+Live at `https://www.novawatch.site/`. Mobile-first by design — phones get the primary, fully-tuned experience; tablets get a widened version of the same layout (see Tablet/larger screens below) rather than a separate design. No desktop/laptop-width layout is planned.
 
 ---
 
@@ -135,3 +135,11 @@ Text selection and iOS's long-press copy/selection callout are disabled app-wide
 **Full-bleed safe-area layout** — the installed PWA's background extends behind the Dynamic Island/notch/status bar and the home indicator/gesture area on every device, rather than the OS's own background color showing through a gap (the `viewport-fit=cover` viewport meta tag is what actually enables this - without it, `env(safe-area-inset-*)` values are meaningless and the whole layout stays confined to the safe rectangle). Only the background is full-bleed; actual content (page padding, the bottom nav, floating modal close buttons) folds the real device inset into its existing spacing so nothing sits under a cutout or gesture area. `env(...)` resolves to `0px` on devices/browsers with no safe area (most Android phones, desktop), so this has no effect there.
 
 The bottom nav's specific glass treatment (`--glass-chrome-*` tokens) - genuinely see-through, a soft top-left highlight, a diffuse top-edge glow, no border, an elevation shadow instead of a ring - is the app's most refined version of the shared "Liquid Glass" language, and is what every other piece of this same chrome tier (the search bar, the segmented-toggle active state) is meant to match. The chrome tokens themselves are kept in exact sync with the nav bar's own blur/saturation values rather than being a separate, looser approximation of them. This tier is about the glass recipe, not whether something floats or sits flush - the nav bar itself floats, as a pill with margin on every side (see Bottom navigation above). Content-backing surfaces (cards, sheets, `--surface`) use a lighter, one-step-back general glass recipe (`--glass-blur`, `--glass-border`, `--glass-shadow`) - that's what gives this chrome tier a distinct, elevated feel instead of every surface in the app looking identical.
+
+## Tablet / larger screens
+
+A single `@media (min-width: 768px)` block at the very end of `app.css` - everything above it in the file is untouched below that width, so phones get byte-for-byte the same CSS they always have. 768px is comfortably above even the widest phone in portrait (a Pro Max is still only ~430px), so there's no risk of this firing on a large phone by mistake.
+
+Not a separate tablet layout - same bottom nav, same page structure, same components everywhere - just enough widening that an iPad doesn't get a stretched phone screen with dead space down both sides. `.app`'s content column widens from 600px to 900px (not the full width of a large iPad - a very wide single column stops being comfortable to scan well before that point), the bottom nav widens to 620px to match without stretching its 4 buttons out to looking sparse, and the two real poster grids (`.library-grid`, `.poster-picker-grid`) gain a 4th column, since images benefit from the extra width in a way running text doesn't. Everything else - stat tiles, segmented toggles, modal action-button rows - stays exactly as it is, since their column counts are tied to a fixed number of items rather than to available space.
+
+The existing PWA install setup (`manifest.json`, the `apple-mobile-web-app-*` meta tags, `viewport-fit=cover`) already works identically on iPadOS's own "Add to Home Screen" - nothing further was needed there specifically for tablets to install and launch standalone the same way they do on iPhone.
