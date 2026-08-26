@@ -126,6 +126,31 @@ function getTodaysReleasesForUser(libraryItems, timeZone) {
     return results;
 }
 
+// TMDB titles/descriptions often use "smart" typographic punctuation
+// (curly quotes, en/em dashes, an ellipsis character) rather than plain
+// ASCII - exactly the class of character that can crash a Node fetch
+// call somewhere in the request/response header-handling machinery
+// (a well-documented Node/undici gotcha: "Cannot convert argument to a
+// ByteString because the character at index X has a value of Y which
+// is greater than 255" - this is what silently failed today's send).
+// Normalizing to plain ASCII equivalents before it ever reaches
+// sendOneSignalPush removes the trigger entirely, rather than hoping it
+// never comes up again.
+function sanitizeForPush(str) {
+    return String(str)
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\u2026/g, '...')
+        // Anything else outside the safe Latin-1 range is dropped
+        // rather than risking this same class of failure again for a
+        // different character next time (a title in a non-Latin
+        // script, an emoji) - a notification missing an unusual
+        // character is far better than one that silently never sends
+        // at all, which is what happened today.
+        .replace(/[^\x00-\xFF]/g, '');
+}
+
 // Targets a specific account via OneSignal's "external_id" alias - see
 // oneSignalLogin() in app.js, which is what ties a subscribed device to
 // this same id (the Firebase uid) on the client side.
@@ -140,8 +165,8 @@ async function sendOneSignalPush(externalId, title, body) {
             app_id: ONESIGNAL_APP_ID,
             target_channel: 'push',
             include_aliases: { external_id: [externalId] },
-            headings: { en: title },
-            contents: { en: body }
+            headings: { en: sanitizeForPush(title) },
+            contents: { en: sanitizeForPush(body) }
         })
     });
 
