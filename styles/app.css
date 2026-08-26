@@ -44,14 +44,14 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
-    /* Nav bar floats at bottom: calc(22px + safe-area) with a 70px
-       height (see .bottom-nav) - its top edge sits at 92px + safe-area
+    /* Nav bar floats at bottom: calc(10px + safe-area) with a 70px
+       height (see .bottom-nav) - its top edge sits at 80px + safe-area
        from the true bottom. .page's own bottom padding already
-       contributes 20px + safe-area of its own trailing space; this 80px
+       contributes 20px + safe-area of its own trailing space; this 68px
        plus that lands just past the nav's own top edge with a small
        ~8px breathing gap, instead of double-padding on top of what
        .page already provides. */
-    padding-bottom: 80px;
+    padding-bottom: 68px;
     -webkit-font-smoothing: antialiased;
     /* Stops a vertical drag at the very top/bottom of the page from
        rubber-banding into the browser's own pull-to-refresh/overscroll
@@ -1329,13 +1329,14 @@ html[data-theme="dark"] .upcoming-card-caption {
 .bottom-nav {
     position: fixed;
     left: 50%;
-    /* Floats a fixed 22px above whatever the true bottom edge is - on a
-       device with a home indicator, that edge sits further up the
-       screen than the physical bottom, so this needs the real inset
-       folded in too, or the bar (and its drag-to-switch touch target)
-       ends up sitting too close to/under the gesture area. Resolves to
-       just 22px on devices with no inset. */
-    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    /* Floats a fixed 10px above whatever the true bottom edge is (was
+       22px - moved closer to the bottom) - on a device with a home
+       indicator, that edge sits further up the screen than the physical
+       bottom, so this needs the real inset folded in too, or the bar
+       (and its drag-to-switch touch target) ends up sitting too close
+       to/under the gesture area. Resolves to just 10px on devices with
+       no inset. */
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
