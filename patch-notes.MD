@@ -58,6 +58,10 @@ A yearly recap, tracking January 1 – December 31 in your own timezone, with a 
 - Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
 - Dark mode throughout, applied before first paint so there's no flash between themes on load.
+- An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap.
+- The offline banner pushes the page's own content down while visible, rather than floating on top of it.
+- A one-time Add to Home Screen prompt, shown once the app is open and only for someone not already using the installed version — permanently suppressed the moment it can tell the app is actually running standalone.
+- Widened, tablet-appropriate layout at 768px and up, with no change at all to the phone experience below that width.
 
 ## Platform
 
