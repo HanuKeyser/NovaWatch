@@ -26,7 +26,7 @@ What's included, top to bottom.
 - Each account is notified once daily, at a single fixed anchor time - the exact local time it arrives at depends on that account's own timezone.
 - Notifications fire only on the actual release day, checked against the real release instant for that specific viewer — never at the moment metadata merely mentions something coming, and never for episodes that were already out when a show was added.
 - On a day when nothing in your library is releasing, an optional reminder can nudge you about an at-risk watch streak, or about episodes waiting in Continue Watching after a few days away — each with its own separate condition so neither becomes a daily nag.
-- A Notifications log on Home keeps a running history of app messages — confirmations, errors, achievement unlocks — so nothing is missed just because it wasn't seen the moment it happened. Separate from the push notifications above; this is a history of in-app feedback, not release alerts.
+- OneSignal push is the only notification mechanism in the app - no separate in-app log or history to check.
 
 ## Home & Viewing Analytics
 
