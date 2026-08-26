@@ -60,26 +60,6 @@ function utcDateString(date) {
     return date.toISOString().slice(0, 10);
 }
 
-// True if it's currently somewhere in the 8:00-8:59 local hour for this
-// timezone. 08:00 UTC is the base anchor for when notifications go out,
-// adjusted per account rather than firing everyone's at the same UTC
-// instant regardless of where they actually are - this is the actual
-// mechanism behind that (see the hourly schedule in
-// .github/workflows/release-notifications.yml, and the call site in
-// run() below).
-function isLocal8AMHour(timeZone) {
-    try {
-        const hourStr = new Date().toLocaleString('en-US', { timeZone, hour: '2-digit', hour12: false });
-        const hour = parseInt(hourStr, 10) % 24; // toLocaleString can return "24" for midnight in some locales
-        return hour === 8;
-    } catch (e) {
-        // An unrecognized timezone string (shouldn't happen - it's
-        // always Intl's own resolvedOptions().timeZone from the client)
-        // falls back to matching on 08:00 UTC specifically, rather than
-        // silently never notifying that account at all.
-        return new Date().getUTCHours() === 8;
-    }
-}
 
 // Same local-calendar-day comparison as daysUntil() in app.js, just for
 // an arbitrary IANA timezone (each account's own stored timeZone - see
@@ -290,14 +270,6 @@ async function run() {
         // that account at all.
         const timeZone = userData.timeZone || 'UTC';
 
-        // 08:00 UTC is the reference anchor, adjusted to each account's
-        // own local time rather than sending everyone's notifications at
-        // the same UTC instant regardless of where they are - this job
-        // runs hourly (see the workflow), but a given account is only
-        // ever actually processed during the one run each day that lands
-        // on ITS OWN local 8am hour.
-        if (!isLocal8AMHour(timeZone)) { skipped++; continue; }
-
         const librarySnapshot = await db.collection('users').doc(uid).collection('library').get();
         const libraryItems = librarySnapshot.docs.map(d => d.data());
 
@@ -340,7 +312,7 @@ async function run() {
         }
     }
 
-    console.log(`Done. Sent ${sent} notification(s), skipped ${skipped} (not this account's local 8am hour yet, or already sent today).`);
+    console.log(`Done. Sent ${sent} notification(s), skipped ${skipped} (already sent today, or nothing to send).`);
 }
 
 run().catch(err => {
