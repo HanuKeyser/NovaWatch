@@ -62,6 +62,15 @@ body {
     overscroll-behavior-y: contain;
 }
 
+/* iOS Safari keyboard scroll-hijack workaround (WebKit #191204) - see
+   the matching focus/blur listeners on the 6 search inputs in app.js
+   for the full explanation. Toggled on/off around focus rather than
+   left permanently on, so a short page doesn't show a large empty gap
+   under its own content the rest of the time. */
+body.keyboard-scroll-safety {
+    padding-bottom: 60vh;
+}
+
 button, input {
     font: inherit;
 }
@@ -750,7 +759,17 @@ img {
     border: 1px solid var(--glass-chrome-border);
     border-radius: 999px;
     box-shadow: var(--glass-chrome-shadow);
-    transition: all 0.2s ease;
+    /* Scoped explicitly to border-color/box-shadow (the only two things
+       that actually change on :focus-within below) rather than
+       transition: all - background/backdrop-filter were already never
+       touched by the focus state itself, but leaving the transition
+       declared broadly meant the browser was still tracking every
+       property on this element for a possible animated change on every
+       state update, backdrop-filter included, which is exactly the
+       layer WebKit's caret math is sensitive to. Being explicit here
+       removes that risk entirely rather than relying on those two
+       properties simply not changing in practice. */
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .search-box:focus-within {
@@ -776,6 +795,15 @@ img {
     border-radius: 999px;
     color: var(--text);
     font-size: 14px;
+    /* Explicit rather than left to each browser's own default (which
+       isn't identical across engines) - the caret's vertical position is
+       computed from the input's line box, so an inconsistent/unset
+       line-height is a second, separate way the caret can end up
+       slightly off from where the text visually sits, on top of the
+       backdrop-filter-related horizontal issue fixed above. Same value
+       across all 6 search bars in the app, since they all share this
+       one rule. */
+    line-height: 1.4;
     -webkit-appearance: none;
     appearance: none;
 }
@@ -3108,10 +3136,18 @@ html[data-theme="dark"] .large-avatar {
    "No Internet" indicator) - stays up for as long as the connection is
    actually down, not a transient message. */
 .offline-banner {
-    position: fixed;
+    /* sticky, not fixed - a fixed banner overlays whatever's underneath
+       it; sticky still takes up real space in normal document flow
+       (pushing .app's content down while it's visible, the same way
+       LinkedIn's own connectivity banner works), while still pinning to
+       the top of the viewport once you scroll past where it would
+       naturally sit. Only affects .app's own normal-flow content this
+       way - position:fixed overlays elsewhere in the app (the auth
+       screen, modals) are removed from document flow entirely by
+       definition, so no sibling's position property can push those
+       down; those still layer via z-index instead, same as before. */
+    position: sticky;
     top: 0;
-    left: 0;
-    right: 0;
     z-index: 900;
     display: none;
     align-items: center;
@@ -3135,6 +3171,70 @@ html[data-theme="dark"] .large-avatar {
 
 .offline-banner.show {
     display: flex;
+}
+
+/* =========================================================
+   ERROR TOAST
+========================================================= */
+.error-toast {
+    position: fixed;
+    left: 50%;
+    /* Nav bar's own top edge sits at 88px + safe-area from the true
+       bottom (18px offset + 70px height - see .bottom-nav) - this
+       clears it with a deliberate ~12px of its own breathing room
+       rather than sitting flush against it. */
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%) translateY(14px) scale(0.94);
+    z-index: 500;
+    opacity: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: calc(100% - 36px);
+    max-width: 420px;
+    padding: 13px 20px 13px 16px;
+    border-radius: var(--radius-2xl);
+    /* Same chrome-tier glass recipe as the nav bar/search bars (fill,
+       blur, sheen, shadow) - the shared visual language for anything
+       that floats over content rather than sitting in the page flow,
+       kept in sync with .bottom-nav's own values rather than a looser
+       approximation of them. */
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    box-shadow: var(--glass-chrome-shadow);
+    color: var(--text);
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    line-height: 1.35;
+    cursor: pointer;
+    transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.error-toast.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.error-toast-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--red-gradient);
+    color: white;
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+}
+
+.error-toast-icon .icon {
+    width: 13px;
+    height: 13px;
 }
 
 .auth-field {
@@ -3341,7 +3441,17 @@ html[data-theme="dark"] .state-card {
 ========================================================= */
 @media (min-width: 768px) {
     .app {
-        max-width: 900px;
+        /* Was 900px - iPad Air/Mini portrait widths (~820px/~744px) sit
+           comfortably under that, so they filled edge to edge already.
+           iPad Pro portrait (1024px for 12.9", 834px for 11") exceeded
+           it, leaving visible empty space down both sides - this covers
+           the largest common tablet portrait width too. Landscape on
+           the biggest tablets can still show some space by design
+           (going all the way to landscape width, ~1366px on a 12.9"
+           iPad Pro, starts reading as a stretched desktop layout rather
+           than a tablet one - out of scope, same as laptop/desktop
+           widths generally). */
+        max-width: 1024px;
     }
 
     .bottom-nav {
