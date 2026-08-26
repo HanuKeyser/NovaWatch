@@ -319,6 +319,15 @@
             </div>
         </div>
 
+        <!-- Continue Watching Section -->
+        <div>
+            <div class="section-header">
+                <div class="section-title">Continue Watching</div>
+            </div>
+
+            <div id="continueWatchingList"></div>
+        </div>
+
         <!-- Viewing Stats -->
         <div class="analytics-section">
             <div class="section-header">
@@ -340,15 +349,6 @@
                 </div>
                 <div id="dashboardStats" class="stats"></div>
             </div>
-        </div>
-
-        <!-- Continue Watching Section -->
-        <div>
-            <div class="section-header">
-                <div class="section-title">Continue Watching</div>
-            </div>
-
-            <div id="continueWatchingList"></div>
         </div>
     </div>
 </main>
@@ -977,6 +977,52 @@
         <div class="confirm-actions">
             <button class="confirm-btn cancel" onclick="closeEditDisplayNameModal()">Cancel</button>
             <button class="confirm-btn primary" id="saveDisplayNameBtn" onclick="saveDisplayName()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     ERROR TOAST
+     Errors only, deliberately - success/confirmation messages stay
+     silent (they usually accompany a visible state change of their own
+     already - a screen transition, a button flipping to its "done"
+     state). See showErrorToast() in app.js. Positioned above the
+     floating nav bar rather than colliding with it, and intentionally
+     bottom-anchored rather than top - the offline banner already owns
+     the top of the screen, and having both appear there at once (a
+     dropped connection during a failed action) would compete for the
+     same space. -->
+<div id="errorToast" class="error-toast" onclick="hideErrorToast()">
+    <div class="error-toast-icon">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <span id="errorToastMessage"></span>
+</div>
+
+<!-- =====================================================
+     ADD TO HOME SCREEN PROMPT
+     Shown once the main app is visible (not over the sign-in screen -
+     a brand new user hasn't seen anything yet, so asking before that
+     would be premature). Never shown at all if the app can already
+     tell it's running as an installed PWA (see isRunningStandalone() in
+     app.js) - that's the one reliable, unspoofable signal available;
+     everything else here is the person self-reporting, since there's
+     no API that reports "did the manual iOS Add to Home Screen actually
+     happen" the way there would be a real completion event on Android's
+     own native install prompt. -->
+<div id="addToHomeScreenModal" class="confirm-overlay" onclick="closeAddToHomeScreenOutside(event)">
+    <div class="confirm-card">
+        <div class="confirm-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2"/>
+                <path d="M12 18h.01"/>
+            </svg>
+        </div>
+        <div class="confirm-title">Add NovaWatch to Your Home Screen</div>
+        <p class="confirm-message" id="addToHomeScreenInstructions">Install NovaWatch for quicker access and a full-screen experience, just like a regular app.</p>
+        <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="dismissAddToHomeScreen()">No thanks</button>
+            <button class="confirm-btn primary" onclick="confirmAddToHomeScreen()">Added</button>
         </div>
     </div>
 </div>
