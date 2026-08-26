@@ -62,16 +62,19 @@ app. Nothing in this codebase needs FCM.
   handles the two engagement reminders (an at-risk streak, a Continue
   Watching nudge after inactivity) on a day with nothing releasing.
 - **`.github/workflows/release-notifications.yml`**: one free way to run
-  that script hourly, via GitHub Actions. The script itself only
-  actually processes each account during the one run each day that
-  lands on *its own* local 8am hour (08:00 UTC is the reference anchor,
-  adjusted per timezone) — every other run is nearly free for that
-  account. Optional — delete it if you'd rather run the script
-  elsewhere.
+  that script once daily (08:00 UTC), via GitHub Actions. Every account
+  is processed on this same single run - there's no per-account local-
+  time targeting, so what local time a notification actually lands at
+  depends on how far an account sits from UTC. Optional — delete it if
+  you'd rather run the script elsewhere, or edit the cron hour if
+  08:00 UTC isn't the anchor you want.
 - **Each account's IANA timezone is saved** (`state.timeZone`),
   refreshed every time the profile saves — this is what lets the server
-  script determine "today," and the account's own local 8am, correctly
-  per person instead of guessing.
+  script determine "today" correctly per account, for the actual release
+  date/time check itself (which does need to be timezone-aware per
+  account - see getTodaysReleasesForUser in send-release-notifications.js)
+  even though the schedule that triggers the job doesn't vary by
+  account.
 - There's a single on/off toggle for notifications, no per-category
   selection — the server script always sends every category once an
   account is subscribed.
