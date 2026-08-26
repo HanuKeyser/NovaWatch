@@ -767,7 +767,7 @@ async function checkNotificationPermissionState() {
 // registration.showNotification() directly anymore.
 async function requestNotificationPermission() {
     if (!("Notification" in window)) {
-        showToast("Notifications not supported on this browser/device.", "error");
+        showErrorToast("Notifications not supported on this browser/device.");
         return;
     }
     try {
@@ -790,11 +790,11 @@ async function requestNotificationPermission() {
             // pure noise. The toast below is confirmation enough.
             showToast("Notifications enabled successfully!", "success");
         } else {
-            showToast("Notification permission denied.", "error");
+            showErrorToast("Notification permission denied.");
         }
     } catch (err) {
         console.error("Error requesting notification permission:", err);
-        showToast("Could not enable notifications.", "error");
+        showErrorToast("Could not enable notifications.");
     }
 }
 
@@ -827,12 +827,42 @@ function tmdbThumb(url, size) {
 }
 
 // Toast notifications, and later the in-app notifications log built to
-// replace them, were both removed entirely - kept as a no-op rather
-// than deleting all ~100 call sites across the app, which would have
-// meant touching almost every action in the codebase for no functional
-// gain. Every call site still works exactly as before, it just no
-// longer displays or logs anything.
+// replace them, were both removed entirely - success/confirmation
+// messages stay silent for good reason (they usually accompany a
+// visible state change of their own already), so this stays a no-op
+// for those specifically. showToast(msg, "error") call sites were all
+// converted to showErrorToast(msg) below instead - the one category
+// that genuinely needs to be visible, since a silent failure with zero
+// feedback is a real problem, not a cosmetic one.
 function showToast(message, type = null) {}
+
+let errorToastTimer = null;
+
+// The single, deliberately-reintroduced case toasts still cover -
+// see the ERROR TOAST block in index.html/app.css for the rest of the
+// reasoning (why this, why not success messages too, why it's
+// positioned where it is). A new error replaces whatever's currently
+// showing and resets the timer, rather than queueing multiple - errors
+// are rare enough now (this only ever fires for the ~39 real failure
+// paths across the app, not everything) that a simple single-slot
+// toast is enough; a queue would be complexity this doesn't need.
+function showErrorToast(message) {
+    const toast = document.getElementById("errorToast");
+    if (!toast) return;
+    const msgEl = document.getElementById("errorToastMessage");
+    if (msgEl) msgEl.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(errorToastTimer);
+    errorToastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+    }, 4500);
+}
+
+function hideErrorToast() {
+    const toast = document.getElementById("errorToast");
+    if (toast) toast.classList.remove("show");
+    clearTimeout(errorToastTimer);
+}
 
 function clearSearch(inputId) {
     const input = document.getElementById(inputId);
@@ -873,6 +903,31 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 input.parentElement.classList.remove("has-text");
             }
+        });
+
+        // Works around a still-current iOS Safari bug (WebKit #191204):
+        // when the on-screen keyboard opens and the page has nothing
+        // left to scroll (an empty search results list, a library with
+        // only a few items, a short country list), iOS falls back to
+        // scrolling the raw document instead of absorbing the keyboard's
+        // own gesture internally - and while that fallback is active,
+        // position:fixed elements briefly "unstick" and the text caret
+        // gets computed against a desynced layout viewport, landing in
+        // the wrong place. Not the same bug as the backdrop-filter-
+        // related one already fixed on .search-box itself (that was a
+        // compositing quirk, always reproducible); this one is content-
+        // length dependent, which is exactly why it read as "not always"
+        // wrong rather than consistently wrong. Giving the page guaranteed
+        // extra scroll room only while a search field is actually
+        // focused (see .keyboard-scroll-safety in app.css) means iOS
+        // never needs that broken fallback in the first place, without
+        // permanently changing how a short page's own scroll height
+        // looks the rest of the time.
+        input.addEventListener("focus", () => {
+            document.body.classList.add("keyboard-scroll-safety");
+        });
+        input.addEventListener("blur", () => {
+            document.body.classList.remove("keyboard-scroll-safety");
         });
     });
 
@@ -2076,7 +2131,7 @@ async function handleSignOut() {
         refreshActivePage();
         showToast("Signed out successfully.", "success");
     } catch (err) {
-        showToast(err.message, "error");
+        showErrorToast(err.message);
     }
 }
 
@@ -2128,11 +2183,11 @@ async function checkVerificationStatus(silent = false) {
             await proceedToApp(auth.currentUser, authScreen, mainApp);
             showToast("Email verified - welcome to NovaWatch!", "success");
         } else if (!silent) {
-            showToast("Not verified yet - tap the link in your email first.", "error");
+            showErrorToast("Not verified yet - tap the link in your email first.");
         }
     } catch (err) {
         console.error("Failed to refresh verification status:", err);
-        if (!silent) showToast("Couldn't check verification status. Please try again.", "error");
+        if (!silent) showErrorToast("Couldn't check verification status. Please try again.");
     } finally {
         if (btn && !silent) {
             btn.disabled = false;
@@ -2162,9 +2217,9 @@ async function resendVerificationEmail() {
     } catch (err) {
         console.error("Failed to resend verification email:", err);
         if (err.code === "auth/too-many-requests") {
-            showToast("Please wait a bit before requesting another email.", "error");
+            showErrorToast("Please wait a bit before requesting another email.");
         } else {
-            showToast("Couldn't send verification email. Please try again.", "error");
+            showErrorToast("Couldn't send verification email. Please try again.");
         }
     } finally {
         if (btn) btn.disabled = false;
@@ -2336,8 +2391,11 @@ let novaWrappedAccountCreatedAt = null;
 let currentNovaWrappedYear = null;
 
 function openNovaWrappedModal() {
-    if (Date.now() < NOVAWRAPPED_RELEASE_MS) {
-        showToast("Available 1 January 2027 @ 00:00 UTC", "error");
+    // The "novawatch" account (the developer's own) can always preview
+    // this regardless of the release gate below - everyone else still
+    // sees it exactly on schedule.
+    if (Date.now() < NOVAWRAPPED_RELEASE_MS && state.username !== "novawatch") {
+        showErrorToast("Available 1 January 2027 @ 00:00 UTC");
         return;
     }
     const modal = document.getElementById("novaWrappedModal");
@@ -3314,7 +3372,7 @@ async function selectRegion(newRegion) {
         // anyway, so better to be upfront about it now.
         state.region = previousRegion;
         syncRegionUI();
-        showToast("Couldn't save region - check your connection and try again.", "error");
+        showErrorToast("Couldn't save region - check your connection and try again.");
         return;
     }
 
@@ -3866,7 +3924,7 @@ async function proceedToApp(user, authScreen, mainApp) {
                     });
             } catch (err) {
                 console.error("Error fetching cloud data:", err);
-                showToast("Library sync failed.", "error");
+                showErrorToast("Library sync failed.");
                 // Stop showing the loading skeleton even though the fetch
                 // failed - otherwise Home/Library would be stuck looking
                 // like they're still loading forever instead of falling
@@ -3874,6 +3932,13 @@ async function proceedToApp(user, authScreen, mainApp) {
                 libraryLoaded = true;
                 refreshActivePage();
             }
+
+            // A couple seconds after the app is actually visible, not the
+            // instant it loads - competing with everything else settling in
+            // (the library fetch above, the initial render) for attention
+            // right at the moment someone opens the app is exactly how a
+            // prompt like this starts feeling naggy rather than helpful.
+            setTimeout(maybeShowAddToHomeScreenPrompt, 2500);
 }
 /* =========================================================
    TMDB SEARCH & DISCOVER
@@ -4255,13 +4320,13 @@ async function openSearchResultDetails(tmdbId, type) {
 
     } catch (err) {
         console.error("Error opening preview details:", err);
-        showToast(err?.message?.startsWith("TMDB") ? err.message : "Unable to load details.", "error");
+        showErrorToast(err?.message?.startsWith("TMDB") ? err.message : "Unable to load details.");
     }
 }
 
 async function importMediaData(id, type, buttonElement) {
     if (!auth || !auth.currentUser) {
-        showToast("Please sign in to add items to your library.", "error");
+        showErrorToast("Please sign in to add items to your library.");
         return;
     }
 
@@ -4455,7 +4520,7 @@ async function importMediaData(id, type, buttonElement) {
         }
     } catch (error) {
         console.error("Error adding media:", error);
-        showToast(error?.message?.startsWith("TMDB") ? error.message : "Failed to add item.", "error");
+        showErrorToast(error?.message?.startsWith("TMDB") ? error.message : "Failed to add item.");
         if (buttonElement) {
             buttonElement.disabled = false;
             buttonElement.textContent = "Add to Library";
@@ -5904,7 +5969,7 @@ async function playTrailer(tmdbId, type) {
 
         if (!res.ok) {
             console.warn(`TMDB videos request failed (${res.status}):`, data?.status_message || data);
-            showToast("Could not load trailer.", "error");
+            showErrorToast("Could not load trailer.");
             return;
         }
 
@@ -5913,11 +5978,11 @@ async function playTrailer(tmdbId, type) {
         if (trailer) {
             window.open(`https://www.youtube.com/watch?v=${trailer.key}`, '_blank');
         } else {
-            showToast("No official trailer found.", "error");
+            showErrorToast("No official trailer found.");
         }
     } catch (err) {
         console.error("Error playing trailer:", err);
-        showToast("Could not load trailer.", "error");
+        showErrorToast("Could not load trailer.");
     }
 }
 
@@ -6058,12 +6123,12 @@ async function shareCurrentItem() {
             showToast("Link copied to clipboard!", "success");
         } catch (err) {
             console.error("Clipboard write failed:", err);
-            showToast("Unable to share.", "error");
+            showErrorToast("Unable to share.");
         }
         return;
     }
 
-    showToast("Sharing isn't supported on this device.", "error");
+    showErrorToast("Sharing isn't supported on this device.");
 }
 
 async function shareCurrentEpisode() {
@@ -6093,12 +6158,12 @@ async function shareCurrentEpisode() {
             showToast("Link copied to clipboard!", "success");
         } catch (err) {
             console.error("Clipboard write failed:", err);
-            showToast("Unable to share.", "error");
+            showErrorToast("Unable to share.");
         }
         return;
     }
 
-    showToast("Sharing isn't supported on this device.", "error");
+    showErrorToast("Sharing isn't supported on this device.");
 }
 
 function openDetails(itemId) {
@@ -6145,7 +6210,7 @@ async function refreshOpenItemFromTMDB(item) {
         // Quiet, honest heads-up rather than silently showing possibly-stale
         // info with no explanation - only shown for this direct, user-facing
         // refresh, never for the silent background sync loop.
-        showToast("Couldn't reach TMDB - showing saved info.", "error");
+        showErrorToast("Couldn't reach TMDB - showing saved info.");
     }
 }
 
@@ -6737,7 +6802,7 @@ async function confirmPosterPickerChanges() {
         item.backdrop = previousBackdrop;
         item.customBackdrop = previousCustomBackdrop;
         closePosterPicker();
-        showToast("Couldn't save - check your connection and try again.", "error");
+        showErrorToast("Couldn't save - check your connection and try again.");
         return;
     }
 
@@ -6782,7 +6847,7 @@ function setEpisodeWatched(ep, watched) {
 async function toggleEntireSeasonWatched(seasonNumber) {
     if (!currentItem || !currentItem.episodes) return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
 
@@ -6791,7 +6856,7 @@ async function toggleEntireSeasonWatched(seasonNumber) {
 
     const releasedEps = seasonEps.filter(ep => isReleased(ep.releaseDate));
     if (releasedEps.length === 0) {
-        showToast("No released episodes in this season yet.", "error");
+        showErrorToast("No released episodes in this season yet.");
         return;
     }
 
@@ -6819,7 +6884,7 @@ async function toggleEntireSeasonWatched(seasonNumber) {
 async function markAllReleasedEpisodesWatched() {
     if (!currentItem || !currentItem.episodes) return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
 
@@ -6925,7 +6990,7 @@ function closeEpisodeModalOutside(event) {
 async function toggleCurrentEpisodeWatched() {
     if (!currentItem || !currentEpisode) return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     // Defensive - the button is already disabled for this case in
@@ -6946,7 +7011,7 @@ async function toggleCurrentEpisodeWatched() {
 async function markWatchedUpToCurrentEpisode() {
     if (!currentItem || !currentEpisode || !currentItem.episodes) return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
 
@@ -7029,7 +7094,7 @@ function getSeasonRewatchCount(seasonNumber) {
 function openMovieRewatchPopup() {
     if (!currentItem || currentItem.type !== 'movie') return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     rewatchPopupMode = 'movie';
@@ -7059,7 +7124,7 @@ function openRewatchPopup(epId) {
 
 function openSeasonRewatchPopup(seasonNumber) {
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     rewatchPopupMode = 'season';
@@ -7120,7 +7185,7 @@ function closeRewatchPopupOutside(event) {
 
 async function addRewatchFromPopup() {
     if (!currentItem || !isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     const now = new Date().toISOString();
@@ -7196,11 +7261,11 @@ async function clearSeasonRewatchesFromPopup() {
 async function toggleMovieWatched(id) {
     if (!currentItem || currentItem.type !== 'movie') return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     if (!currentItem.watched && !isReleased(currentItem.releaseDate)) {
-        showToast("This movie hasn't been released yet.", "error");
+        showErrorToast("This movie hasn't been released yet.");
         return;
     }
     currentItem.watched = !currentItem.watched;
@@ -7214,7 +7279,7 @@ async function toggleMovieWatched(id) {
 async function markNextEpisodeWatched(id) {
     if (!currentItem || currentItem.type === 'movie') return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     const nextEp = getNextUnwatchedEpisode(currentItem);
@@ -7229,7 +7294,7 @@ async function markNextEpisodeWatched(id) {
 async function toggleStopWatching(id) {
     if (!currentItem) return;
     if (!isCurrentItemInLibrary()) {
-        showToast("Add this to your library first.", "error");
+        showErrorToast("Add this to your library first.");
         return;
     }
     currentItem.isStopped = !currentItem.isStopped;
@@ -7251,7 +7316,7 @@ async function markShowStoppedById(id) {
     if (!saved) {
         item.isStopped = false;
         refreshActivePage();
-        showToast(`Couldn't save - "${item.title}" wasn't marked as Stopped Watching.`, "error");
+        showErrorToast(`Couldn't save - "${item.title}" wasn't marked as Stopped Watching.`);
         return;
     }
 
@@ -7304,7 +7369,7 @@ async function removeLibraryItemById(id) {
         // confirmed it - a reload would've brought it back anyway.
         state.library.splice(idx, 0, removedItem);
         refreshActivePage();
-        showToast(`Couldn't remove "${removedItem.title}" - check your connection and try again.`, "error");
+        showErrorToast(`Couldn't remove "${removedItem.title}" - check your connection and try again.`);
         return;
     }
 
@@ -7333,7 +7398,7 @@ async function removeCurrentItem() {
     if (!removed) {
         state.library.splice(removedIndex, 0, removedItem);
         refreshActivePage();
-        showToast(`Couldn't remove "${removedItem.title}" - check your connection and try again.`, "error");
+        showErrorToast(`Couldn't remove "${removedItem.title}" - check your connection and try again.`);
     }
 }
 
@@ -7374,13 +7439,104 @@ window.addEventListener("online", () => {
 
 window.addEventListener("offline", () => {
     updateOfflineBanner();
-    showToast("You're offline - some features won't work until you're back.", "error");
+    showErrorToast("You're offline - some features won't work until you're back.");
 });
 
 // Covers the case where the app is opened while already offline (e.g.
 // launched from the home screen with no signal), not just the moment the
 // connection drops mid-session.
 updateOfflineBanner();
+
+/* =========================================================
+   ADD TO HOME SCREEN PROMPT
+   There's no cross-platform API that reports "is this app installed to
+   the home screen" directly - the closest reliable signal is whether
+   the page is CURRENTLY running in standalone display mode, which is
+   only ever true once someone has already added it and is opening it
+   from that icon. That's the one thing checked here that can't be
+   spoofed by the person themselves; everything else (the "Added"/"No
+   thanks" buttons) is them self-reporting, since - particularly on iOS,
+   which has no install-completion event at all, only a manual Share ->
+   Add to Home Screen flow - there's no way to detect the action itself
+   actually happening.
+========================================================= */
+const ADD_TO_HOME_SCREEN_ADDED_KEY = "novawatch-a2hsAdded";
+const ADD_TO_HOME_SCREEN_DISMISSED_KEY = "novawatch-a2hsDismissedThisSession";
+
+function isRunningStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isIOSDevice() {
+    // No feature-detection alternative exists for this specifically -
+    // the whole reason this check is needed is to decide which
+    // INSTRUCTIONS to show (Share sheet vs browser menu), which is
+    // inherently a platform question, not a capability one.
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function maybeShowAddToHomeScreenPrompt() {
+    if (isRunningStandalone()) return;
+
+    try {
+        if (localStorage.getItem(ADD_TO_HOME_SCREEN_ADDED_KEY) === "true") return;
+    } catch (e) { /* treat as not yet added */ }
+
+    try {
+        if (sessionStorage.getItem(ADD_TO_HOME_SCREEN_DISMISSED_KEY) === "true") return;
+    } catch (e) { /* treat as not dismissed this session */ }
+
+    const instructionsEl = document.getElementById("addToHomeScreenInstructions");
+    if (instructionsEl) {
+        instructionsEl.textContent = isIOSDevice()
+            ? "Tap the Share icon in Safari's toolbar, then \"Add to Home Screen\"."
+            : "Open your browser's menu, then choose \"Install app\" or \"Add to Home Screen\".";
+    }
+
+    const modal = document.getElementById("addToHomeScreenModal");
+    if (modal && !modal.classList.contains("open")) {
+        modal.classList.add("open");
+        lockBodyScroll("addToHomeScreenModal");
+    }
+}
+
+function closeAddToHomeScreenModal() {
+    const modal = document.getElementById("addToHomeScreenModal");
+    if (modal) modal.classList.remove("open");
+    unlockBodyScroll("addToHomeScreenModal");
+}
+
+// Permanent - localStorage, not sessionStorage. Never shown again on
+// this device while that flag stands, regardless of session/browser
+// restarts (on top of isRunningStandalone() above, which would already
+// suppress it forever anyway once the person is actually using the
+// installed version - this just also covers someone who added it but
+// hasn't relaunched from the icon yet).
+function confirmAddToHomeScreen() {
+    try {
+        localStorage.setItem(ADD_TO_HOME_SCREEN_ADDED_KEY, "true");
+    } catch (e) { /* non-fatal - worst case this shows again next visit */ }
+    closeAddToHomeScreenModal();
+}
+
+// Temporary - sessionStorage, which clears itself once the browser tab/
+// window actually closes. Declining just means "not now" - the next
+// real visit (a fresh session, not just a page reload within this one)
+// is meant to ask again, not be permanently silenced by a single "No
+// thanks" tap the way "Added" is.
+function dismissAddToHomeScreen() {
+    try {
+        sessionStorage.setItem(ADD_TO_HOME_SCREEN_DISMISSED_KEY, "true");
+    } catch (e) { /* non-fatal - worst case this shows again this same session */ }
+    closeAddToHomeScreenModal();
+}
+
+// Tapping outside the dialog reads the same as "No thanks" (a session-
+// scoped decline), not as "Added" - dismissing without engaging isn't
+// the same as confirming the action was actually taken.
+function closeAddToHomeScreenOutside(event) {
+    if (event.target.id === "addToHomeScreenModal") dismissAddToHomeScreen();
+}
 
 /* =========================================================
    SERVICE WORKER REGISTRATION (PWA installability + notifications)
