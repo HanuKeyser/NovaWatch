@@ -826,129 +826,13 @@ function tmdbThumb(url, size) {
     return url.replace(/\/t\/p\/(w\d+|original)\//, `/t/p/${size}/`);
 }
 
-/* =========================================================
-   NOTIFICATIONS LOG
-   What used to appear as a floating toast now lands here instead -
-   persisted rather than disappearing after a few seconds. showToast()
-   itself (every one of its ~100 existing call sites across the app,
-   left completely untouched) now feeds this log instead of the removed
-   floating toast UI - a real page, opened from the bell icon on Home's
-   hero card, that a person can actually come back to and read.
-========================================================= */
-const NOTIFICATIONS_LOG_KEY = "novawatch-notificationsLog";
-const NOTIFICATIONS_LOG_MAX = 50;
-const NOTIFICATIONS_LAST_READ_KEY = "novawatch-notificationsLastRead";
-
-function getNotificationsLog() {
-    try {
-        const raw = localStorage.getItem(NOTIFICATIONS_LOG_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        return [];
-    }
-}
-
-// The same message/type every showToast() call already passes - the
-// third `action` param (an undo button on the old floating toast) isn't
-// carried over, since nothing in the app actually used it (every real
-// call site only ever passed a message and a type).
-function showToast(message, type = null) {
-    try {
-        const log = getNotificationsLog();
-        log.unshift({ message, type: type || 'info', at: new Date().toISOString() });
-        if (log.length > NOTIFICATIONS_LOG_MAX) log.length = NOTIFICATIONS_LOG_MAX;
-        localStorage.setItem(NOTIFICATIONS_LOG_KEY, JSON.stringify(log));
-    } catch (e) {
-        // Non-fatal - worst case this particular message doesn't get logged.
-    }
-    updateNotificationsUnreadDot();
-}
-
-function updateNotificationsUnreadDot() {
-    const dot = document.getElementById('notificationsUnreadDot');
-    if (!dot) return;
-    const log = getNotificationsLog();
-    let lastRead = null;
-    try { lastRead = localStorage.getItem(NOTIFICATIONS_LAST_READ_KEY); } catch (e) { /* treat as never read */ }
-    const hasUnread = log.length > 0 && (!lastRead || log[0].at > lastRead);
-    dot.style.display = hasUnread ? 'block' : 'none';
-}
-
-// Short, glanceable relative time for the log list - not trying to be
-// precise to the second, just "roughly how long ago" the way a real
-// notification center reads.
-function formatNotificationLogTime(iso) {
-    const diffMs = Date.now() - new Date(iso).getTime();
-    const diffMin = Math.round(diffMs / 60000);
-    if (diffMin < 1) return 'Just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.round(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    const diffDay = Math.round(diffHr / 24);
-    if (diffDay === 1) return 'Yesterday';
-    if (diffDay < 7) return `${diffDay}d ago`;
-    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function renderNotificationsLog() {
-    const container = document.getElementById('notificationsLogList');
-    if (!container) return;
-    const log = getNotificationsLog();
-
-    if (log.length === 0) {
-        container.innerHTML = emptyState("Nothing Here Yet", "Messages from the app will show up here.");
-        return;
-    }
-
-    const icons = {
-        success: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-        error: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-        info: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`
-    };
-
-    container.innerHTML = log.map(entry => {
-        const type = icons[entry.type] ? entry.type : 'info';
-        return `
-            <div class="notification-log-row">
-                <div class="notification-log-icon ${type}">${icons[type]}</div>
-                <div class="notification-log-body">
-                    <div class="notification-log-message">${escapeHTML(entry.message)}</div>
-                    <div class="notification-log-time">${formatNotificationLogTime(entry.at)}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function openNotificationsLog() {
-    const modal = document.getElementById('notificationsLogModal');
-    renderNotificationsLog();
-    if (!modal.classList.contains('open')) {
-        modal.classList.add('open');
-        lockBodyScroll('notificationsLogModal');
-    }
-    try {
-        localStorage.setItem(NOTIFICATIONS_LAST_READ_KEY, new Date().toISOString());
-    } catch (e) { /* non-fatal - worst case the unread dot lingers */ }
-    updateNotificationsUnreadDot();
-}
-
-function closeNotificationsLog() {
-    document.getElementById('notificationsLogModal').classList.remove('open');
-    unlockBodyScroll('notificationsLogModal');
-}
-
-function closeNotificationsLogOutside(event) {
-    if (event.target.id === 'notificationsLogModal') closeNotificationsLog();
-}
-
-function clearNotificationsLog() {
-    try {
-        localStorage.removeItem(NOTIFICATIONS_LOG_KEY);
-    } catch (e) { /* non-fatal */ }
-    renderNotificationsLog();
-    updateNotificationsUnreadDot();
-}
+// Toast notifications, and later the in-app notifications log built to
+// replace them, were both removed entirely - kept as a no-op rather
+// than deleting all ~100 call sites across the app, which would have
+// meant touching almost every action in the codebase for no functional
+// gain. Every call site still works exactly as before, it just no
+// longer displays or logs anything.
+function showToast(message, type = null) {}
 
 function clearSearch(inputId) {
     const input = document.getElementById(inputId);
@@ -972,7 +856,6 @@ document.addEventListener("DOMContentLoaded", () => {
     syncThemeToggleUI();
 
     initOneSignal();
-    updateNotificationsUnreadDot();
 
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
@@ -5618,7 +5501,7 @@ function initContinueCardSwipe(container) {
 
     const RIGHT_BG_HTML = `<span>Mark Watched</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
     const STOP_BG_HTML = `<span>Stop Watching</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
-    const REMOVE_BG_HTML = `<span>Remove</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>`;
+    const REMOVE_BG_HTML = `<span>Remove</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
     const RIGHT_BG_COLOR = "var(--glass-sheen), var(--green-gradient)";
     const STOP_BG_COLOR = "var(--glass-sheen), var(--orange-gradient)";
     const REMOVE_BG_COLOR = "var(--glass-sheen), var(--red-gradient)";
