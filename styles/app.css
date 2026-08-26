@@ -3312,3 +3312,55 @@ html[data-theme="dark"] .skeleton {
 html[data-theme="dark"] .state-card {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
 }
+
+/* =========================================================
+   TABLET / LARGER SCREENS
+   Everything above this line is untouched below 768px - phones get
+   byte-for-byte the same CSS they always have. This block only ever
+   applies at 768px and up (roughly iPad Mini/Air portrait width and
+   larger), comfortably above even the widest phone in portrait (a
+   Pro Max is still only ~430px), so there's no risk of this firing on
+   a large phone by mistake.
+
+   The goal isn't a separate tablet layout - same bottom nav, same page
+   structure, same components - it's making sure an iPad doesn't just
+   get a stretched phone screen with dead space down both sides, which
+   is what it got before this block existed. Widens the content column
+   a meaningful amount (not to the full width of a large iPad - a very
+   wide single column of text/cards stops being comfortable to scan
+   well before that point), gives poster grids room for a 4th column
+   since images benefit from more width in a way text doesn't need to,
+   and widens the nav bar to match without stretching it so far its 4
+   buttons read as sparse.
+
+   The existing PWA install setup (manifest.json, the apple-mobile-web-
+   app-* meta tags, viewport-fit=cover) already works identically on
+   iPadOS's own "Add to Home Screen" - nothing further was needed there
+   specifically for tablets to install and launch standalone the same
+   way they do on iPhone.
+========================================================= */
+@media (min-width: 768px) {
+    .app {
+        max-width: 900px;
+    }
+
+    .bottom-nav {
+        max-width: 620px;
+    }
+
+    /* The two real poster grids (Library/Upcoming's category blocks,
+       and the custom-poster picker) - not every 3-column grid in the
+       app. .stats (Home's stat tiles), the segmented/three-way toggles,
+       and modal action-button rows all stay exactly as they are - their
+       column count is tied to a fixed number of items, not to how much
+       space happens to be available, so widening them would just
+       stretch buttons and tiles unnecessarily rather than showing more
+       content. .skeleton-grid is included purely so the loading
+       placeholder matches .poster-picker-grid's real column count
+       instead of misaligning for a moment while it loads. */
+    .library-grid,
+    .poster-picker-grid,
+    .skeleton-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
