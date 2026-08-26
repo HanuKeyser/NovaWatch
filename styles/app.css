@@ -132,21 +132,26 @@ img {
 /* =========================================================
    PAGES
 ========================================================= */
-/* Horizontal padding restored, but meaningfully smaller than the
-   original 18px (12px) rather than either extreme - true zero margin
-   looked broken on cards (.hero-card, .analytics-card): rounded corners
-   read as a mistake rather than a style choice once they're touching
-   the flush screen edge with nothing around them, borders became a
-   colored line running along the physical edge, and box-shadows lost
-   their spread on the sides that had no room left to cast into. 12px is
-   enough room for all of that to read properly again while still
-   cutting the old margin by a third - genuinely tighter, not just
-   technically "edge to edge" while looking unfinished. Pure image
-   content (poster grids - see .library-grid below) doesn't have any of
-   those problems and gets true edge-to-edge treatment instead. */
+/* Top/bottom padding both fold in the real device safe-area inset on
+   top of the existing spacing, rather than replacing it - so content
+   (headers, cards) clears the Dynamic Island/notch/status bar at the
+   top and the home indicator/gesture bar at the bottom, while the
+   background behind it (on body - see above) stays full-bleed since
+   nothing about the background itself is padded, only this content
+   layer. env(...) resolves to 0px on devices/browsers without a safe
+   area (most Android phones, desktop), so this is a no-op there.
+   Horizontal padding back to the original 18px - two attempts at
+   pulling this in (0px, then 12px) both left cards, borders, and
+   shadows reading as unfinished rather than intentional once they lost
+   the room a floating card actually needs. The bottom nav's own
+   edge-to-edge treatment (see .bottom-nav) stays - that one was scoped
+   correctly from the start (flat corners, no border, a shadow redesigned
+   for the new shape) and never had this problem; the difference is that
+   page content is made of many individually-shaped floating cards, not
+   one single bar redesigned as a whole. */
 .page {
     display: none;
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 12px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .page.active {
@@ -164,7 +169,7 @@ img {
    5th top-level tab (its own full-height sheet), so it gets the exact
    same logic rather than a separate hardcoded copy. */
 .settings-page-content {
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 12px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .tab-content-wrapper {
@@ -579,18 +584,6 @@ img {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px 12px;
-    /* True edge-to-edge specifically for poster grids (Library and
-       Upcoming both use this class) - escapes .page's own 12px margin
-       via a negative-margin "bleed" rather than inheriting it the way
-       .category-title right above it does. Pure image content doesn't
-       have the problems a full-bleed CARD does (see .page's own
-       comment) - a poster's corner radius is small relative to its own
-       size and reads perfectly fine flush against the true screen edge,
-       the way a card's much larger radius, visible border, and
-       all-around shadow don't. */
-    margin-left: -12px;
-    margin-right: -12px;
-    width: calc(100% + 24px);
 }
 
 .library-grid .card {
@@ -2445,126 +2438,6 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .settings-entry-btn:active {
     transform: scale(0.9) rotate(30deg);
-}
-
-/* Same size/treatment as .settings-entry-btn right next to it, in the
-   neutral --surface glass rather than blue - this is a browsing/reading
-   destination, not an action button, so it doesn't compete with
-   Settings' primary-blue weight. */
-.notifications-entry-btn {
-    position: relative;
-    flex-shrink: 0;
-    width: 42px;
-    height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: var(--glass-sheen), var(--surface);
-    border: 1px solid var(--glass-border);
-    color: var(--text);
-    box-shadow: var(--glass-shadow-sm);
-    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.notifications-entry-btn .icon {
-    width: 20px;
-    height: 20px;
-}
-
-.notifications-entry-btn:active {
-    transform: scale(0.9);
-}
-
-.notifications-unread-dot {
-    position: absolute;
-    top: 8px;
-    right: 9px;
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--red-gradient);
-    border: 2px solid var(--surface);
-    box-shadow: 0 1px 4px rgba(239, 68, 68, 0.5);
-}
-
-/* =========================================================
-   NOTIFICATIONS LOG
-========================================================= */
-.notifications-clear-btn {
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    padding: 4px 2px;
-    color: var(--blue);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: -0.1px;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-}
-
-.notifications-clear-btn:active {
-    opacity: 0.6;
-}
-
-.notification-log-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px;
-    border-radius: var(--radius-md);
-    background: var(--glass-sheen), var(--surface-2);
-    border: 1px solid var(--glass-border-subtle);
-}
-
-.notification-log-icon {
-    flex-shrink: 0;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    margin-top: 1px;
-}
-
-.notification-log-icon .icon {
-    width: 15px;
-    height: 15px;
-}
-
-.notification-log-icon.success {
-    background: var(--green-gradient);
-}
-
-.notification-log-icon.error {
-    background: var(--red-gradient);
-}
-
-.notification-log-icon.info {
-    background: var(--blue-gradient);
-}
-
-.notification-log-body {
-    flex: 1;
-    min-width: 0;
-}
-
-.notification-log-message {
-    font-size: 13.5px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: var(--text);
-}
-
-.notification-log-time {
-    font-size: 11.5px;
-    color: var(--text-muted);
-    opacity: 0.6;
-    margin-top: 3px;
-    font-weight: 600;
 }
 
 /* =========================================================
