@@ -54,7 +54,7 @@ A yearly recap, tracking January 1 – December 31 in your own timezone, with a 
 
 ## Design
 
-- A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the edge-to-edge navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
+- A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the floating navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
 - Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
 - Dark mode throughout, applied before first paint so there's no flash between themes on load.
