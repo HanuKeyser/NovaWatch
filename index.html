@@ -57,10 +57,16 @@
      yet; every call site checks isOneSignalConfigured() first. -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 
-<!-- Firebase App & Services CDNs -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<!-- Firebase App & Services CDNs - deferred (see the note on app.js's own
+     tag at the bottom of this file for why this needs to happen
+     together, not just here in isolation). These three used to load as
+     plain, render-blocking scripts positioned even before the
+     stylesheets below - the browser couldn't so much as discover the
+     CSS, let alone paint anything, until all three had fully downloaded
+     and executed, one after another, from a third-party CDN. -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js" defer></script>
 
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/app.css">
@@ -319,15 +325,6 @@
             </div>
         </div>
 
-        <!-- Continue Watching Section -->
-        <div>
-            <div class="section-header">
-                <div class="section-title">Continue Watching</div>
-            </div>
-
-            <div id="continueWatchingList"></div>
-        </div>
-
         <!-- Viewing Stats -->
         <div class="analytics-section">
             <div class="section-header">
@@ -349,6 +346,15 @@
                 </div>
                 <div id="dashboardStats" class="stats"></div>
             </div>
+        </div>
+
+        <!-- Continue Watching Section -->
+        <div>
+            <div class="section-header">
+                <div class="section-title">Continue Watching</div>
+            </div>
+
+            <div id="continueWatchingList"></div>
         </div>
     </div>
 </main>
@@ -590,8 +596,8 @@
      computeAchievementStats() - rather than tracked as its own synced
      record, so this costs nothing extra against Firestore's free quota.
 ================================================     -->
-<div id="achievementsModal" class="modal modal-compact" onclick="closeAchievementsModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="achievementsModal" class="modal" onclick="closeAchievementsModalOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeAchievementsModal()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
@@ -618,8 +624,8 @@
      fully watched, a hidden Stopped show is still marked stopped),
      it just doesn't render that category block.
 ================================================     -->
-<div id="libraryDisplayModal" class="modal modal-compact" onclick="closeLibraryDisplayModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="libraryDisplayModal" class="modal" onclick="closeLibraryDisplayModalOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeLibraryDisplayModal()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
@@ -1027,6 +1033,14 @@
     </div>
 </div>
 
-<script src="scripts/app.js"></script>
+<!-- defer, not plain - matches the Firebase SDK scripts in <head>, which
+     are also now deferred. HTML guarantees deferred scripts execute in
+     the order they appear in the document, before DOMContentLoaded -
+     since this tag comes after theirs, Firebase is always ready before
+     this runs, exactly as it was when this sat as a plain blocking
+     script at the end of body. The difference now is that neither this
+     nor the Firebase scripts hold up the browser from parsing/painting
+     the rest of the page while they download. -->
+<script src="scripts/app.js" defer></script>
 </body>
 </html>
