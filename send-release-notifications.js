@@ -47,8 +47,12 @@
 
 const admin = require('firebase-admin');
 
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
+// .trim() defensively - a stray trailing newline or space is a common,
+// easy-to-miss mistake when pasting a secret value into GitHub's own
+// secret input field, and would otherwise silently ride along on every
+// single request this script ever makes.
+const ONESIGNAL_APP_ID = (process.env.ONESIGNAL_APP_ID || '').trim();
+const ONESIGNAL_REST_API_KEY = (process.env.ONESIGNAL_REST_API_KEY || '').trim();
 
 if (!admin.apps.length) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
@@ -163,26 +167,45 @@ function sanitizeForPush(str) {
 // oneSignalLogin() in app.js, which is what ties a subscribed device to
 // this same id (the Firebase uid) on the client side.
 async function sendOneSignalPush(externalId, title, body) {
-    const res = await fetch('https://api.onesignal.com/notifications', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Key ${ONESIGNAL_REST_API_KEY}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            app_id: ONESIGNAL_APP_ID,
-            target_channel: 'push',
-            include_aliases: { external_id: [externalId] },
-            headings: { en: sanitizeForPush(title) },
-            contents: { en: sanitizeForPush(body) }
-        })
-    });
+    const sanitizedTitle = sanitizeForPush(title);
+    const sanitizedBody = sanitizeForPush(body);
 
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`OneSignal send failed (${res.status}): ${text}`);
+    try {
+        const res = await fetch('https://api.onesignal.com/notifications', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Key ${ONESIGNAL_REST_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                app_id: ONESIGNAL_APP_ID,
+                target_channel: 'push',
+                include_aliases: { external_id: [externalId] },
+                headings: { en: sanitizedTitle },
+                contents: { en: sanitizedBody }
+            })
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`OneSignal send failed (${res.status}): ${text}`);
+        }
+        return res.json();
+    } catch (err) {
+        // This exact error ("Cannot convert argument to a ByteString...")
+        // was previously assumed to come from an unsanitized title/body -
+        // it wasn't; it recurred at the identical character index across
+        // several completely different titles even after sanitization
+        // was in place, which a varying title's own content couldn't
+        // explain (different titles, different lengths, would fail at
+        // different positions if the titles themselves were the cause).
+        // Logging exactly what was actually sent, rather than guessing
+        // again, is what actually pins this down on the next failure.
+        if (err.message && err.message.includes('ByteString')) {
+            console.error('ByteString error diagnostic - sanitized title length:', sanitizedTitle.length, 'sanitized body length:', sanitizedBody.length, 'title:', JSON.stringify(sanitizedTitle), 'body:', JSON.stringify(sanitizedBody), 'APP_ID length:', ONESIGNAL_APP_ID.length, 'REST_API_KEY length:', ONESIGNAL_REST_API_KEY.length, 'full stack:', err.stack);
+        }
+        throw err;
     }
-    return res.json();
 }
 
 // Same "every calendar day with a watch or rewatch logged" set the
