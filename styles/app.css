@@ -453,7 +453,16 @@ img {
     position: fixed;
     top: calc(14px + env(safe-area-inset-top, 0px));
     left: 16px;
-    right: 16px;
+    /* Was right: 16px, the same right edge the modal's own close button
+       sits at (.modal-header-nav, top: 14px + safe-area; right: 16px)
+       - with this row's own higher z-index (20 vs the close button's
+       10), the progress segments would render directly over the close
+       button, making it untappable for the entire slideshow. 62px
+       leaves the button (38px wide, starting at right: 16px, so
+       occupying out to right: 54px) clear with a small gap to spare -
+       the same layout Instagram/Snapchat stories use, a progress bar
+       and a close control sharing the same row without overlapping. */
+    right: 62px;
     z-index: 20;
     display: flex;
     gap: 5px;
@@ -704,13 +713,6 @@ img {
     border: 1px solid rgba(255, 255, 255, 0.24);
     color: white;
     box-shadow: none;
-}
-
-.spotlight-title {
-    font-size: 19px;
-    font-weight: 800;
-    color: var(--blue);
-    letter-spacing: -0.3px;
 }
 
 .stat-label {
@@ -1956,7 +1958,14 @@ html[data-theme="dark"] .modal-sheet-compact {
     position: absolute;
     top: calc(14px + env(safe-area-inset-top, 0px));
     right: 16px;
-    z-index: 10;
+    /* Higher than the Wrapped slideshow's own tap zones (z-index: 15)
+       and progress bar (z-index: 20) - without this, the invisible
+       right-half "advance to next slide" tap zone would sit above the
+       close button and intercept taps meant for it, even after fixing
+       the earlier visual overlap with the progress bar. Harmless
+       everywhere else this same class is used (every other full-screen
+       modal), since nothing else in those overlaps it to begin with. */
+    z-index: 25;
     display: flex;
     gap: 10px;
 }
@@ -2920,8 +2929,8 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 /* Reusable on/off/neutral variants of the same pill - used anywhere a
    status is reported as active/enabled (green), off/blocked (red), or
-   simply unavailable rather than chosen (neutral) - Notification Types,
-   Library Display, and the notification-permission button all share
+   simply unavailable rather than chosen (neutral) - Library Display's
+   category toggles and the notification-permission button both share
    these rather than each hand-rolling its own colors. Same sheen+
    gradient layering and glow shadow recipe as the default blue pill
    (see .hero-pill-btn above), just recolored - dropping the sheen
