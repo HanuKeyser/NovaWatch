@@ -9,11 +9,16 @@
 // it to an account - this script is what actually decides to send
 // something and calls OneSignal's REST API to do it.
 //
-// It mirrors getReleasesForDay()/checkTodaysReleases() in scripts/app.js
-// as closely as possible - same three notification categories, same
-// "New Release" title and body wording, same once-per-day-per-item
-// dedup idea - just running server-side against every account instead
-// of client-side against just the signed-in one.
+// It decides what's releasing today and calls OneSignal's REST API to
+// notify the right accounts about it - the "what should be notified
+// about today, and to whom" logic that has to live somewhere outside
+// the browser, since a closed tab can't run on a schedule. The client
+// (see the ONESIGNAL NOTIFICATIONS block in scripts/app.js) only ever
+// handles subscribing a device to push and tying it to an account -
+// there's no client-side equivalent of the logic in this file; the
+// app used to also check for releases locally while a tab was open,
+// but that path was removed in favor of this being the single source
+// of truth for both scheduling and delivery.
 //
 // ── SETUP (once, before this can run) ──────────────────────────────
 //   1. npm install firebase-admin
@@ -51,15 +56,16 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Same UTC-calendar-day slicing the client uses for its own
-// once-per-day dedup record (see TODAYS_RELEASE_NOTIFIED_KEY in
-// app.js) - used here as the key for a small per-user Firestore doc
+// UTC-calendar-day slicing, used as the key for the small per-user
+// Firestore "already notified today" doc (see the notifiedRef usage in
+// run() and checkEngagementRemindersForUser below) - there's nothing
+// else to persist that dedup state in server-side, since there's no
+// browser/localStorage on this side.
 // instead of localStorage, since there's nothing else to persist it in
 // server-side.
 function utcDateString(date) {
     return date.toISOString().slice(0, 10);
 }
-
 
 // Same local-calendar-day comparison as daysUntil() in app.js, just for
 // an arbitrary IANA timezone (each account's own stored timeZone - see
@@ -93,9 +99,11 @@ function hasReleased(releaseDateIso) {
     return new Date(releaseDateIso).getTime() <= Date.now();
 }
 
-// Mirrors getReleasesForDay(0) in app.js - movies and TV episodes
-// releasing "today" in THIS account's own timezone, split into the
-// same three categories the Notification Types preferences use.
+// Movies and TV episodes releasing "today" in THIS account's own
+// timezone, split into the same three categories the push notification
+// always covers (there's no per-category selection anymore - a single
+// account-level on/off is all that exists now, so every category goes
+// out together whenever an account is subscribed).
 function getTodaysReleasesForUser(libraryItems, timeZone) {
     const results = [];
 
@@ -224,12 +232,23 @@ function hasContinueWatchingBacklog(libraryItems) {
     });
 }
 
-// Mirrors checkEngagementReminders() in app.js - only ever called for an
-// account with nothing releasing today (see the call site in run()
-// above). Two independent checks, each with its own dedup/cooldown so
-// neither turns into a daily nag - see that function's own comment for
-// why each condition is what it is.
-async function checkEngagementRemindersForUser(uid, libraryItems, todayStr) {
+// Only ever called for an account with nothing releasing today (see the
+// call site in run() below). Two independent checks, each with its own
+// dedup/cooldown so neither turns into a daily nag: a streak reminder
+// (once, only when a real streak is genuinely at risk of breaking) and
+// a Continue Watching nudge (only after 3+ days of no activity, with
+// its own separate 7-day cooldown). "Today" here is this account's own
+// local calendar day (timeZone), not the server's UTC day - watch
+// activity itself is recorded in UTC-sliced dates on both the client
+// and server (see buildWatchedDatesSet), so a streak's day-to-day
+// continuity is still judged consistently either way, but WHICH day
+// currently counts as "today" for deciding whether to nag needs to
+// match the account's own clock, the same care already given to
+// release timing - otherwise this reminder can fire (or stay silent)
+// at a time that makes no sense relative to where that person actually
+// is, especially far from UTC.
+async function checkEngagementRemindersForUser(uid, libraryItems, timeZone) {
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone });
     const watchedDates = buildWatchedDatesSet(libraryItems);
     const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
     const dayGap = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
@@ -237,16 +256,23 @@ async function checkEngagementRemindersForUser(uid, libraryItems, todayStr) {
     if (mostRecentWatch && mostRecentWatch !== todayStr) {
         const streak = getCurrentWatchStreak(watchedDates);
         if (streak > 0) {
-            const notifiedRef = db.collection('users').doc(uid).collection('_internal').doc('notifiedReleases');
-            const notifiedDoc = await notifiedRef.get();
-            const notifiedData = notifiedDoc.exists ? notifiedDoc.data() : {};
-            const alreadySentToday = notifiedData.day === todayStr && (notifiedData.ids || []).includes('streak-reminder');
+            // A dedicated doc, separate from release-notification
+            // tracking (notifiedReleases) - these two used to share the
+            // exact same Firestore document and "ids" array, mixing a
+            // literal 'streak-reminder' string in among what's meant to
+            // be release IDs. Nothing surfaced as an outright crash from
+            // that in the simple case (the two paths are mutually
+            // exclusive within a single day, by design), but it was
+            // fragile and confusing to read, and gave any future change
+            // to either concern room to corrupt the other's data.
+            const streakRef = db.collection('users').doc(uid).collection('_internal').doc('lastStreakReminder');
+            const streakDoc = await streakRef.get();
+            const alreadySentToday = streakDoc.exists && streakDoc.data().day === todayStr;
 
             if (!alreadySentToday) {
                 try {
                     await sendOneSignalPush(uid, 'Keep Your Streak Going!', `You're on a ${streak}-day watch streak - watch something today to keep it going.`);
-                    const ids = (notifiedData.day === todayStr ? notifiedData.ids || [] : []).concat('streak-reminder');
-                    await notifiedRef.set({ day: todayStr, ids });
+                    await streakRef.set({ day: todayStr });
                 } catch (err) {
                     console.error(`Failed to send streak reminder to ${uid}:`, err.message);
                 }
@@ -300,20 +326,18 @@ async function run() {
 
         const releases = getTodaysReleasesForUser(libraryItems, timeZone);
 
-        // Same rule as the client (see checkTodaysReleases/
-        // checkEngagementReminders in app.js): engagement reminders only
-        // get a look-in on a day with nothing actually releasing for
-        // this account at all - never alongside a real release.
+        // Engagement reminders only get a look-in on a day with nothing
+        // actually releasing for this account at all - never alongside a
+        // real release.
         if (releases.length === 0) {
-            await checkEngagementRemindersForUser(uid, libraryItems, todayStr);
+            await checkEngagementRemindersForUser(uid, libraryItems, timeZone);
             continue;
         }
 
-        // Same once-per-day-per-item dedup idea as the client's
-        // TODAYS_RELEASE_NOTIFIED_KEY, just kept in Firestore here
-        // instead of localStorage (nothing else to persist it in
-        // server-side) - a small doc per account records which release
-        // IDs have already been sent today.
+        // A small doc per account records which release IDs have
+        // already been sent today, so the same item never notifies
+        // twice if this job happens to run again before the day rolls
+        // over (a manual re-run, a retry).
         const notifiedRef = db.collection('users').doc(uid).collection('_internal').doc('notifiedReleases');
         const notifiedDoc = await notifiedRef.get();
         const notifiedData = notifiedDoc.exists ? notifiedDoc.data() : {};
