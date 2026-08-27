@@ -217,6 +217,86 @@ function renderAvatarInto(el, initial) {
     }
 }
 
+/* =========================================================
+   CACHED IDENTITY SNAPSHOT
+   Firebase Auth restores its own signed-in user fast on reload, but the
+   richer profile data (the real chosen avatar, the username, a display
+   name that differs from Auth's own) only ever arrives after an actual
+   Firestore round trip - proceedToApp()'s initial fast render only has
+   Auth's own displayName/email to work with, so until that round trip
+   resolves, the real avatar shows as a plain initial letter and the
+   username line doesn't show at all. This caches the last-known real
+   values locally so the very next app open can paint them immediately -
+   before Firebase Auth has even restored its session, let alone before
+   Firestore responds - rather than a brief flash of the wrong avatar/no
+   username. Purely a faster first paint: whatever's cached gets
+   overwritten within moments by updateHomeUI() running on the real,
+   authoritative data the same way it always has, so a stale cache can
+   never linger meaningfully or show incorrect data for long.
+========================================================= */
+const IDENTITY_CACHE_KEY = "novawatch-cachedIdentity";
+
+function cacheIdentitySnapshot(displayName, avatarId, username) {
+    try {
+        localStorage.setItem(IDENTITY_CACHE_KEY, JSON.stringify({ displayName, avatarId, username }));
+    } catch (e) {
+        // Non-fatal - worst case the next app open just doesn't have a
+        // cache to restore from, same as today.
+    }
+}
+
+function clearCachedIdentitySnapshot() {
+    try {
+        localStorage.removeItem(IDENTITY_CACHE_KEY);
+    } catch (e) { /* non-fatal */ }
+}
+
+// Called as the very first thing on boot, before Firebase Auth or
+// Firestore have had any chance to respond - a pure, optimistic "paint
+// what we last knew" pass. Deliberately doesn't touch anything that
+// depends on actually being signed in (the settings-entry-btn, tab
+// content, etc.) - just the identity bits shown on Home and in
+// Settings, which is exactly what would otherwise flash incorrectly.
+function restoreCachedIdentitySnapshot() {
+    let cached = null;
+    try {
+        const raw = localStorage.getItem(IDENTITY_CACHE_KEY);
+        if (raw) cached = JSON.parse(raw);
+    } catch (e) {
+        return; // Nothing to restore.
+    }
+    if (!cached || !cached.displayName) return;
+
+    const initial = cached.displayName.charAt(0).toUpperCase() || "G";
+    const avatar = cached.avatarId ? AVATAR_OPTIONS.find(a => a.id === cached.avatarId) : null;
+    const avatarHtml = avatar
+        ? `<img src="${avatar.src}" alt="Avatar" decoding="async" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">`
+        : null;
+
+    const homeNameEl = document.getElementById("homeName");
+    if (homeNameEl) homeNameEl.textContent = cached.displayName;
+
+    const settingsNameEl = document.getElementById("settingsName");
+    if (settingsNameEl) settingsNameEl.textContent = cached.displayName;
+
+    [document.getElementById("largeAvatar"), document.getElementById("settingsAvatar")].forEach(el => {
+        if (!el) return;
+        if (avatarHtml) {
+            el.innerHTML = avatarHtml;
+        } else {
+            el.textContent = initial;
+        }
+    });
+
+    if (cached.username) {
+        const settingsUsernameSub = document.getElementById("settingsUsernameSubtitle");
+        if (settingsUsernameSub) {
+            settingsUsernameSub.style.display = "";
+            settingsUsernameSub.textContent = `@${cached.username}`;
+        }
+    }
+}
+
 function renderAvatarPickerGrid() {
     const grid = document.getElementById('avatarPickerGrid');
     if (!grid) return;
@@ -878,6 +958,13 @@ function clearSearch(inputId) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Absolute first thing, before theme sync or anything else - a pure
+    // optimistic paint from whatever was cached last time, before
+    // Firebase Auth has even had a chance to restore its own session,
+    // let alone before Firestore responds. See CACHED IDENTITY SNAPSHOT
+    // above for the full reasoning.
+    restoreCachedIdentitySnapshot();
+
     // The inline head script already applied the right theme before first
     // paint (saved choice, or OS preference if none saved yet) - this just
     // keeps it live-following the OS afterward when no explicit Light/Dark
@@ -2466,6 +2553,7 @@ function computeNovaWrappedStats(year) {
     let totalMinutes = 0;
     let moviesCount = 0;
     let episodesCount = 0;
+    let rewatchCount = 0;
     const showEpisodeCounts = new Map();
     const monthMinutes = new Array(12).fill(0);
 
@@ -2478,6 +2566,12 @@ function computeNovaWrappedStats(year) {
                 moviesCount++;
                 monthMinutes[new Date(item.lastWatchedAt).getUTCMonth()] += mins;
             }
+            // Rewatches are counted as their own separate fun fact (see
+            // the Rewatches slide) even though - same as Total Watch
+            // Time above - they're deliberately excluded from every
+            // other total on this page, consistent with how the rest of
+            // NovaWrapped already treats them.
+            if (item.rewatchCount && inRange(item.lastWatchedAt)) rewatchCount += item.rewatchCount;
         } else if (item.episodes) {
             item.episodes.forEach(ep => {
                 if (!ep.watched || !inRange(ep.watchedAt)) return;
@@ -2491,8 +2585,10 @@ function computeNovaWrappedStats(year) {
                 if (existing) {
                     existing.count++;
                 } else {
-                    showEpisodeCounts.set(item.id, { title: item.title, count: 1 });
+                    showEpisodeCounts.set(item.id, { title: item.title, count: 1, poster: item.poster });
                 }
+
+                if (ep.rewatchCount) rewatchCount += ep.rewatchCount;
             });
         }
     });
@@ -2520,6 +2616,15 @@ function computeNovaWrappedStats(year) {
         showsCount: showEpisodeCounts.size,
         topShow,
         busiestMonth,
+        rewatchCount,
+        // Rough, deliberately playful equivalents for the "hero" total -
+        // whole numbers only, since "2.3 movie-nights" reads as a
+        // miscalculation, not a fun fact. Assumes a 2-hour movie and an
+        // 8-hour sleep/work day - approximate on purpose, this is meant
+        // to give a sense of scale, not be a precise unit conversion.
+        equivalentMovies: Math.floor(totalMinutes / 120),
+        equivalentFullDays: Math.floor(totalMinutes / 1440),
+        equivalentWorkWeeks: Math.round((totalMinutes / 60 / 40) * 10) / 10,
         hasData: totalMinutes > 0
     };
 }
@@ -2534,7 +2639,7 @@ function renderNovaWrapped() {
     document.getElementById("novaWrappedRoot").innerHTML = `
         <div class="wrapped-hero">
             <div class="wrapped-hero-title">NovaWrapped</div>
-            <div class="wrapped-hero-sub">Everything you watched, one year at a time.</div>
+            <div class="wrapped-hero-sub">Your year in watching, one story at a time.</div>
         </div>
         <div class="wrapped-year-nav">
             <button class="year-nav-btn" id="wrappedYearPrev" aria-label="Previous year">
@@ -2562,6 +2667,9 @@ function changeNovaWrappedYear(delta) {
     renderNovaWrappedYear();
 }
 
+// The year-picker landing screen - no longer the dashboard itself (see
+// startWrappedSlideshow below for that). Just enough here to confirm
+// there's something worth watching a recap of, and a way in.
 function renderNovaWrappedYear() {
     const { min, max } = getNovaWrappedYearMinMax();
     document.getElementById("wrappedYearLabel").textContent = currentNovaWrappedYear;
@@ -2583,58 +2691,235 @@ function renderNovaWrappedYear() {
     }
 
     body.innerHTML = `
-        <div class="analytics-card" style="margin-top: 0;">
-            <div class="analytics-main">
-                <div class="analytics-icon-badge">
-                    <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                </div>
-                <div>
-                    <div class="stat-label" style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Total Watch Time</div>
-                    <div class="stat-value highlight">${stats.days} days, ${stats.hours} hours, ${stats.minutes} minutes</div>
-                </div>
-            </div>
-            <div class="stats">
-                <div class="stat">
-                    <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>
-                    <div class="stat-value">${stats.showsCount}</div>
-                    <div class="stat-label">TV Shows</div>
-                </div>
-                <div class="stat">
-                    <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-                    <div class="stat-value">${stats.moviesCount}</div>
-                    <div class="stat-label">Movies</div>
-                </div>
-                <div class="stat">
-                    <svg class="icon stat-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    <div class="stat-value">${stats.episodesCount}</div>
-                    <div class="stat-label">Episodes</div>
-                </div>
-            </div>
-        </div>
-
-        ${stats.topShow ? `
-        <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Most Watched Show</div></div>
-        <div class="analytics-card" style="margin-top: 0;">
-            <div class="analytics-main" style="border-bottom: none; padding-bottom: 0;">
-                <div>
-                    <div class="spotlight-title">${escapeHTML(stats.topShow.title)}</div>
-                    <div class="stat-label">${stats.topShow.count} episode${stats.topShow.count === 1 ? '' : 's'} watched</div>
-                </div>
-            </div>
-        </div>` : ''}
-
-        ${stats.busiestMonth ? `
-        <div class="section-header" style="margin-top: 20px;"><div class="section-title settings-section-title">Busiest Month</div></div>
-        <div class="analytics-card" style="margin-top: 0;">
-            <div class="analytics-main" style="border-bottom: none; padding-bottom: 0;">
-                <div>
-                    <div class="spotlight-title">${stats.busiestMonth.label}</div>
-                    <div class="stat-label">${Math.round(stats.busiestMonth.minutes / 60)} hours watched</div>
-                </div>
-            </div>
-        </div>` : ''}
+        <button class="wrapped-start-btn" onclick="startWrappedSlideshow()">
+            View My ${currentNovaWrappedYear} Wrapped
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+        </button>
     `;
 }
+
+/* =========================================================
+   WRAPPED SLIDESHOW
+   A full-screen, story-style sequence (tap/swipe through, a progress
+   bar per slide - the same interaction language as Instagram/Snapchat
+   stories) instead of the scrolling stat-dashboard this used to be.
+   Each slide is built only if there's actually something to say - a
+   year with no rewatches simply doesn't get a rewatch slide, rather
+   than showing a hollow "0 rewatches" - and the whole sequence is
+   computed once upfront (buildWrappedSlides) rather than per-navigation,
+   since the underlying stats never change mid-slideshow.
+========================================================= */
+let wrappedSlides = [];
+let wrappedSlideIndex = 0;
+
+function buildWrappedSlides(stats) {
+    const slides = [];
+
+    slides.push({
+        bg: 'wrapped-bg-intro',
+        html: `
+            <div class="wrapped-slide-content">
+                <div class="wrapped-slide-eyebrow">${stats.year} Wrapped</div>
+                <div class="wrapped-slide-headline">Let's look back<br>at your year.</div>
+                <div class="wrapped-slide-tap-hint">Tap to continue</div>
+            </div>
+        `
+    });
+
+    slides.push({
+        bg: 'wrapped-bg-time',
+        html: `
+            <div class="wrapped-slide-content">
+                <div class="wrapped-slide-eyebrow">You spent</div>
+                <div class="wrapped-slide-number">${stats.days}<span class="wrapped-slide-unit">d</span> ${stats.hours}<span class="wrapped-slide-unit">h</span></div>
+                <div class="wrapped-slide-headline">watching in ${stats.year}.</div>
+                ${stats.equivalentFullDays > 0 ? `<div class="wrapped-slide-footnote">That's ${stats.equivalentFullDays} full ${stats.equivalentFullDays === 1 ? 'day' : 'days'} straight.</div>` : ''}
+            </div>
+        `
+    });
+
+    if (stats.moviesCount > 0) {
+        slides.push({
+            bg: 'wrapped-bg-movies',
+            html: `
+                <div class="wrapped-slide-content">
+                    <div class="wrapped-slide-eyebrow">On the big screen</div>
+                    <div class="wrapped-slide-number">${stats.moviesCount}</div>
+                    <div class="wrapped-slide-headline">${stats.moviesCount === 1 ? 'movie' : 'movies'} watched.</div>
+                    ${stats.equivalentMovies > stats.moviesCount ? `<div class="wrapped-slide-footnote">Your total watch time alone was worth ${stats.equivalentMovies} movies.</div>` : ''}
+                </div>
+            `
+        });
+    }
+
+    if (stats.episodesCount > 0) {
+        slides.push({
+            bg: 'wrapped-bg-tv',
+            html: `
+                <div class="wrapped-slide-content">
+                    <div class="wrapped-slide-eyebrow">Binged and watched</div>
+                    <div class="wrapped-slide-number">${stats.episodesCount}</div>
+                    <div class="wrapped-slide-headline">episodes across ${stats.showsCount} ${stats.showsCount === 1 ? 'show' : 'shows'}.</div>
+                </div>
+            `
+        });
+    }
+
+    if (stats.topShow) {
+        slides.push({
+            bg: 'wrapped-bg-spotlight',
+            poster: stats.topShow.poster,
+            html: `
+                <div class="wrapped-slide-content">
+                    <div class="wrapped-slide-eyebrow">Your most-watched show</div>
+                    <div class="wrapped-slide-headline wrapped-slide-headline-big">${escapeHTML(stats.topShow.title)}</div>
+                    <div class="wrapped-slide-footnote">${stats.topShow.count} ${stats.topShow.count === 1 ? 'episode' : 'episodes'} watched</div>
+                </div>
+            `
+        });
+    }
+
+    if (stats.busiestMonth) {
+        slides.push({
+            bg: 'wrapped-bg-month',
+            html: `
+                <div class="wrapped-slide-content">
+                    <div class="wrapped-slide-eyebrow">Your biggest month was</div>
+                    <div class="wrapped-slide-headline wrapped-slide-headline-big">${stats.busiestMonth.label}</div>
+                    <div class="wrapped-slide-footnote">${Math.round(stats.busiestMonth.minutes / 60)} hours watched that month</div>
+                </div>
+            `
+        });
+    }
+
+    if (stats.rewatchCount > 0) {
+        slides.push({
+            bg: 'wrapped-bg-rewatch',
+            html: `
+                <div class="wrapped-slide-content">
+                    <div class="wrapped-slide-eyebrow">Some favorites earned a</div>
+                    <div class="wrapped-slide-number">${stats.rewatchCount}</div>
+                    <div class="wrapped-slide-headline">${stats.rewatchCount === 1 ? 'rewatch' : 'rewatches'} this year.</div>
+                </div>
+            `
+        });
+    }
+
+    slides.push({
+        bg: 'wrapped-bg-recap',
+        isFinal: true,
+        html: `
+            <div class="wrapped-slide-content">
+                <div class="wrapped-slide-eyebrow">${stats.year} Wrapped</div>
+                <div class="wrapped-recap-grid">
+                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.days}d ${stats.hours}h</div><div class="wrapped-recap-label">Watch Time</div></div>
+                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.moviesCount}</div><div class="wrapped-recap-label">Movies</div></div>
+                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.episodesCount}</div><div class="wrapped-recap-label">Episodes</div></div>
+                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.showsCount}</div><div class="wrapped-recap-label">Shows</div></div>
+                </div>
+                ${stats.topShow ? `<div class="wrapped-recap-topshow">Most watched: <strong>${escapeHTML(stats.topShow.title)}</strong></div>` : ''}
+            </div>
+        `
+    });
+
+    return slides;
+}
+
+function startWrappedSlideshow() {
+    const stats = computeNovaWrappedStats(currentNovaWrappedYear);
+    wrappedSlides = buildWrappedSlides(stats);
+    wrappedSlideIndex = 0;
+
+    const root = document.getElementById("novaWrappedRoot");
+    root.innerHTML = `
+        <div class="wrapped-progress-row" id="wrappedProgressRow"></div>
+        <div class="wrapped-slide-stage" id="wrappedSlideStage">
+            <div class="wrapped-tap-zone wrapped-tap-zone-left" onclick="wrappedGoBack()"></div>
+            <div class="wrapped-tap-zone wrapped-tap-zone-right" onclick="wrappedGoNext()"></div>
+        </div>
+    `;
+    document.getElementById("wrappedProgressRow").innerHTML =
+        wrappedSlides.map((_, i) => `<div class="wrapped-progress-seg" id="wrappedSeg${i}"></div>`).join('');
+
+    renderWrappedSlideAt(0);
+}
+
+function renderWrappedSlideAt(index) {
+    const stage = document.getElementById("wrappedSlideStage");
+    const slide = wrappedSlides[index];
+    if (!stage || !slide) return;
+
+    wrappedSlides.forEach((_, i) => {
+        const seg = document.getElementById(`wrappedSeg${i}`);
+        if (!seg) return;
+        seg.classList.toggle('filled', i < index);
+        seg.classList.toggle('active', i === index);
+    });
+
+    const existing = stage.querySelector('.wrapped-slide-panel');
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.className = `wrapped-slide-panel ${slide.bg}`;
+    if (slide.poster) {
+        panel.style.setProperty('--wrapped-poster-url', `url('${slide.poster}')`);
+        panel.classList.add('has-poster');
+    }
+    panel.innerHTML = slide.html + (slide.isFinal ? `
+        <div class="wrapped-recap-actions">
+            <button class="confirm-btn primary" onclick="event.stopPropagation(); shareNovaWrapped()">Share</button>
+            <button class="confirm-btn cancel" onclick="event.stopPropagation(); closeNovaWrappedModal()">Done</button>
+        </div>
+    ` : '');
+    stage.insertBefore(panel, stage.firstChild);
+}
+
+function wrappedGoNext() {
+    if (wrappedSlideIndex >= wrappedSlides.length - 1) return;
+    wrappedSlideIndex++;
+    renderWrappedSlideAt(wrappedSlideIndex);
+}
+
+// At the very first slide, "back" exits to the year-picker screen
+// instead of doing nothing - there's nowhere further back within the
+// slideshow itself.
+function wrappedGoBack() {
+    if (wrappedSlideIndex <= 0) {
+        renderNovaWrapped();
+        return;
+    }
+    wrappedSlideIndex--;
+    renderWrappedSlideAt(wrappedSlideIndex);
+}
+
+async function shareNovaWrapped() {
+    const stats = computeNovaWrappedStats(currentNovaWrappedYear);
+    const shareData = {
+        title: `My ${currentNovaWrappedYear} NovaWrapped`,
+        text: `My ${currentNovaWrappedYear} NovaWrapped: ${stats.days}d ${stats.hours}h watched, ${stats.moviesCount} movies, ${stats.episodesCount} episodes across ${stats.showsCount} shows.`,
+        url: NOVAWATCH_APP_URL
+    };
+
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+        } catch (err) {
+            if (err.name !== 'AbortError') console.error("Share failed:", err);
+        }
+        return;
+    }
+
+    if (navigator.clipboard) {
+        try {
+            await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+            showToast("Copied to clipboard!", "success");
+        } catch (err) {
+            console.error("Clipboard write failed:", err);
+            showErrorToast("Unable to share.");
+        }
+    }
+}
+
 
 // Loads a same-origin sub-page inside the full-screen iframe overlay and
 // reflects it in the address bar via pushState, so the URL is still
@@ -3706,6 +3991,11 @@ if (auth) {
             hideVerifyScreen();
             hideChooseUsernameScreen();
             oneSignalLogout();
+            // A shared/public device shouldn't show whoever was signed in
+            // before flashing briefly on the next person's first paint -
+            // see restoreCachedIdentitySnapshot(), which is exactly what
+            // this cache exists to feed.
+            clearCachedIdentitySnapshot();
 
             // User is logged out: Show Auth Screen, Hide Main App
             authScreen.style.display = "flex";
@@ -5847,6 +6137,15 @@ function updateHomeUI() {
 
     const settingsAvatarEl = document.getElementById("settingsAvatar");
     renderAvatarInto(settingsAvatarEl, initial);
+
+    // Only cache once there's real, authoritative data worth caching -
+    // never for the signed-out/"Guest" pass through this same function,
+    // which would otherwise overwrite a genuinely useful cache with
+    // nothing the moment someone signs out.
+    if (isSignedIn) {
+        const avatarId = state.profiles && state.profiles[0] ? state.profiles[0].avatarId : null;
+        cacheIdentitySnapshot(displayName, avatarId, state.username || null);
+    }
 }
 
 /* =========================================================
