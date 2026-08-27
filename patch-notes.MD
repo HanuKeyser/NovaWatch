@@ -37,7 +37,7 @@ What's included, top to bottom.
 
 ## NovaWrapped
 
-A yearly recap, tracking January 1 – December 31 in your own timezone, with a grace period after account creation so bulk-adding existing watch history doesn't count as binge-watching.
+A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (the same interaction as Instagram/Snapchat stories), tracking January 1 – December 31 in your own timezone, with a grace period after account creation so bulk-adding existing watch history doesn't count as binge-watching. Total watch time, movies, TV episodes and shows, your most-watched show (with its own poster), your busiest month, and rewatches, each its own vividly-colored slide - only the ones with something real to say, ending on a shareable recap card.
 
 ## Settings
 
@@ -62,6 +62,9 @@ A yearly recap, tracking January 1 – December 31 in your own timezone, with a 
 - The offline banner pushes the page's own content down while visible, rather than floating on top of it.
 - A one-time Add to Home Screen prompt, shown once the app is open and only for someone not already using the installed version — permanently suppressed the moment it can tell the app is actually running standalone.
 - Widened, tablet-appropriate layout at 768px and up, with no change at all to the phone experience below that width.
+- Achievements and Library Display are full-screen, matching every other settings screen, rather than a centered popup card.
+- Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
+- Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
 
 ## Platform
 
