@@ -9,13 +9,15 @@
 // It deliberately does NOT cache TMDB/Firebase API responses or images —
 // that data changes constantly and should always come from the network.
 //
-// NOTE: this alone does not enable "notify me even when the app/tab is
-// fully closed" — true closed-app push requires a backend push service
-// (e.g. Firebase Cloud Messaging) sending to this worker. What this DOES
-// enable is registration.showNotification() working reliably while the
-// service worker is active (e.g. app open in a background tab).
+// NOTE: this file alone does not enable "notify me even when the app/tab
+// is fully closed" - that's what OneSignal is for (see the ONESIGNAL block
+// in app.js and OneSignalSDKWorker.js at the site root, which combines
+// OneSignal's own service worker with this one via importScripts once
+// ONESIGNAL_APP_ID is configured). Once that's set up, OneSignalSDKWorker.js
+// - not this file directly - is what actually gets registered; see the
+// conditional registration logic at the bottom of app.js for why.
 
-const CACHE_NAME = "novawatch-shell-v90";
+const CACHE_NAME = "novawatch-shell-v91";
 
 self.addEventListener("install", (event) => {
     // self.registration.scope is the actual folder this worker controls
