@@ -415,6 +415,297 @@ img {
     text-align: center;
 }
 
+.wrapped-start-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 16px 20px;
+    margin-top: 8px;
+    border-radius: var(--radius-2xl);
+    background: var(--glass-sheen), linear-gradient(115deg, #8b5cf6, #ec4899, #f97316);
+    color: white;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    box-shadow: 0 10px 28px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.4);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.wrapped-start-btn:active {
+    transform: scale(0.97);
+}
+
+/* =========================================================
+   WRAPPED SLIDESHOW
+   A full-screen, story-style sequence - genuinely full-bleed (covers
+   the whole modal, not just the padded/scrollable .modal-content area
+   it's technically nested inside) via position: fixed, which escapes
+   .modal-content's own padding and .modal-sheet's own scroll behavior
+   entirely rather than fighting it with negative margins across a
+   padded ancestor chain. Each slide gets its own vivid gradient -
+   deliberately more saturated than the rest of the app's subtle glass
+   language, since a "wrapped"-style recap is meant to feel like a
+   celebration, distinct from NovaWatch's everyday look.
+========================================================= */
+.wrapped-progress-row {
+    position: fixed;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 16px;
+    z-index: 20;
+    display: flex;
+    gap: 5px;
+}
+
+.wrapped-progress-seg {
+    flex: 1;
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.3);
+    overflow: hidden;
+}
+
+.wrapped-progress-seg::after {
+    content: "";
+    display: block;
+    height: 100%;
+    width: 0%;
+    background: white;
+    border-radius: 999px;
+    transition: width 0.25s ease;
+}
+
+.wrapped-progress-seg.filled::after {
+    width: 100%;
+}
+
+.wrapped-progress-seg.active::after {
+    width: 100%;
+}
+
+.wrapped-slide-stage {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    overflow: hidden;
+}
+
+.wrapped-tap-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 35%;
+    z-index: 15;
+}
+
+.wrapped-tap-zone-left {
+    left: 0;
+}
+
+.wrapped-tap-zone-right {
+    right: 0;
+}
+
+.wrapped-slide-panel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(60px + env(safe-area-inset-top, 0px)) 32px calc(40px + env(safe-area-inset-bottom, 0px));
+    text-align: center;
+    color: white;
+    animation: wrappedSlideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes wrappedSlideIn {
+    from { opacity: 0; transform: scale(1.04); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wrapped-slide-panel {
+        animation: none;
+    }
+}
+
+.wrapped-slide-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 380px;
+}
+
+.wrapped-slide-eyebrow {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    opacity: 0.85;
+    margin-bottom: 10px;
+}
+
+.wrapped-slide-headline {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.6px;
+    line-height: 1.25;
+}
+
+.wrapped-slide-headline-big {
+    font-size: 36px;
+}
+
+.wrapped-slide-number {
+    font-size: 72px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 6px;
+}
+
+.wrapped-slide-unit {
+    font-size: 32px;
+    font-weight: 700;
+    opacity: 0.85;
+}
+
+.wrapped-slide-footnote {
+    margin-top: 18px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.85;
+    line-height: 1.4;
+}
+
+.wrapped-slide-tap-hint {
+    margin-top: 28px;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    opacity: 0.6;
+    text-transform: uppercase;
+}
+
+/* One deliberately vivid, distinct gradient per slide - see the block
+   comment above for why these read as more saturated than the rest of
+   NovaWatch's usual glass palette. */
+.wrapped-bg-intro {
+    background: radial-gradient(circle at 30% 20%, #312e81, #0f0a2e 70%);
+}
+
+.wrapped-bg-time {
+    background: linear-gradient(150deg, #3b82f6, #8b5cf6 55%, #ec4899);
+}
+
+.wrapped-bg-movies {
+    background: linear-gradient(150deg, #f97316, #ea580c 60%, #b91c1c);
+}
+
+.wrapped-bg-tv {
+    background: linear-gradient(150deg, #22c55e, #16a34a 55%, #0e7490);
+}
+
+.wrapped-bg-spotlight {
+    background: linear-gradient(150deg, #ec4899, #a21caf 60%, #581c87);
+}
+
+.wrapped-bg-month {
+    background: linear-gradient(150deg, #06b6d4, #0284c7 60%, #1e3a8a);
+}
+
+.wrapped-bg-rewatch {
+    background: linear-gradient(150deg, #a855f7, #7c3aed 55%, #4c1d95);
+}
+
+.wrapped-bg-recap {
+    background: radial-gradient(circle at 70% 15%, #1e1b4b, #09070f 70%);
+}
+
+/* The top-show spotlight slide layers the actual poster in, blurred and
+   dimmed, behind the vivid gradient rather than instead of it - reads
+   as "this show, celebrated" rather than a plain photo, and still works
+   fine (just falls back to the flat gradient) for the rare case a show
+   has no poster cached. */
+.wrapped-slide-panel.has-poster {
+    background-image:
+        linear-gradient(180deg, rgba(88, 28, 135, 0.55), rgba(30, 10, 46, 0.85)),
+        var(--wrapped-poster-url);
+    background-size: cover;
+    background-position: center;
+}
+
+.wrapped-recap-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    width: 100%;
+    margin-top: 8px;
+}
+
+.wrapped-recap-stat {
+    padding: 16px 12px;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.wrapped-recap-value {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+}
+
+.wrapped-recap-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    opacity: 0.75;
+    text-transform: uppercase;
+    margin-top: 3px;
+}
+
+.wrapped-recap-topshow {
+    margin-top: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+.wrapped-recap-actions {
+    position: absolute;
+    left: 32px;
+    right: 32px;
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    gap: 10px;
+    z-index: 16;
+}
+
+.wrapped-recap-actions .confirm-btn {
+    flex: 1;
+}
+
+/* The recap slide's background is always dark, regardless of the app's
+   own light/dark theme setting (Wrapped is deliberately dramatic, not
+   theme-adaptive) - .confirm-btn.cancel's normal styling uses theme-
+   dependent tokens (var(--surface)/var(--text)) that would render as a
+   dark button with light text in the app's OWN dark mode, nearly
+   blending into this already-dark background. Overridden here to a
+   fixed, theme-independent translucent white instead, so it stays
+   legible no matter which theme is active. */
+.wrapped-recap-actions .confirm-btn.cancel {
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    color: white;
+    box-shadow: none;
+}
+
 .spotlight-title {
     font-size: 19px;
     font-weight: 800;
