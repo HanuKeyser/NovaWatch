@@ -58,21 +58,6 @@ const APP_VERSION = "1.0.0";
 // no visible error unless you had the console open.
 const NOVAWATCH_APP_URL = window.location.origin + "/";
 
-// Remembers which top-level tab (Home / Discover / Library) the user was
-// last on. Currently write-only: saveLastTab() persists it on every tab
-// switch, but nothing reads it back on load (the app always opens on
-// Home) - kept as-is rather than wired up, since restoring the last tab
-// on launch wasn't asked for.
-const LAST_ACTIVE_TAB_KEY = "novawatch_last_tab";
-
-function saveLastTab(page) {
-    try {
-        localStorage.setItem(LAST_ACTIVE_TAB_KEY, page);
-    } catch (e) {
-        // Private browsing / storage disabled - not worth failing over.
-    }
-}
-
 let state = {
     library: [],
     profiles: [
@@ -4957,7 +4942,6 @@ function sortMoviesByWatchedDate(movies) {
 ========================================================= */
 function showPage(page, subType = null, focusSearch = false) {
     window.scrollTo(0, 0);
-    saveLastTab(page);
 
     document.querySelectorAll(".page").forEach(element => element.classList.remove("active"));
 
