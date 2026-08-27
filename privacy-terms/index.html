@@ -70,8 +70,8 @@ body {
     border-radius: 50%;
     background: var(--glass-sheen), var(--surface);
     color: var(--text);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
@@ -112,12 +112,24 @@ h1 {
     letter-spacing: 0.5px;
 }
 
-/* These four match app.css's definitions exactly (copied, not linked -
-   app.css also carries global body/h1/a/etc. rules tuned for the full
-   app shell that would risk leaking onto this page's own layout). Keep
-   these in sync with app.css if either changes - same shared-drift risk
-   tokens.css solves for colors, just not automated for these few
-   component classes. */
+/* .section-header and .section-title match app.css's definitions
+   exactly (copied, not linked - app.css also carries global body/h1/a/
+   etc. rules tuned for the full app shell that would risk leaking onto
+   this page's own layout). .settings-section-title doesn't have an
+   app.css counterpart to sync with anymore - confirmed it's been fully
+   removed from the main app at some point, so this page is now the
+   only place this specific smaller-title treatment exists; kept here
+   since it still reads correctly for this page's own settings-style
+   section headers, just no longer literally "kept in sync" with
+   anything. Blur values reference the shared tokens.css tokens/
+   equivalent values directly (var(--glass-blur) below, or matched by
+   hand to app.css's current value where a token doesn't apply) rather
+   than a hardcoded copy, specifically to avoid the exact silent drift
+   this comment used to warn about without actually preventing - one
+   was found and fixed during a full audit (analytics-card's blur here
+   had drifted to a now-stale value from before app.css's own bumped
+   further). Still worth a manual check if app.css's glass values change
+   again, since not every value here has a shared token to lean on. */
 .section-header {
     display: flex;
     align-items: center;
@@ -139,8 +151,8 @@ h1 {
 .analytics-card {
     padding: 20px;
     background: var(--glass-sheen), var(--surface);
-    backdrop-filter: blur(40px) saturate(200%);
-    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    backdrop-filter: blur(64px) saturate(260%);
+    -webkit-backdrop-filter: blur(64px) saturate(260%);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     box-shadow: var(--glass-shadow);
