@@ -51,10 +51,11 @@
 <!-- OneSignal Web SDK - delivers real push notifications even when the
      app/tab is fully closed (see the ONESIGNAL NOTIFICATIONS block in
      app.js for the client-side wiring, and the separate server-side
-     scheduled job that actually decides what to send). Requires a real
-     OneSignal App ID before this does anything - see ONESIGNAL_APP_ID
-     in app.js. Safe to leave the placeholder in while that's not set up
-     yet; every call site checks isOneSignalConfigured() first. -->
+     scheduled job that actually decides what to send). ONESIGNAL_APP_ID
+     in app.js is a real, live App ID, not a placeholder - subscribing
+     works right now. Every call site still checks
+     isOneSignalConfigured() first regardless, so this stays safe to
+     leave in even if that ID is ever cleared back to a placeholder. -->
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 
 <!-- Firebase App & Services CDNs - deferred (see the note on app.js's own
@@ -559,7 +560,7 @@
         <p class="confirm-message" style="margin-top: 2px;">Rewatches</p>
         <div class="confirm-actions">
             <button id="rewatchPopupRemoveBtn" class="confirm-btn cancel" onclick="removeRewatchFromPopup()">Remove Rewatch</button>
-            <button id="rewatchPopupAddBtn" class="confirm-btn primary" onclick="addRewatchFromPopup()">Add Rewatch</button>
+            <button class="confirm-btn primary" onclick="addRewatchFromPopup()">Add Rewatch</button>
         </div>
         <button id="rewatchPopupClearBtn" style="display:none; margin-top: 14px; width: 100%; background: none; border: none; padding: 4px; color: var(--danger); font-size: 13px; font-weight: 700;" onclick="clearSeasonRewatchesFromPopup()">Clear Season Rewatches</button>
     </div>
@@ -612,7 +613,6 @@
         </div>
     </div>
 </div>
-
 
 <!-- =====================================================
      LIBRARY DISPLAY
