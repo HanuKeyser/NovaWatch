@@ -1,13 +1,15 @@
 /* NovaWatch shared design tokens - the "Liquid Glass" system's colors,
    surfaces, shadows, and the light/dark palette switch. Shared by every
-   NovaWatch page (index.html, privacy-terms.html, novawrapped.html) so
-   they can never drift out of sync with each other again - that was the
-   actual root cause of several dark-mode bugs earlier (e.g.
-   privacy-terms.html referencing --glass-shadow-sm without ever having
-   defined it). Component-specific dark-mode overrides (the ones that
-   reference a specific class like .hero-card or .continue-card) stay in
-   each page's own stylesheet instead, since those components differ
-   page to page. */
+   NovaWatch page (index.html and privacy-terms/index.html) so they can
+   never drift out of sync with each other again - that was the actual
+   root cause of several dark-mode bugs earlier (e.g. privacy-terms
+   referencing --glass-shadow-sm without ever having defined it).
+   NovaWrapped was originally its own separate page too (also sharing
+   this file) before being migrated into index.html as a modal - see
+   the NOVAWRAPPED block there for why. Component-specific dark-mode
+   overrides (the ones that reference a specific class like .hero-card
+   or .continue-card) stay in each page's own stylesheet instead, since
+   those components differ page to page. */
 
 :root {
     /* Previously a flat white/grey mesh (deliberately colorless) - now a
@@ -29,7 +31,6 @@
         #e8edf4;
     --surface: rgba(255, 255, 255, 0.45);
     --surface-2: rgba(255, 255, 255, 0.28);
-    --surface-3: rgba(255, 255, 255, 0.17);
 
     /* Borders across the app are now much fainter, moving toward the
        bottom nav bar's own borderless treatment - a real 1px border was
@@ -94,10 +95,18 @@
     /* A soft near-black rather than pure #000, and near-white rather
        than pure #fff in dark mode below - enough contrast to stay
        fully readable while feeling a shade warmer/less stark than true
-       black-on-white. */
+       black-on-white. Secondary/muted are genuinely distinct steps down
+       from primary (Tailwind's own gray scale, matching how the rest of
+       this palette is built) - found these three flattened to the exact
+       same value during a full audit, which meant zero visual hierarchy
+       across the ~38 places in app.css that use secondary/muted text
+       expecting it to actually recede versus primary (subtitles, stat
+       labels, timestamps, disabled-looking text). Not a deliberate
+       simplification anywhere on record - fixed to what the surrounding
+       comment already implied these should be. */
     --text: #1a1d23;
-    --text-secondary: #1a1d23;
-    --text-muted: #1a1d23;
+    --text-secondary: #4b5563;
+    --text-muted: #6b7280;
 
     --border: rgba(0, 0, 0, 0.08);
 
@@ -143,7 +152,6 @@ html[data-theme="dark"] {
         #0a0d14;
     --surface: rgba(255, 255, 255, 0.06);
     --surface-2: rgba(255, 255, 255, 0.04);
-    --surface-3: rgba(255, 255, 255, 0.025);
 
     --glass-border: rgba(255, 255, 255, 0.12);
     --glass-border-subtle: rgba(255, 255, 255, 0.06);
@@ -166,10 +174,13 @@ html[data-theme="dark"] {
     --green-gradient: linear-gradient(135deg, #86efac, #4ade80);
 
     /* Same near-white rule as light mode's near-black above - #e6e9ef
-       here, not a true #fff, for all three text tiers. */
+       here, not a true #fff, for the primary tier, with the same
+       genuinely-distinct secondary/muted steps (see the light-mode
+       comment above for why these three were flattened and needed
+       fixing). */
     --text: #e6e9ef;
-    --text-secondary: #e6e9ef;
-    --text-muted: #e6e9ef;
+    --text-secondary: #9ca3af;
+    --text-muted: #71717a;
 
     --border: rgba(255, 255, 255, 0.1);
 
