@@ -365,26 +365,44 @@ async function run() {
         const notifiedDoc = await notifiedRef.get();
         const notifiedData = notifiedDoc.exists ? notifiedDoc.data() : {};
         const alreadyNotifiedToday = (notifiedData.day === todayStr) ? (notifiedData.ids || []) : [];
-        const newlyNotified = [...alreadyNotifiedToday];
 
-        for (const release of releases) {
-            if (alreadyNotifiedToday.includes(release.releaseId)) { skipped++; continue; }
+        const newReleases = releases.filter(r => !alreadyNotifiedToday.includes(r.releaseId));
+        skipped += releases.length - newReleases.length;
+        if (newReleases.length === 0) continue;
 
-            try {
-                await sendOneSignalPush(uid, 'New Release', `${release.title} - ${release.subtitle}`);
-                newlyNotified.push(release.releaseId);
-                sent++;
-            } catch (err) {
-                console.error(`Failed to notify ${uid} about ${release.releaseId}:`, err.message);
-            }
-        }
+        // One combined notification per account per day, listing
+        // everything releasing, rather than one API call per release.
+        // Sending several separate pushes back to back used to mean
+        // only the LAST one would actually survive on a device that
+        // wasn't online at that exact moment - not a OneSignal setting
+        // or a send-timing issue this project controls, but Apple's own
+        // APNs store-and-forward behavior: by default it keeps only the
+        // single most recent notification per app for a device that was
+        // offline, and silently discards the rest before the phone ever
+        // sees them. Spacing sends further apart doesn't reliably fix
+        // this either, if the device is offline for the whole window
+        // regardless of how spread out the sends were. Bundling
+        // everything into one notification sidesteps the problem
+        // entirely - there's only ever one notification competing for
+        // that one slot in the first place, so there's nothing for APNs
+        // to discard.
+        const title = newReleases.length === 1 ? 'New Release' : `${newReleases.length} New Releases Today`;
+        const labels = newReleases.map(r => `${r.title} - ${r.subtitle}`);
+        const MAX_NAMED = 3;
+        const body = labels.length <= MAX_NAMED
+            ? labels.join('; ')
+            : `${labels.slice(0, MAX_NAMED).join('; ')}, and ${labels.length - MAX_NAMED} more`;
 
-        if (newlyNotified.length !== alreadyNotifiedToday.length) {
-            await notifiedRef.set({ day: todayStr, ids: newlyNotified });
+        try {
+            await sendOneSignalPush(uid, title, body);
+            sent++;
+            await notifiedRef.set({ day: todayStr, ids: [...alreadyNotifiedToday, ...newReleases.map(r => r.releaseId)] });
+        } catch (err) {
+            console.error(`Failed to notify ${uid} about today's releases:`, err.message);
         }
     }
 
-    console.log(`Done. Sent ${sent} notification(s), skipped ${skipped} (already sent today, or nothing to send).`);
+    console.log(`Done. Sent ${sent} notification(s) (each may cover more than one release), skipped ${skipped} release(s) already notified about today, or nothing to send.`);
 }
 
 run().catch(err => {
