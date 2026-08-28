@@ -7,6 +7,8 @@ What's included, top to bottom.
 - Search and add TV shows and movies, mark them watched with a single tap.
 - Rewatch tracking, per-episode for TV and per-title for movies, via a tap-to-manage popup rather than a one-way counter. A season can be bulk-rewatched once every released episode in it has been watched at least once.
 - Library organized into In Progress, Up to Date, Finished, Unwatched, Coming Soon, and Stopped Watching, sorted by each show's real most-recently-aired episode.
+- Favorite any show or movie from its details - a heart icon right in the modal header.
+- Custom lists mixing shows and movies freely, plus an automatic Favourites list that's always there without needing to be created. The Library tab itself now leads with a scrollable row of your lists, then a self-updating 9-title preview each for TV and Movies based on what you're actually watching, with a "View All" into the full library view for everything else.
 - Finished, Unwatched, and Stopped Watching can each be shown or hidden independently in Settings.
 - Continue Watching on Home surfaces the next unwatched episode for every in-progress show, plus any unwatched movies, with swipe actions to mark watched or stop watching.
 - Opening a show's details lands on and scrolls straight to the episode you actually need to watch next, rather than the top of Season 1.
@@ -64,6 +66,8 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Widened, tablet-appropriate layout at 768px and up, with no change at all to the phone experience below that width.
 - Achievements and Library Display are full-screen, matching every other settings screen, rather than a centered popup card.
 - Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
+- A splash screen covers the moment between opening the app and actually being ready, tied to genuine load time rather than a fixed delay - fades out the instant it's ready, on a fast connection, without ever leaving anyone waiting on a slow one.
+- The sign-in screen has more visual presence now - a much larger logo and bigger type, reading as a considered full page rather than a compact form.
 - Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
 
 ## Platform
