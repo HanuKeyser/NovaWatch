@@ -6563,7 +6563,16 @@ async function saveList() {
             await listsRef.doc(editingListId).update({ name });
         } else {
             const newRef = listsRef.doc();
-            await newRef.set({ id: newRef.id, name, itemIds: [], createdAt: new Date().toISOString() });
+            // If this list is being created from within the Add to List
+            // picker (rather than Library's own "+ New"), the whole
+            // reason someone got here was to add THIS item somewhere -
+            // creating an empty list and making them tap "Add" a second
+            // time for the item they came here to add would be
+            // pointless friction, so it's included at creation time
+            // instead of a separate follow-up step.
+            const pickerOpen = document.getElementById("listPickerModal").classList.contains("open");
+            const initialItemIds = (pickerOpen && currentItem) ? [currentItem.id] : [];
+            await newRef.set({ id: newRef.id, name, itemIds: initialItemIds, createdAt: new Date().toISOString() });
         }
 
         closeCreateListModal();
@@ -8165,6 +8174,8 @@ function openListPickerModal() {
     }
     const modal = document.getElementById("listPickerModal");
     if (modal.classList.contains("open")) return;
+    const nameEl = document.getElementById("listPickerItemName");
+    if (nameEl) nameEl.textContent = currentItem.title;
     renderListPickerContent();
     modal.classList.add("open");
     lockBodyScroll("listPickerModal");
