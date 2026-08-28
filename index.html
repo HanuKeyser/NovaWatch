@@ -75,6 +75,26 @@
 
 <body>
 
+<!-- =====================================================
+     SPLASH SCREEN
+     The one thing on the page that's visible before any JS has run at
+     all - not display:none by default the way every other overlay in
+     this app is, since the whole point is covering the genuine gap
+     between "the HTML has rendered" and "app.js has loaded and Firebase
+     Auth has resolved whether to show sign-in or the main app" (a real
+     window now that the core scripts load with defer rather than
+     blocking the page - see index.html's own script tags). Hidden by
+     hideSplashScreen() in app.js, called from both branches of
+     onAuthStateChanged once it's actually known which one to show -
+     tied to genuine readiness, with a small minimum display time so it
+     never flashes instantly on a fast connection, and a safety-net
+     maximum so a slow one never leaves someone staring at this
+     indefinitely (see MIN/MAX_SPLASH_MS in app.js).
+================================================     -->
+<div id="splashScreen">
+    <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="splash-logo">
+</div>
+
 <!-- DEDICATED AUTH OVERLAY -->
 <div id="authScreen">
     <div class="auth-overlay-card">
@@ -252,46 +272,23 @@
      2. LIBRARY TAB (TV Shows + Movies)
 ================================================     -->
 <main id="libraryPage" class="page">
-    <div class="segmented-toggle">
-        <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
-        <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
+    <div class="section-header">
+        <div class="section-title">Lists</div>
+        <button class="section-view-all-btn" onclick="openCreateListModal()">+ New</button>
     </div>
+    <div id="listsRow" class="lists-scroll-row"></div>
 
-    <!-- TV Shows sub-view -->
-    <div id="libraryViewTV" class="library-subview">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="tvLibrarySearchInput" type="text" inputmode="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
-
-        <div id="tvLibraryCategories"></div>
+    <div class="section-header">
+        <div class="section-title">TV Shows</div>
+        <button class="section-view-all-btn" onclick="openFullLibraryModal('tv')">View All</button>
     </div>
+    <div id="tvLibraryPreviewGrid" class="library-grid"></div>
 
-    <!-- Movies sub-view -->
-    <div id="libraryViewMovies" class="library-subview" style="display: none;">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="movieLibrarySearchInput" type="text" inputmode="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
-
-        <div id="movieLibraryCategories"></div>
+    <div class="section-header">
+        <div class="section-title">Movies</div>
+        <button class="section-view-all-btn" onclick="openFullLibraryModal('movies')">View All</button>
     </div>
+    <div id="movieLibraryPreviewGrid" class="library-grid"></div>
 </main>
 
 <!-- =====================================================
@@ -455,6 +452,19 @@
 <div id="detailsModal" class="modal" onclick="closeModalOutside(event)">
     <div class="modal-sheet">
         <div class="modal-header-nav">
+            <button id="modalFavoriteBtn" class="close-button" onclick="toggleFavoriteCurrentItem()" aria-label="Favorite">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/>
+                </svg>
+            </button>
+            <button class="close-button" onclick="openListPickerModal()" aria-label="Add to list">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <path d="M14 2v6h6"/>
+                    <path d="M12 18v-6"/>
+                    <path d="M9 15h6"/>
+                </svg>
+            </button>
             <button class="close-button" onclick="shareCurrentItem()" aria-label="Share">
                 <svg class="icon" viewBox="0 0 24 24">
                     <path d="M12 16V4"/>
@@ -638,6 +648,105 @@
             <h2 class="poster-picker-title">Library Display</h2>
             <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">Choose which TV Library categories are visible.</p>
             <div id="libraryDisplayList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     FULL LIBRARY (View All)
+     Opened from either "View All" button on the redesigned Library
+     page - the same segmented TV/Movies view that used to be the whole
+     Library tab directly, just relocated into a modal now that the
+     tab itself shows the Lists row + 9-item previews instead. Every
+     element id in here is unchanged from before (libraryTabTV,
+     libraryViewTV, tvLibrarySearchInput, tvLibraryCategories, etc.) -
+     setLibraryView()/renderTVLibrarySection()/renderMovieLibrarySection()
+     in app.js all still target these exact ids and needed no changes
+     at all, just a new home for the elements they already expected.
+================================================     -->
+<div id="fullLibraryModal" class="modal" onclick="closeFullLibraryModalOutside(event)">
+    <div class="modal-sheet">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeFullLibraryModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content modal-content-top-clear">
+            <div class="segmented-toggle">
+                <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
+                <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
+            </div>
+
+            <!-- TV Shows sub-view -->
+            <div id="libraryViewTV" class="library-subview">
+                <div class="library-toolbar">
+                    <div class="search-box">
+                        <svg class="icon search-icon" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="M20 20l-4-4"/>
+                        </svg>
+                        <input id="tvLibrarySearchInput" type="text" inputmode="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search">
+                        <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
+                            <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tvLibraryCategories"></div>
+            </div>
+
+            <!-- Movies sub-view -->
+            <div id="libraryViewMovies" class="library-subview" style="display: none;">
+                <div class="library-toolbar">
+                    <div class="search-box">
+                        <svg class="icon search-icon" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="M20 20l-4-4"/>
+                        </svg>
+                        <input id="movieLibrarySearchInput" type="text" inputmode="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search">
+                        <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
+                            <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="movieLibraryCategories"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     LIST DETAIL
+     Opened by tapping any card in the Lists row (see renderListsRow) -
+     both user-created lists and the automatic Favourites list share
+     this same modal, distinguished by isFavoritesList (see
+     openListDetailModal in app.js). Rename/Delete only show for a real
+     list - Favourites can't be renamed or deleted since it isn't a
+     document that exists to rename or delete in the first place.
+================================================     -->
+<div id="listDetailModal" class="modal" onclick="closeListDetailModalOutside(event)">
+    <div class="modal-sheet">
+        <div class="modal-header-nav">
+            <button id="listDetailRenameBtn" class="close-button" onclick="openRenameListModal(currentListDetailId)" aria-label="Rename list">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+            <button id="listDetailDeleteBtn" class="close-button" onclick="confirmDeleteCurrentList()" aria-label="Delete list">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+            <button class="close-button" onclick="closeListDetailModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content modal-content-top-clear">
+            <h2 id="listDetailTitle" class="poster-picker-title"></h2>
+            <div id="listDetailGrid" class="library-grid" style="margin-top: 16px;"></div>
         </div>
     </div>
 </div>
@@ -950,6 +1059,28 @@
 </div>
 
 <!-- =====================================================
+     DELETE LIST
+================================================     -->
+<div id="deleteListModal" class="confirm-overlay" onclick="closeDeleteListModalOutside(event)">
+    <div class="confirm-card">
+        <div class="confirm-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+        </div>
+        <div class="confirm-title" id="deleteListTitle">Delete List?</div>
+        <p class="confirm-message">This only deletes the list itself - nothing is removed from your library.</p>
+        <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="closeDeleteListModal()">Cancel</button>
+            <button class="confirm-btn danger" onclick="executeDeleteCurrentList()">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
      EDIT DISPLAY NAME
      Opened by tapping the name (or its pencil icon) in Settings' hero
      card. Separate from the username - the username is the unique,
@@ -986,6 +1117,74 @@
         </div>
     </div>
 </div>
+
+<!-- =====================================================
+     CREATE / RENAME LIST
+     One shared modal for both - see editingListId in app.js, which is
+     null while creating a new list and set to a list's own id while
+     renaming an existing one. Same "themed dialog with a text input"
+     pattern as Edit Display Name above, not a native prompt() - a
+     native prompt is unreliable (and often does nothing at all) inside
+     an installed standalone PWA, the same reasoning the rest of the app
+     already avoids it for.
+================================================     -->
+<div id="createListModal" class="confirm-overlay" onclick="closeCreateListModalOutside(event)">
+    <div class="confirm-card">
+        <button class="close-button" style="position: absolute; top: 12px; right: 12px;" onclick="closeCreateListModal()" aria-label="Close">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M6 6l12 12"/>
+                <path d="M18 6L6 18"/>
+            </svg>
+        </button>
+        <div class="confirm-icon-badge rewatch-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+        </div>
+        <div class="confirm-title" id="createListModalTitle">New List</div>
+        <p class="confirm-message">Give it a name - shows and movies can both live in the same list.</p>
+        <div class="auth-field">
+            <input type="text" id="createListInput" class="auth-input" placeholder="List name" maxlength="40" autocomplete="off" enterkeyhint="done" onkeydown="handleCreateListKeydown(event)" oninput="clearCreateListError()">
+            <div id="createListError" class="auth-error"></div>
+        </div>
+        <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="closeCreateListModal()">Cancel</button>
+            <button class="confirm-btn primary" id="saveListBtn" onclick="saveList()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     ADD TO LIST
+     Opened from the Details modal's own header (see openListPickerModal
+     in app.js) - a checklist of every list the currently-open item
+     could belong to, toggled on tap. Favourites deliberately isn't one
+     of the rows here - favoriting is its own separate action (the
+     heart icon right next to this button), not something that belongs
+     in a picker meant for custom lists. modal-compact, matching Choose
+     an Avatar's own sizing, rather than full-screen - a checklist of
+     someone's own lists is rarely long enough to need the whole
+     screen.
+================================================     -->
+<div id="listPickerModal" class="modal modal-compact" onclick="closeListPickerModalOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeListPickerModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content modal-content-top-clear">
+            <h2 class="poster-picker-title">Add to List</h2>
+            <p id="listPickerItemName" style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;"></p>
+            <div id="listPickerRows" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+            <button class="wrapped-start-btn" style="margin-top: 16px; background: var(--glass-sheen), var(--surface-2); color: var(--text); box-shadow: none;" onclick="openCreateListModal()">
+                + Create New List
+            </button>
+        </div>
+    </div>
+</div>
+
 
 <!-- =====================================================
      ERROR TOAST
