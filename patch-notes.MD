@@ -66,6 +66,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Widened, tablet-appropriate layout at 768px and up, with no change at all to the phone experience below that width.
 - Achievements and Library Display are full-screen, matching every other settings screen, rather than a centered popup card.
 - Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
+- The sign-in screen has more visual presence now - a much larger logo and bigger type, reading as a considered full page rather than a compact form.
 - Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
 
 ## Platform
