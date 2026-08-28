@@ -95,6 +95,35 @@
     <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="splash-logo">
 </div>
 
+<!-- Deliberately a plain, standalone inline script - not deferred, and
+     not part of app.js at all. This is the real safety net: it makes
+     no assumptions about app.js loading, parsing, or executing
+     successfully, since app.js failing for any reason is exactly the
+     scenario this needs to cover. It only ever checks whether
+     #splashScreen still exists in the DOM (the normal hide path in
+     app.js removes it outright once auth resolves) - no shared
+     variables, no function calls into app.js, nothing that could be
+     unavailable if app.js itself is the thing that's broken. If the
+     splash is still there after 8 seconds, something is genuinely
+     wrong (not just a slow connection an app.js-side timer could have
+     covered) - Reload is the only thing that can actually help at that
+     point, so that's what this offers instead of leaving the screen to
+     hang with no way out at all. -->
+<script>
+(function () {
+    setTimeout(function () {
+        var splash = document.getElementById('splashScreen');
+        if (!splash) return;
+        splash.innerHTML =
+            '<div class="splash-timeout">' +
+                '<img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="splash-logo splash-logo-static">' +
+                '<p class="splash-timeout-message">This is taking longer than expected.</p>' +
+                '<button class="splash-reload-btn" onclick="window.location.reload()">Reload</button>' +
+            '</div>';
+    }, 8000);
+})();
+</script>
+
 <!-- DEDICATED AUTH OVERLAY -->
 <div id="authScreen">
     <div class="auth-overlay-card">
