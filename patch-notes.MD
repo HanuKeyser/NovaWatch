@@ -23,7 +23,7 @@ What's included, top to bottom.
 ## Notifications
 
 - Real push, delivered even when the app is fully closed, via OneSignal — the only notification delivery mechanism in the app, a single on/off toggle, no separate path that only works while the app happens to be open.
-- Each account is notified once daily, at a single fixed anchor time - the exact local time it arrives at depends on that account's own timezone.
+- Each account is notified once for release day content and, separately, once for an engagement reminder (a streak nudge or a Continue Watching pick) - two different fixed anchor times, not one, so a "watch something today" reminder can land in the evening rather than first thing in the morning. The exact local time either arrives at still depends on that account's own timezone.
 - Notifications fire only on the actual release day, checked against the real release instant for that specific viewer — never at the moment metadata merely mentions something coming, and never for episodes that were already out when a show was added.
 - On a day when nothing in your library is releasing, an optional reminder can nudge you about an at-risk watch streak, or about episodes waiting in Continue Watching after a few days away — each with its own separate condition so neither becomes a daily nag.
 - OneSignal push is the only notification mechanism in the app - no separate in-app log or history to check.
