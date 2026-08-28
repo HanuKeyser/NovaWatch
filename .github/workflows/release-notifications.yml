@@ -1,7 +1,7 @@
-# Runs send-release-notifications.js once a day, for free, without
-# needing a Firebase Blaze plan upgrade or any other hosting - this is
-# one option, not the only one; any host that can run Node on a
-# schedule works the same way. Delete this file if you'd rather run it
+# Runs send-release-notifications.js, for free, without needing a
+# Firebase Blaze plan upgrade or any other hosting - this is one
+# option, not the only one; any host that can run Node on a schedule
+# works the same way. Delete this file if you'd rather run it
 # somewhere else (a Cloud Function + Cloud Scheduler, a cron job on a
 # server you already have, etc).
 #
@@ -12,21 +12,40 @@
 #   ONESIGNAL_APP_ID               - same value as ONESIGNAL_APP_ID in scripts/app.js
 #   ONESIGNAL_REST_API_KEY         - from OneSignal dashboard -> Settings -> Keys & IDs
 #
-# Runs once daily at 08:00 UTC. Every account is processed on this same
-# single run - there's no per-account local-time targeting anymore (that
-# needed hourly runs to work at all, checking each account against its
-# own local 8am hour - removed as unnecessary complexity). The practical
+# Two schedules, not one - release notifications and engagement
+# reminders (streak/Continue Watching) run at different times of day on
+# purpose, not just because they're logically separate. A streak
+# reminder saying "watch something today" makes far more sense sent in
+# the evening, when the day's actually running out, than at 08:00 in
+# the morning when there's still a full day left. Both still only ever
+# run once each, at their own time - every account is processed on the
+# same single pass for whichever concern that run is for; there's still
+# no per-account local-time targeting.
+#
+# GitHub tells the script which of the two schedules actually fired via
+# github.event.schedule (passed through as TRIGGER_SCHEDULE below) - see
+# the RUN MODE block near the top of send-release-notifications.js for
+# how that's used. A manual run (workflow_dispatch) has no schedule
+# value at all, so the script treats that as "run everything," which is
+# what you want when testing by hand rather than only exercising half of
+# it.
+#
+# Every account is processed on the same single run within each concern
+# - there's no per-account local-time targeting anymore (that needed
+# hourly runs to work at all, checking each account against its own
+# local 8am hour - removed as unnecessary complexity). The practical
 # effect: what local time a notification actually lands at now depends
 # on how far an account's timezone sits from UTC - e.g. 08:00 UTC is
 # late morning in most of Europe, the middle of the night on the US West
-# Coast. Adjust the cron hour below if you'd rather anchor to a
-# different UTC time.
+# Coast. Adjust the cron hours below if you'd rather anchor to different
+# UTC times.
 
 name: Send release notifications
 
 on:
   schedule:
     - cron: '0 8 * * *'
+    - cron: '0 20 * * *'
   workflow_dispatch: {}
 
 jobs:
@@ -46,3 +65,4 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
           ONESIGNAL_REST_API_KEY: ${{ secrets.ONESIGNAL_REST_API_KEY }}
+          TRIGGER_SCHEDULE: ${{ github.event.schedule }}
