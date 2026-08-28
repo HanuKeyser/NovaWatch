@@ -14,13 +14,15 @@
 #
 # Two schedules, not one - release notifications and engagement
 # reminders (streak/Continue Watching) run at different times of day on
-# purpose, not just because they're logically separate. A streak
-# reminder saying "watch something today" makes far more sense sent in
-# the evening, when the day's actually running out, than at 08:00 in
-# the morning when there's still a full day left. Both still only ever
-# run once each, at their own time - every account is processed on the
-# same single pass for whichever concern that run is for; there's still
-# no per-account local-time targeting.
+# purpose, not just because they're logically separate. Keeping real
+# separation between the two - rather than both firing at 08:00 - means
+# a "watch something today" reminder doesn't compete for attention with
+# the same morning release check, and lands at a point in the day
+# someone's meaningfully more likely to actually be looking at their
+# phone than at 08:00 sharp. Both still only ever run once each, at
+# their own time - every account is processed on the same single pass
+# for whichever concern that run is for; there's still no per-account
+# local-time targeting.
 #
 # GitHub tells the script which of the two schedules actually fired via
 # github.event.schedule (passed through as TRIGGER_SCHEDULE below) - see
@@ -45,7 +47,7 @@ name: Send release notifications
 on:
   schedule:
     - cron: '0 8 * * *'
-    - cron: '0 20 * * *'
+    - cron: '0 13 * * *'
   workflow_dispatch: {}
 
 jobs:
