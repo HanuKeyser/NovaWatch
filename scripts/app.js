@@ -58,8 +58,79 @@ const APP_VERSION = "1.0.0";
 // no visible error unless you had the console open.
 const NOVAWATCH_APP_URL = window.location.origin + "/";
 
+/* =========================================================
+   SPLASH SCREEN
+   Shown by default in the HTML itself (not display:none the way every
+   other overlay in this app is) so it's visible before any JS has even
+   run - covering the real gap between the page rendering and app.js
+   finishing load + Firebase Auth resolving, now that the core scripts
+   load with defer rather than blocking the page. Tied to genuine
+   readiness (see the two hideSplashScreen() call sites in
+   onAuthStateChanged), not a fixed delay - a fixed wait would make the
+   app feel slower than it actually is on a fast connection, undoing
+   the point of deferring those scripts in the first place. MIN keeps a
+   fast connection from flashing it in and out too quickly to register.
+
+   MAX is deliberately NOT "just hide it after 8 seconds no matter
+   what" - both #authScreen and .app are display:none until JS
+   explicitly shows one of them once auth actually resolves, so hiding
+   the splash before that point would reveal nothing at all underneath,
+   not a skeleton or any other fallback content - just the bare mesh
+   background with no indication anything's wrong. handleSplashTimeout
+   below checks whether that's genuinely happened before deciding what
+   to do, rather than hiding blind.
+========================================================= */
+const SPLASH_SHOWN_AT = Date.now();
+const MIN_SPLASH_MS = 800;
+const MAX_SPLASH_MS = 8000;
+let splashHidden = false;
+
+function hideSplashScreen() {
+    if (splashHidden) return;
+    splashHidden = true;
+    const elapsed = Date.now() - SPLASH_SHOWN_AT;
+    const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+    setTimeout(() => {
+        const splash = document.getElementById("splashScreen");
+        if (!splash) return;
+        splash.classList.add("hide");
+        setTimeout(() => splash.remove(), 400);
+    }, remaining);
+}
+
+// The safety-net call site (set up once in DOMContentLoaded, below) -
+// distinct from hideSplashScreen itself, since "auth genuinely hasn't
+// resolved yet" and "auth resolved, now hide the splash" need two
+// different responses, not the same one. If hideSplashScreen has
+// already run by MAX_SPLASH_MS, this is a no-op - the normal path won
+// the race, exactly as it should on virtually every real load. If it
+// hasn't, something is genuinely taking too long (a hung connection,
+// Firebase unreachable) - rather than hide the splash into a blank
+// screen with nothing shown underneath yet, this keeps it up and
+// swaps its content for an honest "this is taking a while" message
+// with a manual reload option, since the app has no way to know
+// whether waiting longer would actually help.
+function handleSplashTimeout() {
+    if (splashHidden) return;
+    const splash = document.getElementById("splashScreen");
+    if (!splash) return;
+    splash.innerHTML = `
+        <div class="splash-timeout">
+            <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="splash-logo splash-logo-static">
+            <p class="splash-timeout-message">This is taking longer than expected.</p>
+            <button class="splash-reload-btn" onclick="window.location.reload()">Reload</button>
+        </div>
+    `;
+}
+
 let state = {
     library: [],
+    // Each { id, name, itemIds, createdAt } - see the LISTS block further
+    // down for the full CRUD. The automatic "Favourites" list isn't
+    // stored here at all - it's computed on the fly from library items'
+    // own isFavorite flag, not a real document, so there's nothing to
+    // keep in sync when a favorite is toggled.
+    lists: [],
     profiles: [
         {
             id: "profile-guest",
@@ -949,6 +1020,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // let alone before Firestore responds. See CACHED IDENTITY SNAPSHOT
     // above for the full reasoning.
     restoreCachedIdentitySnapshot();
+
+    // Safety net for the splash screen (see hideSplashScreen and
+    // handleSplashTimeout above) - guarantees something honest is shown
+    // by MAX_SPLASH_MS even if auth never resolves, rather than either
+    // trapping someone behind the splash forever or hiding it into a
+    // blank screen with nothing underneath yet. The real hide calls (in
+    // onAuthStateChanged) almost always win this race under normal
+    // conditions; this is only ever a fallback.
+    setTimeout(handleSplashTimeout, MAX_SPLASH_MS);
 
     // The inline head script already applied the right theme before first
     // paint (saved choice, or OS preference if none saved yet) - this just
@@ -2191,6 +2271,7 @@ async function handleSignOut() {
     try {
         await auth.signOut();
         state.library = [];
+        state.lists = [];
         hideChooseUsernameScreen();
         // Explicitly reset to Home on sign-out, not just relying on
         // proceedToApp's own showPage('home') on the NEXT sign-in - if
@@ -2902,7 +2983,10 @@ async function shareNovaWrapped() {
             console.error("Clipboard write failed:", err);
             showErrorToast("Unable to share.");
         }
+        return;
     }
+
+    showErrorToast("Sharing isn't supported on this device.");
 }
 
 
@@ -3052,10 +3136,31 @@ function setInnerHTMLIfChanged(el, html) {
 }
 
 function refreshActivePage() {
-    if (document.getElementById("libraryPage").classList.contains("active")) {
+    if (document.getElementById("libraryPage").classList.contains("active")) renderLibraryHome();
+
+    // Independent of which tab is "active" underneath - the Full Library
+    // modal is its own overlay, not tied to .page.active the way the
+    // preview above is, so a library change (a new watch, a remove)
+    // needs to refresh it too whenever it happens to be open, regardless
+    // of which tab is showing behind it.
+    if (document.getElementById("fullLibraryModal").classList.contains("open")) {
         if (currentLibraryView === 'tv') renderTVLibrarySection();
         if (currentLibraryView === 'movies') renderMovieLibrarySection();
     }
+
+    // Same idea for the Add to List picker - a list created from
+    // within it (via + Create New List) needs to appear in its own
+    // checklist right away, not just the next time it's reopened.
+    if (document.getElementById("listPickerModal").classList.contains("open")) {
+        renderListPickerContent();
+    }
+
+    // And the List Detail view - a list can be edited/deleted from
+    // another device while it's open here.
+    if (document.getElementById("listDetailModal").classList.contains("open")) {
+        renderListDetailContent();
+    }
+
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
     if (document.getElementById("upcomingPage").classList.contains("active")) {
         if (currentUpcomingView === 'tv') renderUpcomingTVSection();
@@ -3965,6 +4070,7 @@ if (auth) {
             // by Google, so they skip straight through.
             const isPasswordAccount = user.providerData.some(p => p.providerId === 'password');
             if (isPasswordAccount && !user.emailVerified) {
+                hideSplashScreen();
                 showVerifyScreen(user);
                 return;
             }
@@ -3972,6 +4078,7 @@ if (auth) {
             hideVerifyScreen();
             oneSignalLogin(user.uid);
             await proceedToApp(user, authScreen, mainApp);
+            hideSplashScreen();
         } else {
             hideVerifyScreen();
             hideChooseUsernameScreen();
@@ -3985,9 +4092,11 @@ if (auth) {
             // User is logged out: Show Auth Screen, Hide Main App
             authScreen.style.display = "flex";
             mainApp.style.display = "none";
+            hideSplashScreen();
 
             // Clear local state
             state.library = [];
+            state.lists = [];
             libraryLoaded = false;
             document.getElementById("homeName").textContent = "Guest";
             const homeEmailSubtitleEl = document.getElementById("homeEmailSubtitle");
@@ -4195,6 +4304,19 @@ async function proceedToApp(user, authScreen, mainApp) {
                         });
 
                         state.library = updatedLibrary;
+                        refreshActivePage();
+                    });
+
+                // Lists get their own, simpler listener - no dedup/cleanup
+                // needed the way library items do (a list is just a name
+                // and an array of ids, not a rich document that can end
+                // up a broken partial stub), so this is a plain mirror of
+                // the collection into state.lists.
+                db.collection("users")
+                    .doc(user.uid)
+                    .collection("lists")
+                    .onSnapshot((snapshot) => {
+                        state.lists = snapshot.docs.map(d => d.data());
                         refreshActivePage();
                     });
             } catch (err) {
@@ -4929,6 +5051,25 @@ function sortTVShowsByLatestAired(shows) {
     return shows.sort((a, b) => getLatestAiredEpisodeDate(b) - getLatestAiredEpisodeDate(a));
 }
 
+// Different from sortTVShowsByLatestAired above - that one sorts by the
+// show's own airing schedule (when TMDB says an episode released),
+// which has nothing to do with when the viewer actually watched it.
+// This sorts by the viewer's own activity instead - the Library
+// preview's "most recently watched" ordering needs the latter, not the
+// former, so it reflects what someone's actually been doing rather
+// than what happened to air recently.
+function getLastWatchedEpisodeTimestamp(show) {
+    if (!show.episodes) return 0;
+    const watchedTimes = show.episodes
+        .filter(ep => ep.watched && ep.watchedAt)
+        .map(ep => new Date(ep.watchedAt).getTime());
+    return watchedTimes.length > 0 ? Math.max(...watchedTimes) : 0;
+}
+
+function sortTVShowsByLastWatched(shows) {
+    return [...shows].sort((a, b) => getLastWatchedEpisodeTimestamp(b) - getLastWatchedEpisodeTimestamp(a));
+}
+
 function sortMoviesByWatchedDate(movies) {
     return movies.sort((a, b) => {
         const timeA = a.lastWatchedAt ? new Date(a.lastWatchedAt).getTime() : 0;
@@ -4960,7 +5101,7 @@ function showPage(page, subType = null, focusSearch = false) {
 
     updateNavIndicator();
 
-    if (page === "library") setLibraryView(subType || currentLibraryView);
+    if (page === "library") renderLibraryHome();
     if (page === "discover") {
         if (subType) {
             setSearchType(subType);
@@ -5205,6 +5346,26 @@ function setLibraryView(view) {
     if (view === 'movies') renderMovieLibrarySection();
 }
 
+// 'tv' or 'movies' - which segmented-toggle tab the modal opens showing,
+// matching whichever "View All" button was actually tapped rather than
+// always defaulting to TV regardless of which section someone came from.
+function openFullLibraryModal(startView) {
+    const modal = document.getElementById("fullLibraryModal");
+    if (modal.classList.contains("open")) return;
+    setLibraryView(startView || currentLibraryView);
+    modal.classList.add("open");
+    lockBodyScroll("fullLibraryModal");
+}
+
+function closeFullLibraryModal() {
+    document.getElementById("fullLibraryModal").classList.remove("open");
+    unlockBodyScroll("fullLibraryModal");
+}
+
+function closeFullLibraryModalOutside(event) {
+    if (event.target.id === "fullLibraryModal") closeFullLibraryModal();
+}
+
 /* =========================================================
    HOME TAB RENDER
 ========================================================= */
@@ -5406,6 +5567,140 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
     }
 
     setInnerHTMLIfChanged(container, html);
+}
+
+/* =========================================================
+   LIBRARY HOME (Lists row + TV/Movie previews)
+   What the Library tab itself shows now - the segmented TV/Movies view
+   that used to live directly on this tab moved into #fullLibraryModal
+   (see openFullLibraryModal), reachable via either section's "View
+   All". This is the tab's own content: a horizontally-scrolling Lists
+   row, then a curated 9-item preview each for TV and Movies that
+   updates automatically based on watch activity - nothing here is
+   manually arranged by the person using it.
+========================================================= */
+// Priority 1: shows genuinely in progress (watched some, not all,
+// released episodes) - not Home's broader Continue Watching definition,
+// which also includes shows never even started; this is specifically
+// "shows watched episodes but hasn't finished the series", sorted by
+// the viewer's own most recent activity. Priority 2, filling any
+// remaining slots up to 9: shows fully caught up with everything
+// currently out, also by most recent activity - so a barely-used
+// library still shows something sensible rather than a mostly-empty
+// preview.
+function pickLibraryPreviewShows() {
+    const tvItems = state.library.filter(i => (i.type === 'tv' || !i.type) && !i.isStopped);
+
+    const inProgress = sortTVShowsByLastWatched(tvItems.filter(item => {
+        const p = getTVProgress(item);
+        return p.watched > 0 && p.watched < p.total;
+    }));
+
+    const upToDate = sortTVShowsByLastWatched(tvItems.filter(item => isTVUpToDate(item)));
+
+    const combined = [...inProgress];
+    upToDate.forEach(show => {
+        if (combined.length < 9 && !combined.includes(show)) combined.push(show);
+    });
+
+    return combined.slice(0, 9);
+}
+
+// Same idea as the TV preview, adapted for movies not having partial
+// progress the way a show does - a movie is either watched or it
+// isn't, so "in progress" doesn't apply. Priority 1: watched movies,
+// most recently watched first (sortMoviesByWatchedDate already does
+// exactly this). Priority 2, filling remaining slots: released but
+// unwatched movies, newest addition first, so a library with little
+// watch history yet still shows a full preview rather than a sparse
+// one.
+function pickLibraryPreviewMovies() {
+    const movieItems = state.library.filter(i => i.type === 'movie');
+
+    const watched = sortMoviesByWatchedDate(movieItems.filter(item => item.watched));
+
+    const unwatched = movieItems
+        .filter(item => !item.watched && isReleased(item.releaseDate))
+        .sort((a, b) => {
+            const dateA = a.addedAt ? new Date(a.addedAt).getTime() : 0;
+            const dateB = b.addedAt ? new Date(b.addedAt).getTime() : 0;
+            return dateB - dateA;
+        });
+
+    const combined = [...watched];
+    unwatched.forEach(movie => {
+        if (combined.length < 9 && !combined.includes(movie)) combined.push(movie);
+    });
+
+    return combined.slice(0, 9);
+}
+
+// One list card - a 2x2 mini-collage of up to the first 4 items' own
+// posters (any empty slots left blank/neutral rather than forcing a
+// placeholder icon into every gap, since a brand new list or a not-yet-
+// favorited Favourites list legitimately has zero items to show yet),
+// name and item count in a gradient scrim over the bottom, the same
+// image+text-overlay pattern already used for the modal backdrop
+// header elsewhere in the app rather than a new visual language just
+// for this.
+function createListCard(list, isFavorites) {
+    const items = isFavorites ? getFavoriteListItems() : getListItems(list.id);
+    const posterSlots = [0, 1, 2, 3].map(i => {
+        const item = items[i];
+        if (!item || !item.poster) return `<div class="list-card-poster-slot empty"></div>`;
+        return `<div class="list-card-poster-slot"><img src="${tmdbThumb(item.poster, 'w185')}" alt="" loading="lazy" decoding="async"></div>`;
+    }).join("");
+
+    const openAttr = isFavorites ? `openListDetailModal(null, true)` : `openListDetailModal('${list.id}')`;
+
+    return `
+        <div class="list-card" onclick="${openAttr}">
+            <div class="list-card-collage">${posterSlots}</div>
+            <div class="list-card-scrim"></div>
+            <div class="list-card-label">
+                <div class="list-card-name">${escapeHTML(isFavorites ? "Favourites" : list.name)}</div>
+                <div class="list-card-count">${items.length} ${items.length === 1 ? 'title' : 'titles'}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderListsRow() {
+    const container = document.getElementById("listsRow");
+    if (!container) return;
+
+    // Favourites always renders first and always exists, even with zero
+    // favorited items yet - it's never one of state.lists' own documents
+    // (see getFavoriteListItems), so it's added here rather than ever
+    // needing to be created.
+    const favoritesCard = createListCard(null, true);
+    const userCards = state.lists
+        .slice()
+        .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+        .map(list => createListCard(list, false))
+        .join("");
+
+    container.innerHTML = favoritesCard + userCards;
+}
+
+function renderLibraryHome() {
+    renderListsRow();
+
+    const tvContainer = document.getElementById("tvLibraryPreviewGrid");
+    if (tvContainer) {
+        const shows = pickLibraryPreviewShows();
+        tvContainer.innerHTML = shows.length > 0
+            ? shows.map(item => createCard(item)).join("")
+            : emptyState("Nothing to Show Yet", "Shows you're watching will appear here.");
+    }
+
+    const movieContainer = document.getElementById("movieLibraryPreviewGrid");
+    if (movieContainer) {
+        const movies = pickLibraryPreviewMovies();
+        movieContainer.innerHTML = movies.length > 0
+            ? movies.map(item => createCard(item)).join("")
+            : emptyState("Nothing to Show Yet", "Movies you're watching will appear here.");
+    }
 }
 
 function renderCategoryBlock(title, items) {
@@ -6238,6 +6533,338 @@ async function saveDisplayName() {
 }
 
 /* =========================================================
+   LISTS
+   Each list is { id, name, itemIds, createdAt } in
+   users/{uid}/lists/{listId} - itemIds stored on the list itself
+   (rather than "which lists" on each library item) so reading a list's
+   contents, or reordering it later, is a single document read rather
+   than a scan across the whole library. The automatic "Favourites"
+   list is deliberately NOT one of these documents - see
+   getFavoriteListItems() below - so favoriting something never needs a
+   second write to keep a list in sync with it.
+========================================================= */
+// null while the Create/Rename List modal is open to make a brand new
+// list; set to a list's own id while renaming an existing one - the
+// one thing that differs between those two flows (see saveList below).
+let editingListId = null;
+
+function openCreateListModal() {
+    if (!auth || !auth.currentUser) return;
+    editingListId = null;
+    const modal = document.getElementById("createListModal");
+    if (modal.classList.contains("open")) return;
+
+    document.getElementById("createListModalTitle").textContent = "New List";
+    const input = document.getElementById("createListInput");
+    if (input) input.value = "";
+    clearCreateListError();
+
+    modal.classList.add("open");
+    lockBodyScroll("createListModal");
+    setTimeout(() => input && input.focus(), 50);
+}
+
+function openRenameListModal(listId) {
+    if (!auth || !auth.currentUser) return;
+    const list = state.lists.find(l => l.id === listId);
+    if (!list) return;
+    editingListId = listId;
+    const modal = document.getElementById("createListModal");
+    if (modal.classList.contains("open")) return;
+
+    document.getElementById("createListModalTitle").textContent = "Rename List";
+    const input = document.getElementById("createListInput");
+    if (input) input.value = list.name;
+    clearCreateListError();
+
+    modal.classList.add("open");
+    lockBodyScroll("createListModal");
+    setTimeout(() => input && input.focus(), 50);
+}
+
+function closeCreateListModal() {
+    document.getElementById("createListModal").classList.remove("open");
+    unlockBodyScroll("createListModal");
+    editingListId = null;
+}
+
+function closeCreateListModalOutside(event) {
+    if (event.target.id === "createListModal") closeCreateListModal();
+}
+
+function clearCreateListError() {
+    const errEl = document.getElementById("createListError");
+    if (errEl) {
+        errEl.textContent = "";
+        errEl.classList.remove("show");
+    }
+    const input = document.getElementById("createListInput");
+    if (input) input.classList.remove("input-error");
+}
+
+function showCreateListError(message) {
+    const errEl = document.getElementById("createListError");
+    if (errEl) {
+        errEl.textContent = message;
+        errEl.classList.add("show");
+    }
+    const input = document.getElementById("createListInput");
+    if (input) input.classList.add("input-error");
+}
+
+function handleCreateListKeydown(event) {
+    if (event.key === "Enter") saveList();
+}
+
+async function saveList() {
+    if (!auth || !auth.currentUser) return;
+
+    const input = document.getElementById("createListInput");
+    const name = input ? input.value.trim() : "";
+
+    if (!name) {
+        showCreateListError("Please enter a list name.");
+        return;
+    }
+
+    const btn = document.getElementById("saveListBtn");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving...";
+    }
+
+    try {
+        const listsRef = db.collection("users").doc(auth.currentUser.uid).collection("lists");
+
+        if (editingListId) {
+            await listsRef.doc(editingListId).update({ name });
+        } else {
+            const newRef = listsRef.doc();
+            // If this list is being created from within the Add to List
+            // picker (rather than Library's own "+ New"), the whole
+            // reason someone got here was to add THIS item somewhere -
+            // creating an empty list and making them tap "Add" a second
+            // time for the item they came here to add would be
+            // pointless friction, so it's included at creation time
+            // instead of a separate follow-up step.
+            const pickerOpen = document.getElementById("listPickerModal").classList.contains("open");
+            const initialItemIds = (pickerOpen && currentItem) ? [currentItem.id] : [];
+            await newRef.set({ id: newRef.id, name, itemIds: initialItemIds, createdAt: new Date().toISOString() });
+        }
+
+        closeCreateListModal();
+        showToast(editingListId ? "List renamed!" : "List created!", "success");
+    } catch (err) {
+        console.error("List save FAILED", err);
+        showCreateListError("Couldn't save right now. Please try again.");
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Save";
+        }
+    }
+}
+
+async function deleteList(listId) {
+    if (!auth || !auth.currentUser) return;
+    try {
+        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).delete();
+        showToast("List deleted.", "success");
+    } catch (err) {
+        console.error("List delete FAILED", err);
+        showErrorToast("Couldn't delete this list.");
+    }
+}
+
+// Both add/remove read the list's current itemIds straight from
+// state.lists (already kept live by the onSnapshot listener - see
+// proceedToApp) rather than re-fetching, then write the whole updated
+// array back. Lists are small enough (a handful of shows/movies, not
+// hundreds of library items) that this is simpler and plenty fast,
+// unlike the library's own more careful merge/dedupe handling.
+async function addItemToList(listId, itemId) {
+    if (!auth || !auth.currentUser) return;
+    const list = state.lists.find(l => l.id === listId);
+    if (!list) return;
+    if (list.itemIds.includes(itemId)) return;
+
+    try {
+        const itemIds = [...list.itemIds, itemId];
+        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
+        showToast(`Added to "${list.name}".`, "success");
+    } catch (err) {
+        console.error("Add to list FAILED", err);
+        showErrorToast("Couldn't add this to the list.");
+    }
+}
+
+async function removeItemFromList(listId, itemId) {
+    if (!auth || !auth.currentUser) return;
+    const list = state.lists.find(l => l.id === listId);
+    if (!list) return;
+
+    try {
+        const itemIds = list.itemIds.filter(id => id !== itemId);
+        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
+    } catch (err) {
+        console.error("Remove from list FAILED", err);
+        showErrorToast("Couldn't remove this from the list.");
+    }
+}
+
+// Resolves a list's stored itemIds into the actual current library item
+// objects - filters out any id that no longer matches anything (the
+// item was removed from the library entirely since being added to this
+// list) rather than showing a broken/blank card for it.
+function getListItems(listId) {
+    const list = state.lists.find(l => l.id === listId);
+    if (!list) return [];
+    return list.itemIds
+        .map(id => state.library.find(i => i.id === id))
+        .filter(Boolean);
+}
+
+// The automatic Favourites "list" - deliberately not a real document
+// (see the LISTS block comment above), just every library item with
+// isFavorite set, computed fresh every time rather than tracked
+// separately.
+function getFavoriteListItems() {
+    return state.library.filter(i => i.isFavorite);
+}
+
+/* =========================================================
+   LIST DETAIL
+========================================================= */
+// null while viewing the automatic Favourites list, since it isn't a
+// real document with an id - checked throughout below instead of
+// tracking a separate boolean, so there's exactly one source of truth
+// for "which list, if any, is currently open".
+let currentListDetailId = null;
+
+function openListDetailModal(listId, isFavorites) {
+    currentListDetailId = isFavorites ? null : listId;
+    const modal = document.getElementById("listDetailModal");
+    if (modal.classList.contains("open")) return;
+
+    // Rename/Delete only make sense for a real list document - toggled
+    // here rather than removed from the DOM entirely, so the header
+    // layout doesn't shift between the two contexts.
+    document.getElementById("listDetailRenameBtn").style.display = isFavorites ? "none" : "";
+    document.getElementById("listDetailDeleteBtn").style.display = isFavorites ? "none" : "";
+
+    renderListDetailContent();
+    modal.classList.add("open");
+    lockBodyScroll("listDetailModal");
+}
+
+function closeListDetailModal() {
+    document.getElementById("listDetailModal").classList.remove("open");
+    unlockBodyScroll("listDetailModal");
+}
+
+function closeListDetailModalOutside(event) {
+    if (event.target.id === "listDetailModal") closeListDetailModal();
+}
+
+function renderListDetailContent() {
+    const isFavorites = !currentListDetailId;
+    const list = isFavorites ? null : state.lists.find(l => l.id === currentListDetailId);
+    if (!isFavorites && !list) {
+        // The list was deleted (from another device, or this one)
+        // while its detail view happened to be open - close rather
+        // than show a broken, list-less screen.
+        closeListDetailModal();
+        return;
+    }
+
+    document.getElementById("listDetailTitle").textContent = isFavorites ? "Favourites" : list.name;
+
+    const items = isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId);
+    const grid = document.getElementById("listDetailGrid");
+    grid.innerHTML = items.length > 0
+        ? items.map(item => createListDetailCard(item, currentListDetailId, isFavorites)).join("")
+        : emptyState(
+            isFavorites ? "No Favourites Yet" : "Nothing in This List Yet",
+            isFavorites ? "Favorite a show or movie from its details to see it here." : "Add shows or movies to this list from their details."
+        );
+}
+
+// A simpler, separate render from the shared createCard() used
+// everywhere else - deliberately doesn't wire up createCard's own
+// long-press/swipe gesture handling here, since that gesture means
+// "remove from the library entirely" elsewhere, which would be the
+// wrong action to trigger by accident in a context that's specifically
+// about list membership, not library membership. Tapping the poster
+// opens the item normally; the small corner button removes it from
+// just this list (or unfavorites it, for Favourites) without touching
+// whether it's still in the library at all.
+function createListDetailCard(item, listId, isFavorites) {
+    const hasPoster = item.poster && item.poster.trim() !== "";
+    const placeholderIcon = item.type === 'movie'
+        ? `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
+        : `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>`;
+
+    const removeOnclick = isFavorites
+        ? `event.stopPropagation(); unfavoriteFromListDetail('${item.id}')`
+        : `event.stopPropagation(); removeItemFromListDetail('${listId}', '${item.id}')`;
+
+    return `
+        <div class="card" onclick="openDetails('${item.id}')">
+            <div class="poster">
+                ${hasPoster ? `
+                    <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
+                ` : `
+                    <div class="poster-placeholder">${placeholderIcon}</div>
+                `}
+                <button class="list-detail-remove-btn" onclick="${removeOnclick}" aria-label="Remove">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function removeItemFromListDetail(listId, itemId) {
+    await removeItemFromList(listId, itemId);
+    renderListDetailContent();
+}
+
+async function unfavoriteFromListDetail(itemId) {
+    const item = state.library.find(i => i.id === itemId);
+    if (!item) return;
+    item.isFavorite = false;
+    await saveItem(item);
+    renderListDetailContent();
+}
+
+function confirmDeleteCurrentList() {
+    if (!currentListDetailId) return;
+    const list = state.lists.find(l => l.id === currentListDetailId);
+    if (!list) return;
+    document.getElementById("deleteListTitle").textContent = `Delete "${list.name}"?`;
+    const modal = document.getElementById("deleteListModal");
+    modal.classList.add("open");
+    lockBodyScroll("deleteListModal");
+}
+
+function closeDeleteListModal() {
+    document.getElementById("deleteListModal").classList.remove("open");
+    unlockBodyScroll("deleteListModal");
+}
+
+function closeDeleteListModalOutside(event) {
+    if (event.target.id === "deleteListModal") closeDeleteListModal();
+}
+
+async function executeDeleteCurrentList() {
+    if (!currentListDetailId) return;
+    await deleteList(currentListDetailId);
+    closeDeleteListModal();
+    closeListDetailModal();
+}
+
+/* =========================================================
    DETAILS MODAL & TRAILERS
 ========================================================= */
 async function playTrailer(tmdbId, type) {
@@ -6534,6 +7161,16 @@ function updateModalContent() {
     }
 
     document.getElementById("modalTitle").textContent = currentItem.title;
+
+    // Reflects favorite state whenever the modal opens for a different
+    // item or after toggling it - "filled" reads as favorited without
+    // needing separate on/off icon artwork, the same fill-vs-outline
+    // convention most apps already use for this.
+    const favBtn = document.getElementById("modalFavoriteBtn");
+    if (favBtn) {
+        favBtn.classList.toggle("favorited", !!currentItem.isFavorite);
+        favBtn.querySelector("svg").setAttribute("fill", currentItem.isFavorite ? "currentColor" : "none");
+    }
 
     let metaHTML = "";
 
@@ -7584,6 +8221,83 @@ async function toggleStopWatching(id) {
     await saveItem(currentItem);
     updateModalContent();
     refreshActivePage();
+}
+
+// Same shape as toggleStopWatching above - a lightweight per-item flag,
+// no separate confirmation needed since it's trivially reversible. The
+// automatic "Favourites" list (see FAVOURITES & LISTS below) is entirely
+// computed from this flag rather than being a real, separately-tracked
+// list - there's nothing else to keep in sync when this changes.
+async function toggleFavoriteCurrentItem() {
+    if (!currentItem) return;
+    if (!isCurrentItemInLibrary()) {
+        showErrorToast("Add this to your library first.");
+        return;
+    }
+    currentItem.isFavorite = !currentItem.isFavorite;
+    await saveItem(currentItem);
+    updateModalContent();
+    refreshActivePage();
+}
+
+/* =========================================================
+   ADD TO LIST PICKER
+========================================================= */
+function openListPickerModal() {
+    if (!currentItem) return;
+    if (!isCurrentItemInLibrary()) {
+        showErrorToast("Add this to your library first.");
+        return;
+    }
+    const modal = document.getElementById("listPickerModal");
+    if (modal.classList.contains("open")) return;
+    const nameEl = document.getElementById("listPickerItemName");
+    if (nameEl) nameEl.textContent = currentItem.title;
+    renderListPickerContent();
+    modal.classList.add("open");
+    lockBodyScroll("listPickerModal");
+}
+
+function closeListPickerModal() {
+    document.getElementById("listPickerModal").classList.remove("open");
+    unlockBodyScroll("listPickerModal");
+}
+
+function closeListPickerModalOutside(event) {
+    if (event.target.id === "listPickerModal") closeListPickerModal();
+}
+
+function renderListPickerContent() {
+    const container = document.getElementById("listPickerRows");
+    if (!container || !currentItem) return;
+
+    if (state.lists.length === 0) {
+        container.innerHTML = emptyState("No Lists Yet", "Create your first list below.");
+        return;
+    }
+
+    container.innerHTML = state.lists.map(list => {
+        const isIn = list.itemIds.includes(currentItem.id);
+        return `
+            <button class="hero-pill-btn ${isIn ? 'pill-on' : 'pill-off'}" style="width: 100%; display: flex; justify-content: space-between; align-items: center;" onclick="toggleItemInListFromPicker('${list.id}')">
+                <span>${escapeHTML(list.name)}</span>
+                <span>${isIn ? 'Added' : 'Add'}</span>
+            </button>
+        `;
+    }).join("");
+}
+
+async function toggleItemInListFromPicker(listId) {
+    if (!currentItem) return;
+    const list = state.lists.find(l => l.id === listId);
+    if (!list) return;
+
+    if (list.itemIds.includes(currentItem.id)) {
+        await removeItemFromList(listId, currentItem.id);
+    } else {
+        await addItemToList(listId, currentItem.id);
+    }
+    renderListPickerContent();
 }
 
 // Generic, id-based versions of stop-watching/remove that don't depend on
