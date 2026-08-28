@@ -58,46 +58,6 @@ const APP_VERSION = "1.0.0";
 // no visible error unless you had the console open.
 const NOVAWATCH_APP_URL = window.location.origin + "/";
 
-/* =========================================================
-   SPLASH SCREEN
-   Shown by default in the HTML itself (not display:none the way every
-   other overlay in this app is) so it's visible before any JS has even
-   run - covering the real gap between the page rendering and app.js
-   finishing load + Firebase Auth resolving, now that the core scripts
-   load with defer rather than blocking the page. Tied to genuine
-   readiness (see the two hideSplashScreen() call sites in
-   onAuthStateChanged), not a fixed delay - a fixed wait would make the
-   app feel slower than it actually is on a fast connection, undoing
-   the point of deferring those scripts in the first place. MIN keeps a
-   fast connection from flashing it in and out too quickly to register.
-
-   The "stuck forever if something's wrong" safety net deliberately does
-   NOT live here - it's a small standalone inline <script> in index.html
-   right after #splashScreen's own markup, not a function in this file.
-   That's not a style choice: a timer set up inside this file can only
-   ever run if this file itself loaded, parsed, and executed
-   successfully - exactly the scenario that needs covering is app.js
-   failing for some reason, so the fallback can't depend on the thing
-   that might be broken. See the comment on that inline script for the
-   full reasoning.
-========================================================= */
-const SPLASH_SHOWN_AT = Date.now();
-const MIN_SPLASH_MS = 800;
-let splashHidden = false;
-
-function hideSplashScreen() {
-    if (splashHidden) return;
-    splashHidden = true;
-    const elapsed = Date.now() - SPLASH_SHOWN_AT;
-    const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
-    setTimeout(() => {
-        const splash = document.getElementById("splashScreen");
-        if (!splash) return;
-        splash.classList.add("hide");
-        setTimeout(() => splash.remove(), 400);
-    }, remaining);
-}
-
 let state = {
     library: [],
     // Each { id, name, itemIds, createdAt } - see the LISTS block further
@@ -4036,7 +3996,6 @@ if (auth) {
             // by Google, so they skip straight through.
             const isPasswordAccount = user.providerData.some(p => p.providerId === 'password');
             if (isPasswordAccount && !user.emailVerified) {
-                hideSplashScreen();
                 showVerifyScreen(user);
                 return;
             }
@@ -4044,7 +4003,6 @@ if (auth) {
             hideVerifyScreen();
             oneSignalLogin(user.uid);
             await proceedToApp(user, authScreen, mainApp);
-            hideSplashScreen();
         } else {
             hideVerifyScreen();
             hideChooseUsernameScreen();
@@ -4058,7 +4016,6 @@ if (auth) {
             // User is logged out: Show Auth Screen, Hide Main App
             authScreen.style.display = "flex";
             mainApp.style.display = "none";
-            hideSplashScreen();
 
             // Clear local state
             state.library = [];
@@ -6606,16 +6563,7 @@ async function saveList() {
             await listsRef.doc(editingListId).update({ name });
         } else {
             const newRef = listsRef.doc();
-            // If this list is being created from within the Add to List
-            // picker (rather than Library's own "+ New"), the whole
-            // reason someone got here was to add THIS item somewhere -
-            // creating an empty list and making them tap "Add" a second
-            // time for the item they came here to add would be
-            // pointless friction, so it's included at creation time
-            // instead of a separate follow-up step.
-            const pickerOpen = document.getElementById("listPickerModal").classList.contains("open");
-            const initialItemIds = (pickerOpen && currentItem) ? [currentItem.id] : [];
-            await newRef.set({ id: newRef.id, name, itemIds: initialItemIds, createdAt: new Date().toISOString() });
+            await newRef.set({ id: newRef.id, name, itemIds: [], createdAt: new Date().toISOString() });
         }
 
         closeCreateListModal();
@@ -8217,8 +8165,6 @@ function openListPickerModal() {
     }
     const modal = document.getElementById("listPickerModal");
     if (modal.classList.contains("open")) return;
-    const nameEl = document.getElementById("listPickerItemName");
-    if (nameEl) nameEl.textContent = currentItem.title;
     renderListPickerContent();
     modal.classList.add("open");
     lockBodyScroll("listPickerModal");
