@@ -255,6 +255,35 @@ function hasContinueWatchingBacklog(libraryItems) {
     });
 }
 
+// Picks a genuinely random item from Continue Watching - a TV show
+// (naming its specific next episode, the same "lowest season, then
+// lowest episode number, among released-and-unwatched" rule the
+// client's own getNextUnwatchedEpisode() uses, so whatever this names
+// as "next" always matches what the app itself would show if opened
+// right now) or a movie (nothing further to name beyond the movie
+// itself - a movie doesn't have a "next episode" the way a show does).
+// Both pooled into the same random draw rather than always favoring
+// one type over the other.
+function pickRandomContinueWatchingItem(libraryItems) {
+    const candidates = [];
+    libraryItems.forEach(item => {
+        if (item.isStopped) return;
+        if (item.type === 'movie') {
+            if (!item.watched && item.releaseDate && hasReleased(item.releaseDate)) {
+                candidates.push({ type: 'movie', item });
+            }
+            return;
+        }
+        if (!Array.isArray(item.episodes)) return;
+        const nextEp = item.episodes
+            .filter(ep => ep.releaseDate && hasReleased(ep.releaseDate) && !ep.watched)
+            .sort((a, b) => (a.season !== b.season) ? a.season - b.season : a.number - b.number)[0];
+        if (nextEp) candidates.push({ type: 'tv', show: item, episode: nextEp });
+    });
+    if (candidates.length === 0) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
 // Only ever called for an account with nothing releasing today (see the
 // call site in run() below). Two independent checks, each with its own
 // dedup/cooldown so neither turns into a daily nag: a streak reminder
@@ -269,8 +298,12 @@ function hasContinueWatchingBacklog(libraryItems) {
 // match the account's own clock, the same care already given to
 // release timing - otherwise this reminder can fire (or stay silent)
 // at a time that makes no sense relative to where that person actually
-// is, especially far from UTC.
+// is, especially far from UTC. Returns how many reminders it actually
+// sent (0, 1, or 2 - streak and Continue Watching are independent, both
+// can fire in the same call) so run()'s own summary count reflects
+// engagement-only runs too, not just release sends.
 async function checkEngagementRemindersForUser(uid, libraryItems, timeZone) {
+    let sentCount = 0;
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone });
     const watchedDates = buildWatchedDatesSet(libraryItems);
     const mostRecentWatch = watchedDates.size > 0 ? [...watchedDates].sort().pop() : null;
@@ -296,6 +329,7 @@ async function checkEngagementRemindersForUser(uid, libraryItems, timeZone) {
                 try {
                     await sendOneSignalPush(uid, 'Keep Your Streak Going!', `You're on a ${streak}-day watch streak - watch something today to keep it going.`);
                     await streakRef.set({ day: todayStr });
+                    sentCount++;
                 } catch (err) {
                     console.error(`Failed to send streak reminder to ${uid}:`, err.message);
                 }
@@ -313,16 +347,47 @@ async function checkEngagementRemindersForUser(uid, libraryItems, timeZone) {
             const daysSinceLastReminder = lastReminderDay ? dayGap(lastReminderDay, todayStr) : Infinity;
 
             if (daysSinceLastReminder >= 7) {
+                // Names the specific show+episode, or the specific
+                // movie, whichever the random draw picked - see
+                // pickRandomContinueWatchingItem above. Only falls back
+                // to a generic message in the (rare) case where
+                // hasContinueWatchingBacklog said yes but this draw
+                // still turned up nothing, which shouldn't happen given
+                // they check the same criteria, but costs nothing to
+                // guard against.
+                const pick = pickRandomContinueWatchingItem(libraryItems);
+                let title = 'Pick Up Where You Left Off';
+                let body = "You've got something waiting in Continue Watching.";
+                if (pick && pick.type === 'tv') {
+                    title = pick.show.title;
+                    body = `S${pick.episode.season}E${pick.episode.number}: ${pick.episode.title} is ready to watch.`;
+                } else if (pick && pick.type === 'movie') {
+                    title = pick.item.title;
+                    body = 'Ready to watch.';
+                }
                 try {
-                    await sendOneSignalPush(uid, 'Pick Up Where You Left Off', "You've got episodes waiting in Continue Watching.");
+                    await sendOneSignalPush(uid, title, body);
                     await reminderRef.set({ day: todayStr });
+                    sentCount++;
                 } catch (err) {
                     console.error(`Failed to send Continue Watching reminder to ${uid}:`, err.message);
                 }
             }
         }
     }
+
+    return sentCount;
 }
+
+// Two separate schedules fire this same script (see the workflow file
+// for why) - GitHub tells us which one via github.event.schedule,
+// passed through as this env var. A manual run (workflow_dispatch) has
+// no schedule value at all, so RUN_RELEASES and RUN_ENGAGEMENT both
+// end up true in that case - convenient for testing everything by
+// hand in one go, rather than only ever exercising half of the logic.
+const TRIGGER_SCHEDULE = process.env.TRIGGER_SCHEDULE || '';
+const RUN_RELEASES = TRIGGER_SCHEDULE === '' || TRIGGER_SCHEDULE === '0 8 * * *';
+const RUN_ENGAGEMENT = TRIGGER_SCHEDULE === '' || TRIGGER_SCHEDULE === '0 20 * * *';
 
 async function run() {
     if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
@@ -351,11 +416,19 @@ async function run() {
 
         // Engagement reminders only get a look-in on a day with nothing
         // actually releasing for this account at all - never alongside a
-        // real release.
+        // real release, regardless of which run (morning or evening)
+        // this is. Recomputed fresh here rather than checked against
+        // what the morning run already sent, since "is anything
+        // releasing today" doesn't depend on what time you ask it -
+        // both runs arrive at the same answer independently, with no
+        // need for the evening run to coordinate with the morning one
+        // through Firestore.
         if (releases.length === 0) {
-            await checkEngagementRemindersForUser(uid, libraryItems, timeZone);
+            if (RUN_ENGAGEMENT) sent += await checkEngagementRemindersForUser(uid, libraryItems, timeZone);
             continue;
         }
+
+        if (!RUN_RELEASES) continue;
 
         // A small doc per account records which release IDs have
         // already been sent today, so the same item never notifies
@@ -402,7 +475,10 @@ async function run() {
         }
     }
 
-    console.log(`Done. Sent ${sent} notification(s) (each may cover more than one release), skipped ${skipped} release(s) already notified about today, or nothing to send.`);
+    const modeLabel = RUN_RELEASES && RUN_ENGAGEMENT
+        ? 'releases + engagement reminders (manual run)'
+        : RUN_RELEASES ? 'releases only' : 'engagement reminders only';
+    console.log(`Done [${modeLabel}]. Sent ${sent} notification(s) (each may cover more than one release), skipped ${skipped} release(s) already notified about today, or nothing to send.`);
 }
 
 run().catch(err => {
