@@ -387,7 +387,7 @@ async function checkEngagementRemindersForUser(uid, libraryItems, timeZone) {
 // hand in one go, rather than only ever exercising half of the logic.
 const TRIGGER_SCHEDULE = process.env.TRIGGER_SCHEDULE || '';
 const RUN_RELEASES = TRIGGER_SCHEDULE === '' || TRIGGER_SCHEDULE === '0 8 * * *';
-const RUN_ENGAGEMENT = TRIGGER_SCHEDULE === '' || TRIGGER_SCHEDULE === '0 20 * * *';
+const RUN_ENGAGEMENT = TRIGGER_SCHEDULE === '' || TRIGGER_SCHEDULE === '0 13 * * *';
 
 async function run() {
     if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
@@ -416,12 +416,12 @@ async function run() {
 
         // Engagement reminders only get a look-in on a day with nothing
         // actually releasing for this account at all - never alongside a
-        // real release, regardless of which run (morning or evening)
+        // real release, regardless of which run (morning or afternoon)
         // this is. Recomputed fresh here rather than checked against
         // what the morning run already sent, since "is anything
         // releasing today" doesn't depend on what time you ask it -
         // both runs arrive at the same answer independently, with no
-        // need for the evening run to coordinate with the morning one
+        // need for the afternoon run to coordinate with the morning one
         // through Firestore.
         if (releases.length === 0) {
             if (RUN_ENGAGEMENT) sent += await checkEngagementRemindersForUser(uid, libraryItems, timeZone);
