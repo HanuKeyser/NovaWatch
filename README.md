@@ -66,6 +66,18 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Library & search** — TMDB-backed search; add movies/TV shows; mark watched with a single tap (no rating/reaction popup in the way).
 
+## Library
+
+Redesigned as a central content-management home rather than a straight-to-search-results view - the Library tab itself now shows three things, in order: a horizontally-scrolling **Lists** row, a **TV Shows** preview (up to 9 titles), and a **Movies** preview (up to 9 titles), each with its own "View All".
+
+**Lists** — the first list card is always the automatic **Favourites** list, which isn't a real document at all (`getFavoriteListItems()`) - it's every library item with `isFavorite` set, computed fresh every time rather than a separately-tracked collection, so favoriting something (the heart icon in the Details modal's header) never needs a second write to keep a list in sync with it. Everything after Favourites is a real user-created list (`users/{uid}/lists/{listId}`, `{ name, itemIds, createdAt }`) - shows and movies are treated identically, so a single mixed list is completely normal. Each card is a 2×2 poster collage from the list's own first 4 items with a name/count label over a gradient scrim, sized to roughly 82% of the row's width (not a fixed pixel value, so it scales sensibly at any screen width this app supports) rather than tuned to one specific device. Tapping a card opens its detail view; a small corner button on each poster there removes it from just that list (or unfavorites it, for Favourites) without ever touching whether it's still in the library at all - deliberately a separate, simpler card renderer from the shared library grid's own cards, specifically so it can't accidentally trigger the library's own swipe-to-remove-from-library gesture.
+
+**TV Shows preview** — up to 9 titles, entirely automatic, in priority order: shows genuinely in progress (watched some, not all, released episodes - not Home's broader Continue Watching definition, which also includes shows never started), then shows fully caught up with everything currently out, both tiers sorted by the viewer's own most recent watch activity (a new sort, distinct from the existing latest-aired sort used elsewhere, since "when did TMDB say this released" and "when did I actually watch it" are different questions).
+
+**Movies preview** — same shape, adapted for movies not having partial progress: recently-watched movies first, then unwatched-but-released ones filling any remaining slots, so a library with little watch history yet still shows something rather than a sparse preview.
+
+**View All** opens the exact same segmented TV/Movies view (search, category blocks - In Progress, Up to Date, Finished, Unwatched, Coming Soon, Stopped Watching) that used to be the whole Library tab directly, just relocated into its own modal (`#fullLibraryModal`) - none of that existing rendering logic needed to change at all, only where its HTML lives.
+
 **Rewatch tracking** — per-episode for TV, per-title for movies, via a tap-to-manage popup (Add/Remove Rewatch) rather than a one-way counter. Unwatching something clears its rewatch history. A season can also be bulk-rewatched (or have its rewatches cleared) once every released episode in it has been watched at least once — gated behind a long-press on that season's tab, or the "Mark All Episodes Watched" button for the whole show at once.
 
 **Opening a TV show's details** — lands on the season containing the next released-but-unwatched episode (`getCurrentSeasonForShow`) and auto-scrolls the episode list straight to that row, rather than opening at the top of Season 1 and leaving the person to hunt for where they left off. A caught-up show lands on the season of its most recently watched episode instead. A show with nothing released and unwatched yet (nothing to scroll to) simply opens at the top, same as it always did.
@@ -141,6 +153,16 @@ The bottom nav's specific glass treatment (`--glass-chrome-*` tokens) - genuinel
 ## Cached identity on load
 
 Firebase Auth restores its own signed-in session fast on reload, but the richer profile data (the real chosen avatar, the username, a display name that might differ from Auth's own) only ever arrives after an actual Firestore round trip - until that resolves, the avatar would show as a plain initial letter and the username line wouldn't show at all. The last-known real values (display name, avatar, username) are cached to localStorage every time they're confirmed from real data, and restored immediately on the very next app open - before Firebase Auth has even restored its session, let alone before Firestore responds - so the first paint already shows the right identity instead of a placeholder that corrects itself a moment later. Purely a faster first paint: the cache gets overwritten within moments by the real, authoritative data the same way it always has, so it can never meaningfully show something wrong for long. Cleared on sign-out, so a shared device never flashes the previous person's identity on the next person's first paint.
+
+## Splash screen
+
+Shown by default in the HTML itself, not toggled on by JS - the one thing on the page visible before any script has even run, covering the real gap between the page rendering and Firebase Auth resolving. Tied to genuine readiness (`hideSplashScreen()`, called once it's known whether to show sign-in or the main app), not a fixed delay - a fixed wait would make the app feel slower than it actually is on a fast connection, working against the whole reason the core scripts load with `defer` in the first place (see Load performance below). A small minimum keeps it from flashing in and out too quickly on a fast connection to register.
+
+The 8-second maximum isn't "hide it regardless" - both `#authScreen` and `.app` stay `display: none` until JS explicitly shows one of them once auth actually resolves, so hiding the splash before that point would reveal nothing at all underneath, not a skeleton or any other fallback content. If loading genuinely hasn't finished by then (a hung connection, Firebase unreachable), `handleSplashTimeout()` keeps the splash up and swaps its content for an honest "this is taking longer than expected" message with a manual reload button, rather than ever exposing a blank screen with no explanation.
+
+## Sign-in screen
+
+Reworked for more visual presence - a much larger logo (88px, up from 38px, matching the splash screen's own size for continuity between the two screens someone sees back to back on first open), bigger title type, and more generous spacing throughout the card, rather than everything compressed into a small centered box. Same underlying structure and glass card treatment as before (a proven, working pattern already consistent with the rest of the app), just scaled up to read as a deliberate, considered page rather than a compact form floating in empty space.
 
 ## Load performance
 
