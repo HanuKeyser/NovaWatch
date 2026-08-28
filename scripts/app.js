@@ -71,18 +71,18 @@ const NOVAWATCH_APP_URL = window.location.origin + "/";
    the point of deferring those scripts in the first place. MIN keeps a
    fast connection from flashing it in and out too quickly to register.
 
-   MAX is deliberately NOT "just hide it after 8 seconds no matter
-   what" - both #authScreen and .app are display:none until JS
-   explicitly shows one of them once auth actually resolves, so hiding
-   the splash before that point would reveal nothing at all underneath,
-   not a skeleton or any other fallback content - just the bare mesh
-   background with no indication anything's wrong. handleSplashTimeout
-   below checks whether that's genuinely happened before deciding what
-   to do, rather than hiding blind.
+   The "stuck forever if something's wrong" safety net deliberately does
+   NOT live here - it's a small standalone inline <script> in index.html
+   right after #splashScreen's own markup, not a function in this file.
+   That's not a style choice: a timer set up inside this file can only
+   ever run if this file itself loaded, parsed, and executed
+   successfully - exactly the scenario that needs covering is app.js
+   failing for some reason, so the fallback can't depend on the thing
+   that might be broken. See the comment on that inline script for the
+   full reasoning.
 ========================================================= */
 const SPLASH_SHOWN_AT = Date.now();
 const MIN_SPLASH_MS = 800;
-const MAX_SPLASH_MS = 8000;
 let splashHidden = false;
 
 function hideSplashScreen() {
@@ -96,31 +96,6 @@ function hideSplashScreen() {
         splash.classList.add("hide");
         setTimeout(() => splash.remove(), 400);
     }, remaining);
-}
-
-// The safety-net call site (set up once in DOMContentLoaded, below) -
-// distinct from hideSplashScreen itself, since "auth genuinely hasn't
-// resolved yet" and "auth resolved, now hide the splash" need two
-// different responses, not the same one. If hideSplashScreen has
-// already run by MAX_SPLASH_MS, this is a no-op - the normal path won
-// the race, exactly as it should on virtually every real load. If it
-// hasn't, something is genuinely taking too long (a hung connection,
-// Firebase unreachable) - rather than hide the splash into a blank
-// screen with nothing shown underneath yet, this keeps it up and
-// swaps its content for an honest "this is taking a while" message
-// with a manual reload option, since the app has no way to know
-// whether waiting longer would actually help.
-function handleSplashTimeout() {
-    if (splashHidden) return;
-    const splash = document.getElementById("splashScreen");
-    if (!splash) return;
-    splash.innerHTML = `
-        <div class="splash-timeout">
-            <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch" class="splash-logo splash-logo-static">
-            <p class="splash-timeout-message">This is taking longer than expected.</p>
-            <button class="splash-reload-btn" onclick="window.location.reload()">Reload</button>
-        </div>
-    `;
 }
 
 let state = {
@@ -1020,15 +995,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // let alone before Firestore responds. See CACHED IDENTITY SNAPSHOT
     // above for the full reasoning.
     restoreCachedIdentitySnapshot();
-
-    // Safety net for the splash screen (see hideSplashScreen and
-    // handleSplashTimeout above) - guarantees something honest is shown
-    // by MAX_SPLASH_MS even if auth never resolves, rather than either
-    // trapping someone behind the splash forever or hiding it into a
-    // blank screen with nothing underneath yet. The real hide calls (in
-    // onAuthStateChanged) almost always win this race under normal
-    // conditions; this is only ever a fallback.
-    setTimeout(handleSplashTimeout, MAX_SPLASH_MS);
 
     // The inline head script already applied the right theme before first
     // paint (saved choice, or OS preference if none saved yet) - this just
