@@ -204,6 +204,15 @@
 
 <div class="app">
 
+<!-- Fixed, blurred strip covering exactly the real device status bar
+     area (a real notch/Dynamic Island's own height, resolving to zero
+     everywhere else) - without this, scrolling content passes directly
+     underneath the clock/battery icons with no visual separation at
+     all, since black-translucent (see the status-bar-style meta tag)
+     is fully transparent by design, not blurred on its own. Purely
+     decorative and never intercepts touches (see .top-status-blur). -->
+<div class="top-status-blur"></div>
+
 <!-- Persistent top banner - shown whenever the device has no network
      connection, so a lost connection is obvious immediately instead of
      only surfacing later as a failed search or a stuck spinner. -->
@@ -252,23 +261,31 @@
      2. LIBRARY TAB (TV Shows + Movies)
 ================================================     -->
 <main id="libraryPage" class="page">
-    <div class="section-header">
-        <div class="section-title">Lists</div>
-        <button class="section-view-all-btn" onclick="openCreateListModal()">+ New</button>
-    </div>
-    <div id="listsRow" class="lists-scroll-row"></div>
+    <div class="tab-content-wrapper">
+        <div>
+            <div class="section-header">
+                <div class="section-title">Lists</div>
+                <button class="section-view-all-btn" onclick="openCreateListModal()">+ New</button>
+            </div>
+            <div id="listsRow" class="lists-scroll-row"></div>
+        </div>
 
-    <div class="section-header">
-        <div class="section-title">TV Shows</div>
-        <button class="section-view-all-btn" onclick="openFullLibraryModal('tv')">View All</button>
-    </div>
-    <div id="tvLibraryPreviewGrid" class="library-grid"></div>
+        <div>
+            <div class="section-header">
+                <div class="section-title">TV Shows</div>
+                <button class="section-view-all-btn" onclick="openFullLibraryModal('tv')">View All</button>
+            </div>
+            <div id="tvLibraryPreviewGrid" class="library-grid"></div>
+        </div>
 
-    <div class="section-header">
-        <div class="section-title">Movies</div>
-        <button class="section-view-all-btn" onclick="openFullLibraryModal('movies')">View All</button>
+        <div>
+            <div class="section-header">
+                <div class="section-title">Movies</div>
+                <button class="section-view-all-btn" onclick="openFullLibraryModal('movies')">View All</button>
+            </div>
+            <div id="movieLibraryPreviewGrid" class="library-grid"></div>
+        </div>
     </div>
-    <div id="movieLibraryPreviewGrid" class="library-grid"></div>
 </main>
 
 <!-- =====================================================
@@ -353,35 +370,11 @@
 
     <!-- TV Shows sub-view -->
     <div id="upcomingViewTV" class="library-subview">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="upcomingTVSearchInput" type="text" inputmode="search" placeholder="Search upcoming TV shows..." autocomplete="off" enterkeyhint="search">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingTVSearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
         <div id="upcomingTVCategories"></div>
     </div>
 
     <!-- Movies sub-view -->
     <div id="upcomingViewMovies" class="library-subview" style="display: none;">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="upcomingMovieSearchInput" type="text" inputmode="search" placeholder="Search upcoming movies..." autocomplete="off" enterkeyhint="search">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingMovieSearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
         <div id="upcomingMovieCategories"></div>
     </div>
 </main>
@@ -655,44 +648,13 @@
             </button>
         </div>
         <div class="modal-content modal-content-top-clear">
-            <div class="segmented-toggle">
-                <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
-                <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
-            </div>
-
             <!-- TV Shows sub-view -->
             <div id="libraryViewTV" class="library-subview">
-                <div class="library-toolbar">
-                    <div class="search-box">
-                        <svg class="icon search-icon" viewBox="0 0 24 24">
-                            <circle cx="11" cy="11" r="7"/>
-                            <path d="M20 20l-4-4"/>
-                        </svg>
-                        <input id="tvLibrarySearchInput" type="text" inputmode="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search">
-                        <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
-                            <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                        </button>
-                    </div>
-                </div>
-
                 <div id="tvLibraryCategories"></div>
             </div>
 
             <!-- Movies sub-view -->
             <div id="libraryViewMovies" class="library-subview" style="display: none;">
-                <div class="library-toolbar">
-                    <div class="search-box">
-                        <svg class="icon search-icon" viewBox="0 0 24 24">
-                            <circle cx="11" cy="11" r="7"/>
-                            <path d="M20 20l-4-4"/>
-                        </svg>
-                        <input id="movieLibrarySearchInput" type="text" inputmode="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search">
-                        <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
-                            <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                        </button>
-                    </div>
-                </div>
-
                 <div id="movieLibraryCategories"></div>
             </div>
         </div>
@@ -711,6 +673,9 @@
 <div id="listDetailModal" class="modal" onclick="closeListDetailModalOutside(event)">
     <div class="modal-sheet">
         <div class="modal-header-nav">
+            <button id="listDetailBackdropBtn" class="close-button" onclick="openListBackdropPicker()" aria-label="Choose backdrop">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            </button>
             <button id="listDetailRenameBtn" class="close-button" onclick="openRenameListModal(currentListDetailId)" aria-label="Rename list">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </button>
@@ -727,6 +692,35 @@
         <div class="modal-content modal-content-top-clear">
             <h2 id="listDetailTitle" class="poster-picker-title"></h2>
             <div id="listDetailGrid" class="library-grid" style="margin-top: 16px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     LIST BACKDROP PICKER
+     Choosing a custom image for a list means choosing among the
+     backdrops of whatever's actually already in that list - there's no
+     TMDB entry for a personal list itself to pull alternate images
+     from the way an individual show/movie has, and no image upload
+     infrastructure in this app to add a truly custom one instead. Not
+     available for the automatic Favourites list, same reasoning as
+     Rename/Delete not being available there either - it isn't a real
+     document with a field to store this on.
+================================================     -->
+<div id="listBackdropPickerModal" class="modal modal-compact" onclick="closeListBackdropPickerOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeListBackdropPicker()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content modal-content-top-clear">
+            <h2 class="poster-picker-title">Choose a Backdrop</h2>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">Pick from what's already in this list.</p>
+            <div id="listBackdropPickerGrid" class="poster-picker-grid backdrop-mode" style="margin-top: 16px;"></div>
         </div>
     </div>
 </div>
