@@ -968,7 +968,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
 
-    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'upcomingTVSearchInput', 'upcomingMovieSearchInput', 'regionSearchInput'];
+    // Only two real search inputs left in the app now - Discover and the
+    // region picker. Library, Upcoming, and the Full Library "View All"
+    // view all had their own search boxes removed (each entry point
+    // already disambiguates what you're looking at before you get
+    // there, so a search field inside as well was redundant).
+    const searchInputs = ['onlineSearchInput', 'regionSearchInput'];
     
     searchInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -3061,6 +3066,56 @@ function setInnerHTMLIfChanged(el, html) {
     return false;
 }
 
+// A targeted alternative to the whole-container replacement above,
+// specifically for poster grids (createCard's own output, which
+// already tags each card with data-id="<item id>") - setInnerHTMLIfChanged
+// is all-or-nothing: if a SINGLE card's content changes anywhere in the
+// container (a progress bar updating for one show among a dozen),
+// string comparison sees the whole block as different and replaces the
+// entire container, destroying and recreating every <img> in it - which
+// is what was actually causing posters to visibly flicker/"reload" on
+// every library update, tab switch, or modal open, even for cards
+// whose own data never changed at all. This instead updates only the
+// specific cards whose own rendered HTML actually changed, and leaves
+// every other card's existing DOM node - including its already-decoded
+// image - completely untouched.
+function syncCardGrid(container, items, cardHtmlFn) {
+    if (!container) return;
+
+    const newIds = new Set(items.map(item => item.id));
+    Array.from(container.children).forEach(child => {
+        if (!newIds.has(child.dataset.id)) child.remove();
+    });
+
+    let previousNode = null;
+    items.forEach(item => {
+        const html = cardHtmlFn(item).trim();
+        let node = container.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
+
+        if (!node || node.outerHTML !== html) {
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            const freshNode = temp.firstElementChild;
+            if (node) {
+                node.replaceWith(freshNode);
+            } else {
+                container.appendChild(freshNode);
+            }
+            node = freshNode;
+        }
+
+        // Keeps items in the right order without moving nodes that are
+        // already correctly positioned - only touches the DOM when an
+        // item has actually moved, same "don't disturb what's already
+        // right" principle as the replacement logic above.
+        if (previousNode ? previousNode.nextElementSibling !== node : container.firstElementChild !== node) {
+            if (previousNode) previousNode.after(node);
+            else container.prepend(node);
+        }
+        previousNode = node;
+    });
+}
+
 function refreshActivePage() {
     if (document.getElementById("libraryPage").classList.contains("active")) renderLibraryHome();
 
@@ -4974,6 +5029,17 @@ function sortTVShowsByLatestAired(shows) {
     return shows.sort((a, b) => getLatestAiredEpisodeDate(b) - getLatestAiredEpisodeDate(a));
 }
 
+// Movie equivalent of the above - every Library category, TV or movie,
+// sorts by the item's own release date, latest first, as one single
+// consistent rule rather than each category picking its own dimension
+// (this used to mix release-date-ish TV sorting with watch-date sorting
+// for movies' own Watched category, and no sorting at all for movies'
+// Unwatched/Coming Soon - inconsistent, not really "latest to oldest"
+// as one coherent rule at all).
+function sortMoviesByReleaseDate(movies) {
+    return movies.sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0));
+}
+
 // Different from sortTVShowsByLatestAired above - that one sorts by the
 // show's own airing schedule (when TMDB says an episode released),
 // which has nothing to do with when the viewer actually watched it.
@@ -5259,8 +5325,16 @@ document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 function setLibraryView(view) {
     currentLibraryView = view;
 
-    document.getElementById("libraryTabTV").classList.toggle("active", view === 'tv');
-    document.getElementById("libraryTabMovies").classList.toggle("active", view === 'movies');
+    // Guarded, not assumed to exist - the segmented toggle these used to
+    // belong to was removed (each section's own "View All" already
+    // disambiguates TV vs Movies before the modal ever opens, so there
+    // was nothing left to switch between once inside it), but this
+    // function's actual job - showing the right subview and rendering
+    // it - still needs to work exactly the same regardless.
+    const tabTV = document.getElementById("libraryTabTV");
+    const tabMovies = document.getElementById("libraryTabMovies");
+    if (tabTV) tabTV.classList.toggle("active", view === 'tv');
+    if (tabMovies) tabMovies.classList.toggle("active", view === 'movies');
 
     document.getElementById("libraryViewTV").style.display = view === 'tv' ? 'block' : 'none';
     document.getElementById("libraryViewMovies").style.display = view === 'movies' ? 'block' : 'none';
@@ -5475,9 +5549,9 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
         return;
     }
 
-    const unwatched = items.filter(item => !item.watched && isReleased(item.releaseDate));
-    const comingSoon = items.filter(item => !item.watched && !isReleased(item.releaseDate));
-    const watched = sortMoviesByWatchedDate(items.filter(item => item.watched));
+    const unwatched = sortMoviesByReleaseDate(items.filter(item => !item.watched && isReleased(item.releaseDate)));
+    const comingSoon = sortMoviesByReleaseDate(items.filter(item => !item.watched && !isReleased(item.releaseDate)));
+    const watched = sortMoviesByReleaseDate(items.filter(item => item.watched));
 
     let html = "";
 
@@ -5568,17 +5642,25 @@ function pickLibraryPreviewMovies() {
 // for this.
 function createListCard(list, isFavorites) {
     const items = isFavorites ? getFavoriteListItems() : getListItems(list.id);
-    const posterSlots = [0, 1, 2, 3].map(i => {
-        const item = items[i];
-        if (!item || !item.poster) return `<div class="list-card-poster-slot empty"></div>`;
-        return `<div class="list-card-poster-slot"><img src="${tmdbThumb(item.poster, 'w185')}" alt="" loading="lazy" decoding="async"></div>`;
-    }).join("");
+
+    // A chosen custom backdrop (see openListBackdropPicker) always wins
+    // over the auto-generated collage - one deliberately-picked image
+    // reads as more considered than four small crops, which is exactly
+    // the point of offering the choice at all.
+    const customBackdrop = !isFavorites && list.backdropUrl;
+    const visualHTML = customBackdrop
+        ? `<img class="list-card-backdrop" src="${tmdbThumb(list.backdropUrl, 'w780')}" alt="" loading="lazy" decoding="async">`
+        : `<div class="list-card-collage">${[0, 1, 2, 3].map(i => {
+            const item = items[i];
+            if (!item || !item.poster) return `<div class="list-card-poster-slot empty"></div>`;
+            return `<div class="list-card-poster-slot"><img src="${tmdbThumb(item.poster, 'w185')}" alt="" loading="lazy" decoding="async"></div>`;
+        }).join("")}</div>`;
 
     const openAttr = isFavorites ? `openListDetailModal(null, true)` : `openListDetailModal('${list.id}')`;
 
     return `
         <div class="list-card" onclick="${openAttr}">
-            <div class="list-card-collage">${posterSlots}</div>
+            ${visualHTML}
             <div class="list-card-scrim"></div>
             <div class="list-card-label">
                 <div class="list-card-name">${escapeHTML(isFavorites ? "Favourites" : list.name)}</div>
@@ -5612,17 +5694,21 @@ function renderLibraryHome() {
     const tvContainer = document.getElementById("tvLibraryPreviewGrid");
     if (tvContainer) {
         const shows = pickLibraryPreviewShows();
-        tvContainer.innerHTML = shows.length > 0
-            ? shows.map(item => createCard(item)).join("")
-            : emptyState("Nothing to Show Yet", "Shows you're watching will appear here.");
+        if (shows.length > 0) {
+            syncCardGrid(tvContainer, shows, createCard);
+        } else {
+            tvContainer.innerHTML = emptyState("Nothing to Show Yet", "Shows you're watching will appear here.");
+        }
     }
 
     const movieContainer = document.getElementById("movieLibraryPreviewGrid");
     if (movieContainer) {
         const movies = pickLibraryPreviewMovies();
-        movieContainer.innerHTML = movies.length > 0
-            ? movies.map(item => createCard(item)).join("")
-            : emptyState("Nothing to Show Yet", "Movies you're watching will appear here.");
+        if (movies.length > 0) {
+            syncCardGrid(movieContainer, movies, createCard);
+        } else {
+            movieContainer.innerHTML = emptyState("Nothing to Show Yet", "Movies you're watching will appear here.");
+        }
     }
 }
 
@@ -6669,11 +6755,12 @@ function openListDetailModal(listId, isFavorites) {
     const modal = document.getElementById("listDetailModal");
     if (modal.classList.contains("open")) return;
 
-    // Rename/Delete only make sense for a real list document - toggled
-    // here rather than removed from the DOM entirely, so the header
-    // layout doesn't shift between the two contexts.
+    // Rename/Delete/Backdrop only make sense for a real list document -
+    // toggled here rather than removed from the DOM entirely, so the
+    // header layout doesn't shift between the two contexts.
     document.getElementById("listDetailRenameBtn").style.display = isFavorites ? "none" : "";
     document.getElementById("listDetailDeleteBtn").style.display = isFavorites ? "none" : "";
+    document.getElementById("listDetailBackdropBtn").style.display = isFavorites ? "none" : "";
 
     renderListDetailContent();
     modal.classList.add("open");
@@ -6704,12 +6791,14 @@ function renderListDetailContent() {
 
     const items = isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId);
     const grid = document.getElementById("listDetailGrid");
-    grid.innerHTML = items.length > 0
-        ? items.map(item => createListDetailCard(item, currentListDetailId, isFavorites)).join("")
-        : emptyState(
+    if (items.length > 0) {
+        syncCardGrid(grid, items, item => createListDetailCard(item, currentListDetailId, isFavorites));
+    } else {
+        grid.innerHTML = emptyState(
             isFavorites ? "No Favourites Yet" : "Nothing in This List Yet",
             isFavorites ? "Favorite a show or movie from its details to see it here." : "Add shows or movies to this list from their details."
         );
+    }
 }
 
 // A simpler, separate render from the shared createCard() used
@@ -6732,7 +6821,7 @@ function createListDetailCard(item, listId, isFavorites) {
         : `event.stopPropagation(); removeItemFromListDetail('${listId}', '${item.id}')`;
 
     return `
-        <div class="card" onclick="openDetails('${item.id}')">
+        <div class="card" data-id="${item.id}" onclick="openDetails('${item.id}')">
             <div class="poster">
                 ${hasPoster ? `
                     <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -6759,6 +6848,51 @@ async function unfavoriteFromListDetail(itemId) {
     item.isFavorite = false;
     await saveItem(item);
     renderListDetailContent();
+}
+
+// A list's chosen backdrop is only ever one of its own members' own
+// backdrop images - picked here, from whatever's already in the list,
+// rather than any kind of upload or external image search.
+function openListBackdropPicker() {
+    if (!currentListDetailId) return;
+    const items = getListItems(currentListDetailId).filter(item => item.backdrop);
+    const grid = document.getElementById("listBackdropPickerGrid");
+
+    if (items.length === 0) {
+        grid.innerHTML = emptyState("No Backdrops Available", "Add something with a backdrop image to this list first.");
+    } else {
+        grid.innerHTML = items.map(item => `
+            <button class="poster-picker-item" onclick="selectListBackdrop('${escapeHTML(item.backdrop)}')" aria-label="${escapeHTML(item.title)}">
+                <img src="${tmdbThumb(item.backdrop, 'w300')}" alt="${escapeHTML(item.title)}" loading="lazy" decoding="async">
+            </button>
+        `).join("");
+    }
+
+    const modal = document.getElementById("listBackdropPickerModal");
+    if (!modal.classList.contains("open")) {
+        modal.classList.add("open");
+        lockBodyScroll("listBackdropPickerModal");
+    }
+}
+
+function closeListBackdropPicker() {
+    document.getElementById("listBackdropPickerModal").classList.remove("open");
+    unlockBodyScroll("listBackdropPickerModal");
+}
+
+function closeListBackdropPickerOutside(event) {
+    if (event.target.id === "listBackdropPickerModal") closeListBackdropPicker();
+}
+
+async function selectListBackdrop(backdropUrl) {
+    if (!currentListDetailId || !auth || !auth.currentUser) return;
+    try {
+        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(currentListDetailId).update({ backdropUrl });
+        closeListBackdropPicker();
+    } catch (err) {
+        console.error("Set list backdrop FAILED", err);
+        showErrorToast("Couldn't set that backdrop.");
+    }
 }
 
 function confirmDeleteCurrentList() {
