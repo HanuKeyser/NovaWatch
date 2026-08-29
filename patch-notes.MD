@@ -8,7 +8,8 @@ What's included, top to bottom.
 - Rewatch tracking, per-episode for TV and per-title for movies, via a tap-to-manage popup rather than a one-way counter. A season can be bulk-rewatched once every released episode in it has been watched at least once.
 - Library organized into In Progress, Up to Date, Finished, Unwatched, Coming Soon, and Stopped Watching, sorted by each show's real most-recently-aired episode.
 - Favorite any show or movie from its details - a heart icon right in the modal header.
-- Custom lists mixing shows and movies freely, plus an automatic Favourites list that's always there without needing to be created. The Library tab itself now leads with a scrollable row of your lists, then a self-updating 9-title preview each for TV and Movies based on what you're actually watching, with a "View All" into the full library view for everything else.
+- Custom lists mixing shows and movies freely, plus an automatic Favourites list that's always there without needing to be created. Give a list its own backdrop image, picked from whatever's already in it. The Library tab itself now leads with a scrollable row of your lists, then a self-updating 9-title preview each for TV and Movies based on what you're actually watching, with a "View All" into the full library view for everything else - every category there, TV or Movies, sorted the same way: latest to oldest.
+- A top status-bar blur, and posters that no longer flicker on a library update, tab switch, or modal open.
 - Finished, Unwatched, and Stopped Watching can each be shown or hidden independently in Settings.
 - Continue Watching on Home surfaces the next unwatched episode for every in-progress show, plus any unwatched movies, with swipe actions to mark watched or stop watching.
 - Opening a show's details lands on and scrolls straight to the episode you actually need to watch next, rather than the top of Season 1.
