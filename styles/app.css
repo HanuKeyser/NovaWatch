@@ -137,6 +137,41 @@ img {
     margin: 0 auto;
 }
 
+/* Sits exactly over the real device status bar area - a soft blur and
+   a gentle downward fade, so scrolling content visually blurs and dims
+   as it passes underneath the clock/battery icons instead of sliding
+   directly behind them with no transition at all (see the HTML
+   comment on this element for why that's the default without this).
+   Matches .app's own width/centering so it lines up with the actual
+   content column rather than the full raw viewport on a wide screen.
+   Purely decorative - never intercepts a touch, and collapses to zero
+   height on any device with no real inset (most Android phones,
+   desktop), where it has nothing to do at all. */
+.top-status-blur {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    width: 100%;
+    max-width: 600px;
+    height: env(safe-area-inset-top, 0px);
+    pointer-events: none;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: linear-gradient(180deg, rgba(232, 237, 244, 0.7) 0%, rgba(232, 237, 244, 0) 100%);
+}
+
+html[data-theme="dark"] .top-status-blur {
+    background: linear-gradient(180deg, rgba(10, 13, 20, 0.7) 0%, rgba(10, 13, 20, 0) 100%);
+}
+
+@media (min-width: 768px) {
+    .top-status-blur {
+        max-width: 1024px;
+    }
+}
+
 /* =========================================================
    PAGES
 ========================================================= */
@@ -926,7 +961,6 @@ img {
     overflow-x: auto;
     overflow-y: hidden;
     padding-bottom: 4px;
-    margin-bottom: 8px;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
 }
@@ -943,8 +977,15 @@ img {
    without hardcoding to any single device's specific measurements. */
 .list-card {
     position: relative;
-    flex: 0 0 82%;
-    max-width: 340px;
+    /* Exactly as wide as 3 poster columns plus the 2 gaps between them
+       in .library-grid right below this section - which, worked out
+       mathematically, is simply the grid's own full row width: 3 equal
+       columns with 2 gaps between them always sums to the whole
+       container, regardless of how wide that container actually is.
+       So this is just 100% of the row it scrolls in, matching
+       .library-grid's own width exactly rather than an approximation
+       of it. */
+    flex: 0 0 100%;
     aspect-ratio: 2 / 1;
     border-radius: var(--radius-lg);
     overflow: hidden;
@@ -964,6 +1005,17 @@ img {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
+}
+
+/* The alternative to the collage above when a list has a deliberately
+   chosen backdrop (see openListBackdropPicker) - same absolute fill as
+   the collage, just a single image instead of four small crops. */
+.list-card-backdrop {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .list-card-poster-slot {
