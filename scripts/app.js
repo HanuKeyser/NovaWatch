@@ -5504,20 +5504,20 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
 
     const visPrefs = getLibraryVisibilityPrefs();
 
-    let html = "";
+    const categories = [];
+    if (inProgress.length > 0) categories.push({ title: "In Progress", items: inProgress });
+    if (upToDate.length > 0) categories.push({ title: "Up to Date", items: upToDate });
+    if (finished.length > 0 && visPrefs.showFinished) categories.push({ title: "Finished", items: finished });
+    if (unwatched.length > 0 && visPrefs.showUnwatched) categories.push({ title: "Unwatched", items: unwatched });
+    if (comingSoon.length > 0) categories.push({ title: "Coming Soon", items: comingSoon });
+    if (stopped.length > 0 && visPrefs.showStopped) categories.push({ title: "Stopped Watching", items: stopped });
 
-    if (inProgress.length > 0) html += renderCategoryBlock("In Progress", inProgress);
-    if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", upToDate);
-    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
-    if (unwatched.length > 0 && visPrefs.showUnwatched) html += renderCategoryBlock("Unwatched", unwatched);
-    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
-    if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", stopped);
-
-    if (!html) {
-        html = emptyState("No TV Shows Matching", "No TV shows match your search query.");
+    if (categories.length === 0) {
+        setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
+        return;
     }
 
-    setInnerHTMLIfChanged(container, html);
+    renderCategorizedLibrary(container, categories);
 }
 
 function renderMovieLibrarySection(containerId = "movieLibraryCategories", inputId = "movieLibrarySearchInput") {
@@ -5553,17 +5553,17 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
     const comingSoon = sortMoviesByReleaseDate(items.filter(item => !item.watched && !isReleased(item.releaseDate)));
     const watched = sortMoviesByReleaseDate(items.filter(item => item.watched));
 
-    let html = "";
+    const categories = [];
+    if (unwatched.length > 0) categories.push({ title: "Unwatched", items: unwatched });
+    if (comingSoon.length > 0) categories.push({ title: "Coming Soon", items: comingSoon });
+    if (watched.length > 0) categories.push({ title: "Watched", items: watched });
 
-    if (unwatched.length > 0) html += renderCategoryBlock("Unwatched", unwatched);
-    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
-    if (watched.length > 0) html += renderCategoryBlock("Watched", watched);
-
-    if (!html) {
-        html = emptyState("No Movies Matching", "No movies match your search query.");
+    if (categories.length === 0) {
+        setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
+        return;
     }
 
-    setInnerHTMLIfChanged(container, html);
+    renderCategorizedLibrary(container, categories);
 }
 
 /* =========================================================
@@ -5714,7 +5714,7 @@ function renderLibraryHome() {
 
 function renderCategoryBlock(title, items) {
     return `
-        <div class="category-block">
+        <div class="category-block" data-category="${escapeHTML(title)}">
             <div class="category-title">
                 <span>${escapeHTML(title)}</span>
                 <span class="category-count">${items.length}</span>
@@ -5724,6 +5724,49 @@ function renderCategoryBlock(title, items) {
             </div>
         </div>
     `;
+}
+
+// Same "only touch what actually changed" idea as syncCardGrid, one
+// level up - renderTVLibrarySection/renderMovieLibrarySection build a
+// multi-category view (In Progress, Up to Date, Finished, ...), and
+// setInnerHTMLIfChanged alone meant ANY single card changing anywhere
+// in ANY category replaced the ENTIRE multi-category block, destroying
+// and recreating every <img> in every category, not just the one that
+// actually changed - the same poster-flicker problem syncCardGrid
+// already fixed for the Library home preview and List Detail, just not
+// yet here. This checks whether the SET of categories present (by
+// title, in order) genuinely changed first - if a show moved between
+// categories (In Progress -> Finished) or a category appeared/emptied
+// out, that's a real structural change and still gets the full
+// replacement, since inserting/removing a whole category block isn't
+// something worth building a general keyed-reconciliation system for.
+// But the common case - nothing changed categories, a progress bar
+// updated somewhere - now updates only that one card's grid via
+// syncCardGrid, leaving every other category's cards, and their
+// already-decoded images, completely untouched.
+function renderCategorizedLibrary(container, categories) {
+    if (!container) return;
+
+    const existingBlocks = Array.from(container.children).filter(el => el.classList.contains("category-block"));
+    const existingKeys = existingBlocks.map(b => b.dataset.category);
+    const newKeys = categories.map(c => c.title);
+    const sameStructure = existingKeys.length === newKeys.length && existingKeys.every((k, i) => k === newKeys[i]);
+
+    if (!sameStructure) {
+        const html = categories.map(c => renderCategoryBlock(c.title, c.items)).join("");
+        setInnerHTMLIfChanged(container, html);
+        return;
+    }
+
+    categories.forEach((cat, i) => {
+        const block = existingBlocks[i];
+        const countEl = block.querySelector(".category-count");
+        if (countEl && countEl.textContent !== String(cat.items.length)) {
+            countEl.textContent = cat.items.length;
+        }
+        const grid = block.querySelector(".library-grid");
+        syncCardGrid(grid, cat.items, createCard);
+    });
 }
 
 /* =========================================================
@@ -6755,12 +6798,17 @@ function openListDetailModal(listId, isFavorites) {
     const modal = document.getElementById("listDetailModal");
     if (modal.classList.contains("open")) return;
 
-    // Rename/Delete/Backdrop only make sense for a real list document -
-    // toggled here rather than removed from the DOM entirely, so the
-    // header layout doesn't shift between the two contexts.
+    // Rename/Delete/Backdrop/Share only make sense for a real list
+    // document - toggled here rather than removed from the DOM
+    // entirely, so the header layout doesn't shift between the two
+    // contexts. Share specifically: sharing works by looking up
+    // state.lists (see shareCurrentList), which the automatic
+    // Favourites list was never a part of in the first place - same
+    // reasoning the other three already had, not a separate decision.
     document.getElementById("listDetailRenameBtn").style.display = isFavorites ? "none" : "";
     document.getElementById("listDetailDeleteBtn").style.display = isFavorites ? "none" : "";
     document.getElementById("listDetailBackdropBtn").style.display = isFavorites ? "none" : "";
+    document.getElementById("listDetailShareBtn").style.display = isFavorites ? "none" : "";
 
     renderListDetailContent();
     modal.classList.add("open");
@@ -7010,10 +7058,11 @@ function openShortcutTabFromURL() {
 
 // Reads a shared item link from the URL, if present, and opens the right
 // thing directly - this is what makes a shared link actually take the
-// recipient to the specific show/movie/episode instead of just the app's
-// home screen. Two shapes:
+// recipient to the specific show/movie/episode/list instead of just the
+// app's home screen. Shapes:
 //   ?share_type=tv|movie&share_id=<tmdbId>              - a show or movie
 //   ?share_type=episode&share_id=<showTmdbId>&share_ep=sXeY - one episode
+//   ?share_type=list&share_id=<sharedListDocId>          - a shared list
 // Returns true if a shared item was found and opened, so the caller can
 // skip anything (like a generic "Welcome back!" toast) that would
 // otherwise talk over it.
@@ -7025,7 +7074,11 @@ function openSharedItemFromURL() {
 
     const isEpisodeShare = type === 'episode' && id && !isNaN(Number(id)) && epId && /^s\d+e\d+$/.test(epId);
     const isItemShare = (type === 'tv' || type === 'movie') && id && !isNaN(Number(id));
-    if (!isEpisodeShare && !isItemShare) return false;
+    // A shared list's id is a Firestore auto-id (opaque string), not a
+    // numeric TMDB id like the other two share shapes - no numeric check
+    // here, just that something was actually provided.
+    const isListShare = type === 'list' && !!id;
+    if (!isEpisodeShare && !isItemShare && !isListShare) return false;
 
     // Strip the params so refreshing or navigating within the app doesn't
     // keep reopening the same shared item.
@@ -7033,6 +7086,8 @@ function openSharedItemFromURL() {
 
     if (isEpisodeShare) {
         openSharedEpisode(Number(id), epId);
+    } else if (isListShare) {
+        openSharedList(id);
     } else {
         openSearchResultDetails(Number(id), type);
     }
@@ -7147,6 +7202,143 @@ async function shareCurrentEpisode() {
     }
 
     showErrorToast("Sharing isn't supported on this device.");
+}
+
+// Sharing a list is fundamentally different from sharing a show/movie/
+// episode above - those point at public TMDB data, so there's nothing to
+// protect and the deep link alone is enough. A list is private data
+// behind Firestore rules (only the owner can read users/{uid}/lists/*),
+// so a friend's account could never read it directly even with the
+// right link. Instead this writes a lightweight, standalone, PUBLIC
+// snapshot to its own top-level sharedLists collection - just the list's
+// name and a plain array of {tmdbId, type, title, poster} for whatever
+// was in it at share time, decoupled entirely from the owner's private
+// library/lists structure. That needs its own separate Firestore rule
+// (see README) - readable by anyone with the exact link, but never
+// listable/browsable, and writable by any signed-in account (creating a
+// snapshot of a list you own, not modifying anyone else's data). A
+// snapshot is immutable once created - if the original list changes
+// later, an already-shared link keeps showing what it looked like at
+// share time, the same reasonable tradeoff most "share a copy" features
+// make elsewhere.
+async function shareCurrentList() {
+    if (!currentListDetailId || !auth || !auth.currentUser) return;
+    const list = state.lists.find(l => l.id === currentListDetailId);
+    if (!list) return;
+
+    const items = getListItems(currentListDetailId);
+    if (items.length === 0) {
+        showErrorToast("Add something to this list before sharing it.");
+        return;
+    }
+
+    try {
+        const snapshot = {
+            name: list.name,
+            items: items.map(i => ({
+                tmdbId: i.tmdbId,
+                type: i.type,
+                title: i.title,
+                poster: i.poster || null
+            })),
+            createdAt: new Date().toISOString()
+        };
+        const docRef = await db.collection("sharedLists").add(snapshot);
+        const deepLink = `${NOVAWATCH_APP_URL}?share_type=list&share_id=${docRef.id}`;
+
+        const shareData = {
+            title: `${list.name} - NovaWatch`,
+            text: `Check out my "${list.name}" list on NovaWatch!`,
+            url: deepLink
+        };
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                if (err.name !== 'AbortError') console.error("Share failed:", err);
+            }
+            return;
+        }
+
+        if (navigator.clipboard) {
+            try {
+                await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+                showToast("Link copied to clipboard!", "success");
+            } catch (err) {
+                console.error("Clipboard write failed:", err);
+                showErrorToast("Unable to share.");
+            }
+            return;
+        }
+
+        showErrorToast("Sharing isn't supported on this device.");
+    } catch (err) {
+        console.error("Share list FAILED", err);
+        showErrorToast(`Couldn't share this list (${err.code || err.message || 'unknown error'}).`);
+    }
+}
+
+// Opens a shared list from a deep link - a plain, read-only viewer, not
+// the same List Detail modal an owner sees. There's no rename/delete/
+// remove/backdrop here at all, since the viewer doesn't own this list
+// and the snapshot has no such data anyway; tapping an item just opens
+// the normal Details preview for it (openSearchResultDetails, the same
+// path a shared show/movie link already used), so the recipient can add
+// it to their own library the ordinary way.
+async function openSharedList(shareId) {
+    try {
+        const doc = await db.collection("sharedLists").doc(shareId).get();
+        if (!doc.exists) {
+            showErrorToast("This shared list link isn't valid anymore.");
+            return;
+        }
+        const data = doc.data();
+        document.getElementById("sharedListTitle").textContent = data.name || "Shared List";
+
+        const grid = document.getElementById("sharedListGrid");
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (items.length === 0) {
+            grid.innerHTML = emptyState("Empty List", "This list didn't have anything in it when it was shared.");
+        } else {
+            grid.innerHTML = items.map(item => {
+                const hasPoster = item.poster && item.poster.trim() !== "";
+                const placeholderIcon = item.type === 'movie'
+                    ? `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
+                    : `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>`;
+                return `
+                    <div class="card" onclick="openSearchResultDetails(${item.tmdbId}, '${item.type}')">
+                        <div class="poster">
+                            ${hasPoster ? `
+                                <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
+                            ` : `
+                                <div class="poster-placeholder">${placeholderIcon}</div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        const modal = document.getElementById("sharedListModal");
+        if (!modal.classList.contains("open")) {
+            modal.classList.add("open");
+            lockBodyScroll("sharedListModal");
+        }
+    } catch (err) {
+        console.error("Open shared list FAILED", err);
+        showErrorToast("Couldn't open this shared list.");
+    }
+}
+
+function closeSharedListModal() {
+    document.getElementById("sharedListModal").classList.remove("open");
+    unlockBodyScroll("sharedListModal");
+}
+
+function closeSharedListModalOutside(event) {
+    if (event.target.id === "sharedListModal") closeSharedListModal();
 }
 
 function openDetails(itemId) {
