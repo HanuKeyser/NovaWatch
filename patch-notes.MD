@@ -6,14 +6,14 @@ What's included, top to bottom.
 
 - Search and add TV shows and movies, mark them watched with a single tap.
 - Rewatch tracking, per-episode for TV and per-title for movies, via a tap-to-manage popup rather than a one-way counter. A season can be bulk-rewatched once every released episode in it has been watched at least once.
-- Library organized into In Progress, Up to Date, Finished, Unwatched, Coming Soon, and Stopped Watching, sorted by each show's real most-recently-aired episode.
+- Library organized into In Progress, Up to Date, Finished, Unwatched, Coming Soon, and Stopped Watching, each sorted the same way: latest to oldest by release date, one consistent rule across every category rather than each picking its own dimension.
 - Favorite any show or movie from its details - a heart icon right in the modal header.
-- Custom lists mixing shows and movies freely, plus an automatic Favourites list that's always there without needing to be created. Give a list its own backdrop image, picked from whatever's already in it. The Library tab itself now leads with a scrollable row of your lists, then a self-updating 9-title preview each for TV and Movies based on what you're actually watching, with a "View All" into the full library view for everything else - every category there, TV or Movies, sorted the same way: latest to oldest.
-- A top status-bar blur, and posters that no longer flicker on a library update, tab switch, or modal open.
+- Custom lists mixing shows and movies freely, plus an automatic Favourites list that's always there without needing to be created. Give a list its own backdrop image, picked from whatever's already in it. The Library tab itself now leads with a scrollable row of your lists, then a self-updating 9-title preview each for TV and Movies based on what you're actually watching, with a "View All" into the full library view for everything else.
+- Posters that no longer flicker on a library update, tab switch, or modal open.
 - Finished, Unwatched, and Stopped Watching can each be shown or hidden independently in Settings.
 - Continue Watching on Home surfaces the next unwatched episode for every in-progress show, plus any unwatched movies, with swipe actions to mark watched or stop watching.
 - Opening a show's details lands on and scrolls straight to the episode you actually need to watch next, rather than the top of Season 1.
-- Discover → For You, recommendations seeded from your library.
+- Search → For You, recommendations seeded from your library.
 - Deep links for sharing a show, movie, or a specific episode.
 - Unique usernames alongside a freely editable display name.
 
@@ -60,7 +60,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the floating navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
 - Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
-- Dark mode throughout, applied before first paint so there's no flash between themes on load.
+- Dark mode throughout, applied before first paint so there's no flash between themes on load - genuinely dark now too, not just dark navy.
 - An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap.
 - The offline banner pushes the page's own content down while visible, rather than floating on top of it.
 - A one-time Add to Home Screen prompt, shown once the app is open and only for someone not already using the installed version — permanently suppressed the moment it can tell the app is actually running standalone.
@@ -72,5 +72,5 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 
 ## Platform
 
-- Installable as a PWA on iOS and Android, with home-screen shortcuts to Discover, Library, and Upcoming.
+- Installable as a PWA on iOS and Android, with home-screen shortcuts to Search, Library, and Upcoming.
 - Offline app-shell caching, so a repeat visit still loads something during a brief connection drop.
