@@ -120,7 +120,7 @@ function setTheme(theme) {
     } catch (e) { /* localStorage unavailable - theme just won't persist */ }
 
     const metaTheme = document.getElementById('metaThemeColor');
-    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#0a0d14' : '#e8edf4');
+    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#050609' : '#e8edf4');
 
     syncThemeToggleUI();
 }
@@ -5476,7 +5476,7 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
         if (query) {
             setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
         } else {
-            setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'tv')" }));
+            setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Search", onclick: "showPage('discover', 'tv')" }));
         }
         return;
     }
@@ -5544,7 +5544,7 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
         if (query) {
             setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
         } else {
-            setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'movie')" }));
+            setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Search", onclick: "showPage('discover', 'movie')" }));
         }
         return;
     }
@@ -5897,7 +5897,7 @@ function renderContinueWatching(containerId = "continueWatchingList") {
         setInnerHTMLIfChanged(container, emptyState(
             "You're All Caught Up",
             "New episodes and unwatched movies from your library will show up here.",
-            { label: "Browse Discover", onclick: "showPage('discover', null, true)" }
+            { label: "Search", onclick: "showPage('discover', null, true)" }
         ));
         return;
     }
@@ -6062,7 +6062,7 @@ function renderUpcomingBuckets(container, entries, query, emptyTitle, emptySub, 
         if (query) {
             setInnerHTMLIfChanged(container, emptyState(matchingTitle, matchingSub));
         } else {
-            setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Browse Discover", onclick: emptyOnclick }));
+            setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Search", onclick: emptyOnclick }));
         }
         return;
     }
@@ -6665,7 +6665,7 @@ async function saveList() {
         showToast(editingListId ? "List renamed!" : "List created!", "success");
     } catch (err) {
         console.error("List save FAILED", err);
-        showCreateListError("Couldn't save right now. Please try again.");
+        showCreateListError(`Couldn't save right now (${err.code || err.message || 'unknown error'}).`);
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -6681,7 +6681,7 @@ async function deleteList(listId) {
         showToast("List deleted.", "success");
     } catch (err) {
         console.error("List delete FAILED", err);
-        showErrorToast("Couldn't delete this list.");
+        showErrorToast(`Couldn't delete this list (${err.code || err.message || 'unknown error'}).`);
     }
 }
 
@@ -6703,7 +6703,7 @@ async function addItemToList(listId, itemId) {
         showToast(`Added to "${list.name}".`, "success");
     } catch (err) {
         console.error("Add to list FAILED", err);
-        showErrorToast("Couldn't add this to the list.");
+        showErrorToast(`Couldn't add this to the list (${err.code || err.message || 'unknown error'}).`);
     }
 }
 
@@ -6717,7 +6717,7 @@ async function removeItemFromList(listId, itemId) {
         await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
     } catch (err) {
         console.error("Remove from list FAILED", err);
-        showErrorToast("Couldn't remove this from the list.");
+        showErrorToast(`Couldn't remove this from the list (${err.code || err.message || 'unknown error'}).`);
     }
 }
 
@@ -6861,8 +6861,19 @@ function openListBackdropPicker() {
     if (items.length === 0) {
         grid.innerHTML = emptyState("No Backdrops Available", "Add something with a backdrop image to this list first.");
     } else {
+        // The backdrop URL travels via a data attribute, not interpolated
+        // directly into the onclick string - escapeHTML() is the right
+        // tool for embedding it as an HTML attribute value (which this
+        // is), not for safely embedding it inside a JS string literal
+        // (which the previous version effectively needed, since the URL
+        // was interpolated straight into onclick="selectListBackdrop('...')").
+        // The browser handles decoding a data attribute back to its
+        // original value automatically when read via .dataset, so this
+        // sidesteps that whole class of escaping mismatch entirely
+        // rather than trying to pick the "correct" escaping for a JS
+        // string context by hand.
         grid.innerHTML = items.map(item => `
-            <button class="poster-picker-item" onclick="selectListBackdrop('${escapeHTML(item.backdrop)}')" aria-label="${escapeHTML(item.title)}">
+            <button class="poster-picker-item" data-backdrop="${escapeHTML(item.backdrop)}" onclick="selectListBackdrop(this.dataset.backdrop)" aria-label="${escapeHTML(item.title)}">
                 <img src="${tmdbThumb(item.backdrop, 'w300')}" alt="${escapeHTML(item.title)}" loading="lazy" decoding="async">
             </button>
         `).join("");
@@ -6890,8 +6901,13 @@ async function selectListBackdrop(backdropUrl) {
         await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(currentListDetailId).update({ backdropUrl });
         closeListBackdropPicker();
     } catch (err) {
+        // Surfaces the real Firestore error code (e.g. "permission-denied"
+        // if the lists subcollection is missing its own security rule -
+        // see the README's note on this) rather than a generic message,
+        // so a failure here is actually diagnosable from what shows on
+        // screen instead of needing a console dump to explain it.
         console.error("Set list backdrop FAILED", err);
-        showErrorToast("Couldn't set that backdrop.");
+        showErrorToast(`Couldn't set that backdrop (${err.code || err.message || 'unknown error'}).`);
     }
 }
 
