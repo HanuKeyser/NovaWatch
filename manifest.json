@@ -16,8 +16,8 @@
   "theme_color": "#e8edf4",
   "shortcuts": [
     {
-      "name": "Discover",
-      "short_name": "Discover",
+      "name": "Search",
+      "short_name": "Search",
       "description": "Search for new TV shows and movies",
       "url": "/?shortcut=discover",
       "icons": [
