@@ -45,7 +45,7 @@ body {
     min-height: 100dvh;
     overflow-x: hidden;
     /* Nav bar floats at bottom: calc(18px + safe-area) with a 70px
-       height (see .nav-bar-row) - its top edge sits at 88px + safe-area
+       height (see .bottom-nav) - its top edge sits at 88px + safe-area
        from the true bottom. .page's own bottom padding already
        contributes 20px + safe-area of its own trailing space; this 76px
        plus that lands just past the nav's own top edge with a small
@@ -1818,104 +1818,24 @@ html[data-theme="dark"] .upcoming-card-caption {
 /* =========================================================
    BOTTOM NAV (Floating Pill)
 ========================================================= */
-/* Wraps the standalone search button and the (now 3-tab) main bar side
-   by side - takes over .bottom-nav's own old fixed positioning/
-   centering, since .bottom-nav itself is now just a flex child within
-   this row rather than independently fixed-positioned on the page. */
-.nav-bar-row {
+.bottom-nav {
     position: fixed;
     left: 50%;
-    /* Same reasoning as .bottom-nav's old comment here - 18px on the
-       bottom matching the 18px the sides get, with the real safe-area
-       inset folding in on top on a device with a home indicator. */
+    /* 18px on the bottom, matching the 18px the sides get (width:
+       calc(100% - 36px)) - genuinely symmetric margins on all three
+       open sides. On a device with a home indicator, the real
+       safe-area inset folds in on top of that 18px, since that space
+       exists to keep the bar's tap targets clear of the gesture area -
+       resolves to a flat 18px on devices with no inset. */
     bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
     max-width: 480px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* A perfect circle, matching the main bar's own 70px height so the two
-   sit flush and aligned in the row - never shrinks (flex-shrink: 0),
-   since .bottom-nav next to it is what should absorb any extra/short
-   space instead. Same glass-chrome visual recipe as .bottom-nav below
-   (background layers, blur, shadow, the shimmer sweep) so the two
-   genuinely read as one consistent chrome tier split into two pieces,
-   not two different-looking buttons that happen to sit next to each
-   other. */
-.nav-search-btn {
-    position: relative;
-    flex-shrink: 0;
-    width: 70px;
-    height: 70px;
-    border-radius: 999px;
-    overflow: hidden;
-    background:
-        radial-gradient(60px 40px at 30% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
-        var(--glass-sheen),
-        rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(72px) saturate(300%);
-    -webkit-backdrop-filter: blur(72px) saturate(300%);
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.05),
-        0 30px 60px rgba(0, 0, 0, 0.16),
-        inset 0 -14px 22px -16px rgba(255, 255, 255, 0.5);
-}
-
-.nav-search-btn::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
-    background-size: 260% 260%;
-    opacity: 0.16;
-    pointer-events: none;
-    z-index: 2;
-    animation: navGlassShimmer 10s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .nav-search-btn::before {
-        animation: none;
-    }
-}
-
-html[data-theme="dark"] .nav-search-btn {
-    background:
-        radial-gradient(60px 40px at 30% -10%, rgba(255, 255, 255, 0.14), transparent 65%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
-        var(--glass-sheen),
-        rgba(18, 18, 22, 0.38);
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.5),
-        0 30px 66px rgba(0, 0, 0, 0.8),
-        inset 0 -14px 22px -16px rgba(255, 255, 255, 0.09);
-}
-
-.bottom-nav {
-    /* Was fixed, self-positioning/centering - now a flex child within
-       .nav-bar-row above, which owns that job instead so it can center
-       the row as a whole (search button + this bar together), not just
-       this bar alone. */
-    position: relative;
-    /* Was width: calc(100% - 36px); max-width: 480px - both owned by
-       the row now instead. flex: 1 lets this bar absorb whatever width
-       is left in the row after the fixed-size search button and the
-       gap between them, rather than needing its own separate budget. */
-    flex: 1;
-    min-width: 0;
     height: 70px;
     padding: 7px;
     display: grid;
-    /* Was repeat(4, 1fr) - one less tab now that Search moved out to
-       its own standalone button in the row (see .nav-search-btn and
-       .nav-bar-row above). */
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 4px;
     /* The drag-to-switch gesture (initNavBarDragToSwitch in app.js) needs
        to own horizontal pointer movement on this bar itself, rather than
@@ -3777,7 +3697,7 @@ html[data-theme="dark"] .large-avatar {
     position: fixed;
     left: 50%;
     /* Nav bar's own top edge sits at 88px + safe-area from the true
-       bottom (18px offset + 70px height - see .nav-bar-row) - this
+       bottom (18px offset + 70px height - see .bottom-nav) - this
        clears it with a deliberate ~12px of its own breathing room
        rather than sitting flush against it. */
     bottom: calc(100px + env(safe-area-inset-bottom, 0px));
@@ -4051,7 +3971,7 @@ html[data-theme="dark"] .state-card {
         max-width: 1024px;
     }
 
-    .nav-bar-row {
+    .bottom-nav {
         max-width: 620px;
     }
 
