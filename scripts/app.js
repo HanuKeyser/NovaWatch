@@ -5644,17 +5644,23 @@ function createListCard(list, isFavorites) {
     const items = isFavorites ? getFavoriteListItems() : getListItems(list.id);
 
     // A chosen custom backdrop (see openListBackdropPicker) always wins
-    // over the auto-generated collage - one deliberately-picked image
-    // reads as more considered than four small crops, which is exactly
-    // the point of offering the choice at all.
+    // when set. Otherwise, auto-pick the first item that actually has a
+    // backdrop image and use that, full-size, rather than a poster
+    // collage - a backdrop is already the right shape for this card
+    // (landscape, matching its own 2:1 aspect ratio), where a poster
+    // (portrait) never was. The collage approach broke down visibly for
+    // any list under 4 items - the normal case, not a rare one - since
+    // empty slots just showed blank instead of anything meaningful; one
+    // full-card image reads as considered regardless of how many items
+    // are actually in the list. Falls back to a plain surface color
+    // only if literally nothing in the list has a backdrop at all.
     const customBackdrop = !isFavorites && list.backdropUrl;
-    const visualHTML = customBackdrop
-        ? `<img class="list-card-backdrop" src="${tmdbThumb(list.backdropUrl, 'w780')}" alt="" loading="lazy" decoding="async">`
-        : `<div class="list-card-collage">${[0, 1, 2, 3].map(i => {
-            const item = items[i];
-            if (!item || !item.poster) return `<div class="list-card-poster-slot empty"></div>`;
-            return `<div class="list-card-poster-slot"><img src="${tmdbThumb(item.poster, 'w185')}" alt="" loading="lazy" decoding="async"></div>`;
-        }).join("")}</div>`;
+    const autoBackdrop = !customBackdrop ? items.find(item => item.backdrop) : null;
+    const backdropSrc = customBackdrop ? list.backdropUrl : (autoBackdrop ? autoBackdrop.backdrop : null);
+
+    const visualHTML = backdropSrc
+        ? `<img class="list-card-backdrop" src="${tmdbThumb(backdropSrc, 'w780')}" alt="" loading="lazy" decoding="async">`
+        : '';
 
     const openAttr = isFavorites ? `openListDetailModal(null, true)` : `openListDetailModal('${list.id}')`;
 
