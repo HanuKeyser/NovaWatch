@@ -48,8 +48,18 @@
        legible. Deliberately one full step lighter than the chrome tier
        right below - that's what gives floating controls (the nav bar,
        toasts) a distinct, elevated feel instead of every surface in the
-       app reading identically. */
-    --glass-blur: blur(24px) saturate(180%);
+       app reading identically. Was blur(24px) - used across six
+       different, mostly small-to-medium components (the modal close/
+       action buttons, Continue Watching's check button, the season
+       rewatch button, confirm dialogs' Cancel button, a secondary auth
+       button), a 24px radius read as a noticeably strong haze on
+       several of them, not just the one case (modal header buttons)
+       that got its own separate, more aggressive fix (blur removed
+       entirely there, since it sits over a busy photo backdrop rather
+       than a plain surface). Halved here at the shared token, so every
+       one of those six gets a real, consistent reduction in one place
+       rather than tuning each separately. */
+    --glass-blur: blur(12px) saturate(180%);
 
     /* =====================================================
        LIQUID GLASS "CHROME" SYSTEM
@@ -137,31 +147,41 @@ html {
 
 html[data-theme="dark"] {
     color-scheme: dark;
-    /* Near-black with a faint blue undertone, not pure #000 - a true
-       black makes translucent glass surfaces look muddy/flat instead of
-       luminous, since there's no depth in the base for the blur to
-       read against. */
-    background: #0a0d14;
+    /* Was #0a0d14 - genuinely darkened toward true black now, not just
+       "dark navy". Still not pure #000 (kept a faint blue undertone
+       rather than a flat, fully neutral black) for the same reason as
+       before: translucent glass surfaces need some depth in the base
+       for the blur to read against, or they look muddy/flat instead of
+       luminous - but every dark-mode surface below is darkened to
+       match this new, meaningfully blacker base, not left at their old
+       values sitting on top of it. */
+    background: #050609;
 
     --bg-mesh:
-        radial-gradient(at 15% 12%, rgba(50, 58, 78, 0.55) 0px, transparent 48%),
-        radial-gradient(at 85% 8%, rgba(28, 32, 44, 0.6) 0px, transparent 50%),
-        radial-gradient(at 90% 75%, rgba(42, 48, 66, 0.4) 0px, transparent 50%),
-        radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.5) 0px, transparent 50%),
-        radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.5) 0px, transparent 65%),
-        #0a0d14;
-    --surface: rgba(255, 255, 255, 0.06);
-    --surface-2: rgba(255, 255, 255, 0.04);
+        radial-gradient(at 15% 12%, rgba(50, 58, 78, 0.4) 0px, transparent 48%),
+        radial-gradient(at 85% 8%, rgba(28, 32, 44, 0.45) 0px, transparent 50%),
+        radial-gradient(at 90% 75%, rgba(42, 48, 66, 0.28) 0px, transparent 50%),
+        radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.35) 0px, transparent 50%),
+        radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.35) 0px, transparent 65%),
+        #050609;
+    --surface: rgba(255, 255, 255, 0.05);
+    --surface-2: rgba(255, 255, 255, 0.035);
 
     --glass-border: rgba(255, 255, 255, 0.12);
     --glass-border-subtle: rgba(255, 255, 255, 0.06);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    --glass-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    --glass-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.42);
 
-    --glass-chrome-fill: rgba(40, 40, 46, 0.5);
+    /* Was rgba(40, 40, 46, 0.5) - a genuinely dark-gray fill (iOS's own
+       typical "elevated surface" system gray), not black-leaning at
+       all. Darkened toward the same true-black direction as the base
+       background above, so the nav bar and other chrome-tier surfaces
+       actually read as black glass rather than dark gray glass sitting
+       on top of a blacker page underneath them. */
+    --glass-chrome-fill: rgba(18, 18, 22, 0.55);
     --glass-chrome-blur: blur(72px) saturate(230%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
-    --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.42), 0 28px 60px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 28px 60px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
 
     --blue: #60a5fa;
