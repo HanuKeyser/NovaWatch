@@ -7,7 +7,7 @@ What's included, top to bottom.
 - Search and add TV shows and movies, mark them watched with a single tap.
 - Rewatch tracking, per-episode for TV and per-title for movies, via a tap-to-manage popup rather than a one-way counter. A season can be bulk-rewatched once every released episode in it has been watched at least once.
 - Library organized into In Progress, Up to Date, Finished, Unwatched, Coming Soon, and Stopped Watching, each sorted the same way: latest to oldest by release date, one consistent rule across every category rather than each picking its own dimension.
-- Favorite any show or movie from its details - a heart icon right in the modal header.
+- Favorite any show or movie from its details - one tap in a labeled action row, no separate menu to dig through.
 - Custom lists mixing shows and movies freely, plus an automatic Favourites list that's always there without needing to be created. Give a list its own backdrop image, picked from whatever's already in it. Share a list with a link, the same way sharing a show or episode already works. The Library tab itself now leads with a scrollable row of your lists, then a self-updating 9-title preview each for TV and Movies based on what you're actually watching, with a "View All" into the full library view for everything else.
 - Posters that no longer flicker on a library update, tab switch, or modal open.
 - Finished, Unwatched, and Stopped Watching can each be shown or hidden independently in Settings.
