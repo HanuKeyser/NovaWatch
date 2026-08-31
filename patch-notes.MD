@@ -58,7 +58,6 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 ## Design
 
 - A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the floating navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
-- Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
 - Dark mode throughout, applied before first paint so there's no flash between themes on load - genuinely dark now too, not just dark navy.
 - An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap.
