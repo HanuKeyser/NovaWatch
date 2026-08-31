@@ -6805,16 +6805,15 @@ function openListDetailModal(listId, isFavorites) {
     if (modal.classList.contains("open")) return;
 
     // Rename/Delete/Backdrop/Share only make sense for a real list
-    // document - toggled here rather than removed from the DOM
-    // entirely, so the header layout doesn't shift between the two
-    // contexts. Share specifically: sharing works by looking up
-    // state.lists (see shareCurrentList), which the automatic
-    // Favourites list was never a part of in the first place - same
-    // reasoning the other three already had, not a separate decision.
-    document.getElementById("listDetailRenameBtn").style.display = isFavorites ? "none" : "";
-    document.getElementById("listDetailDeleteBtn").style.display = isFavorites ? "none" : "";
-    document.getElementById("listDetailBackdropBtn").style.display = isFavorites ? "none" : "";
-    document.getElementById("listDetailShareBtn").style.display = isFavorites ? "none" : "";
+    // document - all four now live in #listDetailActionRow (see that
+    // element's own comment in index.html for why they moved out of
+    // the floating header). Toggled by hiding the whole row at once for
+    // Favourites, not each button individually - hiding all four
+    // buttons but leaving their container in place would still leave
+    // an empty row taking up its own margin, an odd gap with nothing
+    // visibly in it.
+    const actionRow = document.getElementById("listDetailActionRow");
+    if (actionRow) actionRow.style.display = isFavorites ? "none" : "";
 
     renderListDetailContent();
     modal.classList.add("open");
