@@ -44,13 +44,12 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
-    /* Nav bar floats at bottom: calc(18px + safe-area) with a 70px
-       height (see .bottom-nav) - its top edge sits at 88px + safe-area
-       from the true bottom. .page's own bottom padding already
-       contributes 20px + safe-area of its own trailing space; this 76px
-       plus that lands just past the nav's own top edge with a small
-       ~8px breathing gap, instead of double-padding on top of what
-       .page already provides. */
+    /* Nav bar floats at bottom: 18px with a 70px height (see
+       .bottom-nav) - its top edge sits at 88px from the true bottom.
+       .page's own bottom padding already contributes 20px of its own
+       trailing space; this 76px plus that lands just past the nav's
+       own top edge with a small ~8px breathing gap, instead of
+       double-padding on top of what .page already provides. */
     padding-bottom: 76px;
     -webkit-font-smoothing: antialiased;
     /* Stops a vertical drag at the very top/bottom of the page from
@@ -140,22 +139,14 @@ img {
 /* =========================================================
    PAGES
 ========================================================= */
-/* Top/bottom padding both fold in the real device safe-area inset on
-   top of the existing spacing, rather than replacing it - so content
-   (headers, cards) clears the Dynamic Island/notch/status bar at the
-   top and the home indicator/gesture bar at the bottom, while the
-   background behind it (on body - see above) stays full-bleed since
-   nothing about the background itself is padded, only this content
-   layer. env(...) resolves to 0px on devices/browsers without a safe
-   area (most Android phones, desktop), so this is a no-op there.
-   Horizontal padding is the original 18px - two separate attempts at
+/* Horizontal padding is the original 18px - two separate attempts at
    pulling this in (0px, then 12px) both left cards, borders, and
    shadows reading as unfinished rather than intentional once they lost
    the room a floating card actually needs to read as a deliberate
    shape rather than a mistake. */
 .page {
     display: none;
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: 36px 18px 20px;
 }
 
 .page.active {
@@ -169,11 +160,11 @@ img {
    globally on every tab switch, which would have permanently hidden
    Settings' content (via .page's own display:none default) the next
    time any tab changed while sharing that class. */
-/* Same safe-area treatment as .page above - Settings is functionally a
-   5th top-level tab (its own full-height sheet), so it gets the exact
-   same logic rather than a separate hardcoded copy. */
+/* Same padding as .page above - Settings is functionally a 5th
+   top-level tab (its own full-height sheet), so it gets the exact same
+   values rather than a separate hardcoded copy. */
 .settings-page-content {
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: 36px 18px 20px;
 }
 
 .tab-content-wrapper {
@@ -451,17 +442,17 @@ img {
 ========================================================= */
 .wrapped-progress-row {
     position: fixed;
-    top: calc(14px + env(safe-area-inset-top, 0px));
+    top: 14px;
     left: 16px;
     /* Was right: 16px, the same right edge the modal's own close button
-       sits at (.modal-header-nav, top: 14px + safe-area; right: 16px)
-       - with this row's own higher z-index (20 vs the close button's
-       10), the progress segments would render directly over the close
-       button, making it untappable for the entire slideshow. 62px
-       leaves the button (38px wide, starting at right: 16px, so
-       occupying out to right: 54px) clear with a small gap to spare -
-       the same layout Instagram/Snapchat stories use, a progress bar
-       and a close control sharing the same row without overlapping. */
+       sits at (.modal-header-nav, top: 14px; right: 16px) - with this
+       row's own higher z-index (20 vs the close button's 10), the
+       progress segments would render directly over the close button,
+       making it untappable for the entire slideshow. 62px leaves the
+       button (38px wide, starting at right: 16px, so occupying out to
+       right: 54px) clear with a small gap to spare - the same layout
+       Instagram/Snapchat stories use, a progress bar and a close
+       control sharing the same row without overlapping. */
     right: 62px;
     z-index: 20;
     display: flex;
@@ -523,7 +514,7 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: calc(60px + env(safe-area-inset-top, 0px)) 32px calc(40px + env(safe-area-inset-bottom, 0px));
+    padding: 60px 32px 40px;
     text-align: center;
     color: white;
     animation: wrappedSlideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
@@ -688,7 +679,7 @@ img {
     position: absolute;
     left: 32px;
     right: 32px;
-    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    bottom: 40px;
     display: flex;
     gap: 10px;
     z-index: 16;
@@ -1801,11 +1792,8 @@ html[data-theme="dark"] .upcoming-card-caption {
     left: 50%;
     /* 18px on the bottom, matching the 18px the sides get (width:
        calc(100% - 36px)) - genuinely symmetric margins on all three
-       open sides. On a device with a home indicator, the real
-       safe-area inset folds in on top of that 18px, since that space
-       exists to keep the bar's tap targets clear of the gesture area -
-       resolves to a flat 18px on devices with no inset. */
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+       open sides. */
+    bottom: 18px;
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
@@ -2125,15 +2113,9 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: linear-gradient(180deg, rgba(248,250,252,0.05) 0%, rgba(248,250,252,0.96) 100%);
 }
 
-/* Full-screen modals (Details, Episode, NovaWrapped, Settings' own
-   entry point elsewhere) sit edge-to-edge, so this floating close/action
-   button needs the real top safe-area inset folded in or it can end up
-   under the Dynamic Island/notch/status bar. Compact modals (below)
-   override this back to the plain value, since those are centered on
-   screen and never actually reach the true top edge. */
 .modal-header-nav {
     position: absolute;
-    top: calc(14px + env(safe-area-inset-top, 0px));
+    top: 14px;
     right: 16px;
     /* Higher than the Wrapped slideshow's own tap zones (z-index: 15)
        and progress bar (z-index: 20) - without this, the invisible
@@ -2148,10 +2130,6 @@ html[data-theme="dark"] .modal-sheet-compact {
        right edge, rather than side by side along the top. */
     flex-direction: column;
     gap: 10px;
-}
-
-.modal-sheet-compact .modal-header-nav {
-    top: 14px;
 }
 
 .close-button {
@@ -2293,10 +2271,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     background: rgba(0, 0, 0, 0.32);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    /* Centered card, so this is mostly defensive the same way #authScreen's
-       is - the backdrop itself (inset: 0 above) is already full-bleed
-       regardless. */
-    padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
+    /* Centered card, so this padding is mostly defensive on a very short
+       viewport, keeping the card clear of the screen edges. */
+    padding: 24px;
 }
 
 .confirm-overlay.open {
@@ -3588,11 +3565,10 @@ html[data-theme="dark"] .large-avatar {
     display: none; /* Hidden by default, controlled via JS */
     align-items: center;
     justify-content: center;
-    /* Content is centered, not top/bottom-anchored, so this is mostly
-       defensive (a very short viewport could still push the card close
-       to an edge) - the background itself (inset: 0 above) is already
-       correctly full-bleed regardless of this padding. */
-    padding: calc(20px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+    /* Content is centered, not top/bottom-anchored, so this padding is
+       mostly defensive on a very short viewport, keeping the card
+       clear of the screen edges. */
+    padding: 20px;
 }
 
 /* Blur backdrop overlay */
@@ -3685,7 +3661,6 @@ html[data-theme="dark"] .large-avatar {
     justify-content: center;
     gap: 7px;
     padding: 9px 16px;
-    padding-top: calc(9px + env(safe-area-inset-top, 0px));
     /* var(--orange-gradient), not a hand-copied duplicate of it - the
        duplicate had drifted to a slightly different shade of orange
        (#ffb340 vs the token's #ffb15c) and, being hardcoded, never
@@ -3710,11 +3685,11 @@ html[data-theme="dark"] .large-avatar {
 .error-toast {
     position: fixed;
     left: 50%;
-    /* Nav bar's own top edge sits at 88px + safe-area from the true
-       bottom (18px offset + 70px height - see .bottom-nav) - this
-       clears it with a deliberate ~12px of its own breathing room
-       rather than sitting flush against it. */
-    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    /* Nav bar's own top edge sits at 88px from the true bottom (18px
+       offset + 70px height - see .bottom-nav) - this clears it with a
+       deliberate ~12px of its own breathing room rather than sitting
+       flush against it. */
+    bottom: 100px;
     transform: translateX(-50%) translateY(14px) scale(0.94);
     z-index: 500;
     opacity: 0;
@@ -3965,10 +3940,10 @@ html[data-theme="dark"] .state-card {
    buttons read as sparse.
 
    The existing PWA install setup (manifest.json, the apple-mobile-web-
-   app-* meta tags, viewport-fit=cover) already works identically on
-   iPadOS's own "Add to Home Screen" - nothing further was needed there
-   specifically for tablets to install and launch standalone the same
-   way they do on iPhone.
+   app-* meta tags) already works identically on iPadOS's own "Add to
+   Home Screen" - nothing further was needed there specifically for
+   tablets to install and launch standalone the same way they do on
+   iPhone.
 ========================================================= */
 @media (min-width: 768px) {
     .app {
