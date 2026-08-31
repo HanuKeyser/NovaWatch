@@ -1010,6 +1010,60 @@ img {
 }
 
 /* =========================================================
+   REORDER LISTS
+========================================================= */
+.reorder-list-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
+}
+
+.reorder-list-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reorder-list-controls {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+}
+
+.reorder-move-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--glass-border-subtle);
+    color: var(--text);
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.15s ease;
+}
+
+.reorder-move-btn:active {
+    transform: scale(0.9);
+}
+
+/* First list can't move earlier, last can't move later - disabled
+   rather than hidden, so the row's own layout (name left, two controls
+   right) never shifts depending on position in the list. */
+.reorder-move-btn:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* =========================================================
    LIST DETAIL - REMOVE BUTTON
 ========================================================= */
 .list-detail-remove-btn {
