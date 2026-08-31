@@ -2126,9 +2126,6 @@ html[data-theme="dark"] .modal-sheet-compact {
        modal), since nothing else in those overlaps it to begin with. */
     z-index: 25;
     display: flex;
-    /* Was a row - stacked vertically instead, top to bottom along the
-       right edge, rather than side by side along the top. */
-    flex-direction: column;
     gap: 10px;
 }
 
@@ -2148,17 +2145,19 @@ html[data-theme="dark"] .modal-sheet-compact {
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* .modal-header-nav's own buttons specifically (Favorite/Add to List/
-   Share/Close, floating over a photo backdrop) drop the frosted-glass
-   blur the base .close-button above still has everywhere else (the
-   standalone confirm-dialog close buttons, which sit over a solid card
-   background where blur was never really doing anything meaningful
-   anyway). Over a busy photo, that same blur at this button size (24px
-   radius on a 38px circle - a lot of frosting relative to how small the
-   circle actually is) read as a strong haze right where the eye lands
-   first. Solid, more opaque backgrounds take over the legibility job
-   blur was doing instead, so the icons stay clearly readable against
-   any photo without needing to blur what's behind them to do it. */
+/* .modal-header-nav's own Close button specifically - always just Close
+   now (Favorite/Add to List/Share/Backdrop/Rename/Delete all moved into
+   labeled rows within each modal's own content - see .modal-action-row)
+   - drops the frosted-glass blur the base .close-button above still has
+   everywhere else (the standalone confirm-dialog close buttons, which
+   sit over a solid card background where blur was never really doing
+   anything meaningful anyway). Over a photo backdrop specifically, that
+   same blur at this button size (24px radius on a 38px circle - a lot
+   of frosting relative to how small the circle actually is) read as a
+   strong haze right where the eye lands first. Solid, more opaque
+   backgrounds take over the legibility job blur was doing instead, so
+   the icon stays clearly readable against any photo without needing to
+   blur what's behind it to do it. */
 .modal-header-nav .close-button {
     background: rgba(255, 255, 255, 0.88);
     backdrop-filter: none;
@@ -2171,14 +2170,6 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 
 .close-button:active {
     transform: scale(0.9);
-}
-
-/* #modalFavoriteBtn only - reuses .close-button's circular glass chrome
-   entirely, just recolors the icon (and its fill, toggled in JS between
-   none/currentColor) to red once favorited, matching the red/danger
-   token already used elsewhere for a "marked" state. */
-.close-button.favorited {
-    color: var(--danger);
 }
 
 .season-rewatch-button {
@@ -2240,18 +2231,6 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    needs to change in one place. */
 .modal-content-top-clear {
     padding-top: 60px;
-}
-
-/* List Detail's header has 5 stacked buttons now (Backdrop/Share/
-   Rename/Delete/Close - see .modal-header-nav's flex-direction: column
-   above), the tallest button stack in the app by a good margin - the
-   default 60px above was sized for the common single-button case and
-   would leave the title/grid sitting underneath the bottom of that
-   stack instead of clear of it. Computed for 5 buttons at 38px each
-   with 10px gaps, starting from the header nav's own top offset, plus
-   a little extra breathing room past where the stack actually ends. */
-#listDetailModal .modal-content-top-clear {
-    padding-top: 260px;
 }
 
 /* =========================================================
@@ -2402,6 +2381,76 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     font-size: 12px;
     margin: 10px 0 16px;
     align-items: center;
+}
+
+/* A labeled row of secondary actions (Favorite/Add to List/Share on
+   Details, Backdrop/Share/Rename/Delete on List Detail, and so on) -
+   lives in the modal's normal content flow now, not floating over a
+   photo as icon-only circles. That floating pattern reads reliably as
+   "tappable icon" on iOS specifically, where it's a familiar system
+   convention, but this app runs everywhere - Android, desktop browsers,
+   anything else a PWA installs on - and a bare icon with no label
+   doesn't carry the same built-in meaning across all of those. A label
+   next to the icon removes the ambiguity entirely, at zero cost to
+   anyone who already recognized the icon anyway. flex-wrap means this
+   holds up correctly at any viewport width without needing horizontal
+   scroll or JS-measured layout - four labeled chips wrap to a second
+   line on a narrow phone exactly as gracefully as they'd sit on one
+   line on a wider screen. */
+.modal-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 4px 0 16px;
+}
+
+.modal-action-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* 40px tall regardless of content - meets the ~40-44px minimum
+       touch-target guidance shared across iOS, Android, and general
+       web accessibility recommendations, rather than shrinking to fit
+       whatever the icon+label happen to need. */
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.modal-action-chip:active {
+    transform: scale(0.96);
+}
+
+.modal-action-chip .icon-small {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* #modalFavoriteBtn specifically - filled red heart once favorited,
+   same convention as everywhere else in the app a "marked" state uses
+   the danger/red token. Icon fill is toggled between none/currentColor
+   in updateModalContent(), same as it always was. */
+.modal-action-chip.favorited {
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* #listDetailDeleteBtn specifically - a destructive action gets a
+   visually distinct treatment from the other, non-destructive chips in
+   the same row, rather than looking identical to Rename/Share/Backdrop
+   right up until the confirmation dialog appears. */
+.modal-action-chip.danger {
+    color: var(--danger);
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.08);
 }
 
 /* Holds whichever of the two secondary info lines actually applies
