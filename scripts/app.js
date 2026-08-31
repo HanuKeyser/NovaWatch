@@ -3142,6 +3142,12 @@ function refreshActivePage() {
         renderListDetailContent();
     }
 
+    // And Reorder Lists - a list created/deleted/renamed elsewhere
+    // should be reflected immediately if this happens to be open too.
+    if (document.getElementById("reorderListsModal").classList.contains("open")) {
+        renderReorderListsContent();
+    }
+
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
     if (document.getElementById("upcomingPage").classList.contains("active")) {
         if (currentUpcomingView === 'tv') renderUpcomingTVSection();
@@ -5643,20 +5649,32 @@ function pickLibraryPreviewMovies() {
 function createListCard(list, isFavorites) {
     const items = isFavorites ? getFavoriteListItems() : getListItems(list.id);
 
-    // A chosen custom backdrop (see openListBackdropPicker) always wins
-    // when set. Otherwise, auto-pick the first item that actually has a
-    // backdrop image and use that, full-size, rather than a poster
-    // collage - a backdrop is already the right shape for this card
-    // (landscape, matching its own 2:1 aspect ratio), where a poster
-    // (portrait) never was. The collage approach broke down visibly for
-    // any list under 4 items - the normal case, not a rare one - since
-    // empty slots just showed blank instead of anything meaningful; one
-    // full-card image reads as considered regardless of how many items
-    // are actually in the list. Falls back to a plain surface color
-    // only if literally nothing in the list has a backdrop at all.
+    // A chosen custom backdrop (see openListBackdropPicker, and the
+    // Favourites-specific version below) always wins when set.
+    // Otherwise, auto-pick whichever item was added most recently that
+    // actually has a backdrop image, and use that, full-size, rather
+    // than a poster collage - a backdrop is already the right shape for
+    // this card (landscape, matching its own 2:1 aspect ratio), where a
+    // poster (portrait) never was. The collage approach broke down
+    // visibly for any list under 4 items - the normal case, not a rare
+    // one - since empty slots just showed blank instead of anything
+    // meaningful; one full-card image reads as considered regardless of
+    // how many items are actually in the list. "Most recent" specifically
+    // (not just "the first one with a backdrop") means favoriting a new
+    // item updates the card immediately, and un-favoriting it correctly
+    // falls back to whichever item is now the most recent instead of an
+    // arbitrary one. getFavoriteListItems() already returns most-recent-
+    // first; getListItems() returns insertion order (oldest first, since
+    // addItemToList appends), so regular lists search from the end
+    // instead - same "most recent" intent, just walking the opposite
+    // direction to match how each list is actually ordered. Falls back
+    // to a plain surface color only if literally nothing in the list has
+    // a backdrop at all.
     const customBackdrop = !isFavorites && list.backdropUrl;
-    const autoBackdrop = !customBackdrop ? items.find(item => item.backdrop) : null;
-    const backdropSrc = customBackdrop ? list.backdropUrl : (autoBackdrop ? autoBackdrop.backdrop : null);
+    const favoritesBackdrop = isFavorites && state.favoritesBackdropUrl;
+    const searchOrder = isFavorites ? items : [...items].reverse();
+    const autoBackdrop = (!customBackdrop && !favoritesBackdrop) ? searchOrder.find(item => item.backdrop) : null;
+    const backdropSrc = customBackdrop ? list.backdropUrl : (favoritesBackdrop ? state.favoritesBackdropUrl : (autoBackdrop ? autoBackdrop.backdrop : null));
 
     const visualHTML = backdropSrc
         ? `<img class="list-card-backdrop" src="${tmdbThumb(backdropSrc, 'w780')}" alt="" loading="lazy" decoding="async">`
@@ -5676,6 +5694,19 @@ function createListCard(list, isFavorites) {
     `;
 }
 
+// Shared by renderListsRow and the Reorder Lists modal, so both always
+// agree on the same order. Sorts by an explicit order field once one
+// exists (assigned the first time anyone actually reorders anything -
+// see moveList below), falling back to creation order for anyone who's
+// never touched reordering at all, which is exactly the order they'd
+// already been seeing.
+function getOrderedLists() {
+    return state.lists.slice().sort((a, b) => {
+        if (a.order != null && b.order != null) return a.order - b.order;
+        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+    });
+}
+
 function renderListsRow() {
     const container = document.getElementById("listsRow");
     if (!container) return;
@@ -5683,15 +5714,103 @@ function renderListsRow() {
     // Favourites always renders first and always exists, even with zero
     // favorited items yet - it's never one of state.lists' own documents
     // (see getFavoriteListItems), so it's added here rather than ever
-    // needing to be created.
+    // needing to be created. Also never reorderable - it's always
+    // pinned first, not a list with a position of its own.
     const favoritesCard = createListCard(null, true);
-    const userCards = state.lists
-        .slice()
-        .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+    const userCards = getOrderedLists()
         .map(list => createListCard(list, false))
         .join("");
 
     container.innerHTML = favoritesCard + userCards;
+}
+
+/* =========================================================
+   REORDER LISTS
+========================================================= */
+function openReorderListsModal() {
+    const modal = document.getElementById("reorderListsModal");
+    if (modal.classList.contains("open")) return;
+    renderReorderListsContent();
+    modal.classList.add("open");
+    lockBodyScroll("reorderListsModal");
+}
+
+function closeReorderListsModal() {
+    document.getElementById("reorderListsModal").classList.remove("open");
+    unlockBodyScroll("reorderListsModal");
+}
+
+function closeReorderListsModalOutside(event) {
+    if (event.target.id === "reorderListsModal") closeReorderListsModal();
+}
+
+function renderReorderListsContent() {
+    const container = document.getElementById("reorderListsRows");
+    const lists = getOrderedLists();
+
+    if (lists.length === 0) {
+        container.innerHTML = emptyState("No Lists Yet", "Create a list first, then come back here to reorder it against others.");
+        return;
+    }
+
+    container.innerHTML = lists.map((list, i) => `
+        <div class="reorder-list-row">
+            <div class="reorder-list-name">${escapeHTML(list.name)}</div>
+            <div class="reorder-list-controls">
+                <button class="reorder-move-btn" onclick="moveList('${list.id}', -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">
+                    <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+                </button>
+                <button class="reorder-move-btn" onclick="moveList('${list.id}', 1)" ${i === lists.length - 1 ? 'disabled' : ''} aria-label="Move down">
+                    <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+            </div>
+        </div>
+    `).join("");
+}
+
+// direction: -1 to move earlier, 1 to move later. Simple adjacent-swap
+// move buttons rather than drag-and-drop - genuine drag gestures behave
+// inconsistently across touch, mouse, and different browsers (native
+// HTML5 drag-and-drop in particular barely works on touch devices at
+// all), where a plain button tap works identically everywhere this app
+// runs. The first move for any account backfills a real order value
+// onto every list at once (from whatever order they're already
+// showing in, so nothing visibly jumps the first time this runs) -
+// after that, every list already has one and this just swaps two
+// adjacent values.
+async function moveList(listId, direction) {
+    if (!auth || !auth.currentUser) return;
+    const lists = getOrderedLists();
+    const index = lists.findIndex(l => l.id === listId);
+    const targetIndex = index + direction;
+    if (index === -1 || targetIndex < 0 || targetIndex >= lists.length) return;
+
+    const needsBackfill = lists.some(l => l.order == null);
+    if (needsBackfill) {
+        lists.forEach((l, i) => { l.order = i; });
+    }
+
+    const a = lists[index];
+    const b = lists[targetIndex];
+    const aOrder = a.order;
+    a.order = b.order;
+    b.order = aOrder;
+
+    try {
+        const listsRef = db.collection("users").doc(auth.currentUser.uid).collection("lists");
+        const batch = db.batch();
+        if (needsBackfill) {
+            lists.forEach(l => batch.update(listsRef.doc(l.id), { order: l.order }));
+        } else {
+            batch.update(listsRef.doc(a.id), { order: a.order });
+            batch.update(listsRef.doc(b.id), { order: b.order });
+        }
+        await batch.commit();
+        renderReorderListsContent();
+    } catch (err) {
+        console.error("Reorder lists FAILED", err);
+        showErrorToast(`Couldn't reorder lists (${err.code || err.message || 'unknown error'}).`);
+    }
 }
 
 function renderLibraryHome() {
@@ -6786,8 +6905,16 @@ function getListItems(listId) {
 // (see the LISTS block comment above), just every library item with
 // isFavorite set, computed fresh every time rather than tracked
 // separately.
+// Most recently favorited first - not just "everything with isFavorite
+// set" in whatever order state.library happens to be in. The Favourites
+// list card's auto-picked backdrop (see createListCard) depends on this
+// order specifically: it always wants the most recent favorite that has
+// a backdrop, and unfavoriting that one should correctly fall back to
+// whichever favorite is now the most recent, not an arbitrary one.
 function getFavoriteListItems() {
-    return state.library.filter(i => i.isFavorite);
+    return state.library
+        .filter(i => i.isFavorite)
+        .sort((a, b) => new Date(b.favoritedAt || 0) - new Date(a.favoritedAt || 0));
 }
 
 /* =========================================================
@@ -6804,16 +6931,17 @@ function openListDetailModal(listId, isFavorites) {
     const modal = document.getElementById("listDetailModal");
     if (modal.classList.contains("open")) return;
 
-    // Rename/Delete/Backdrop/Share only make sense for a real list
-    // document - all four now live in #listDetailActionRow (see that
-    // element's own comment in index.html for why they moved out of
-    // the floating header). Toggled by hiding the whole row at once for
-    // Favourites, not each button individually - hiding all four
-    // buttons but leaving their container in place would still leave
-    // an empty row taking up its own margin, an odd gap with nothing
-    // visibly in it.
-    const actionRow = document.getElementById("listDetailActionRow");
-    if (actionRow) actionRow.style.display = isFavorites ? "none" : "";
+    // Rename/Delete/Share only make sense for a real list document, so
+    // those three stay hidden for the automatic Favourites list -
+    // Backdrop is the one exception now, since it works for Favourites
+    // too (see openListBackdropPicker/selectListBackdrop, which save its
+    // choice on the user's own account document instead of a list
+    // document that doesn't exist for Favourites). The row container
+    // itself always stays visible, since Backdrop alone is enough to
+    // justify it - only individual buttons within it toggle.
+    document.getElementById("listDetailShareBtn").style.display = isFavorites ? "none" : "";
+    document.getElementById("listDetailRenameBtn").style.display = isFavorites ? "none" : "";
+    document.getElementById("listDetailDeleteBtn").style.display = isFavorites ? "none" : "";
 
     renderListDetailContent();
     modal.classList.add("open");
@@ -6905,10 +7033,16 @@ async function unfavoriteFromListDetail(itemId) {
 
 // A list's chosen backdrop is only ever one of its own members' own
 // backdrop images - picked here, from whatever's already in the list,
-// rather than any kind of upload or external image search.
+// rather than any kind of upload or external image search. Works for
+// the automatic Favourites list too (currentListDetailId is null while
+// viewing it, the same check used throughout Lists) - Favourites has no
+// list document to store this on, so its choice is saved on the user's
+// own account document instead (see selectListBackdrop below), which
+// state's own boot-time load already spreads directly into state, so
+// no separate fetch is needed to read it back.
 function openListBackdropPicker() {
-    if (!currentListDetailId) return;
-    const items = getListItems(currentListDetailId).filter(item => item.backdrop);
+    const isFavorites = !currentListDetailId;
+    const items = (isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId)).filter(item => item.backdrop);
     const grid = document.getElementById("listBackdropPickerGrid");
 
     if (items.length === 0) {
@@ -6949,9 +7083,16 @@ function closeListBackdropPickerOutside(event) {
 }
 
 async function selectListBackdrop(backdropUrl) {
-    if (!currentListDetailId || !auth || !auth.currentUser) return;
+    if (!auth || !auth.currentUser) return;
+    const isFavorites = !currentListDetailId;
     try {
-        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(currentListDetailId).update({ backdropUrl });
+        if (isFavorites) {
+            await db.collection("users").doc(auth.currentUser.uid).update({ favoritesBackdropUrl: backdropUrl });
+            state.favoritesBackdropUrl = backdropUrl;
+            refreshActivePage();
+        } else {
+            await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(currentListDetailId).update({ backdropUrl });
+        }
         closeListBackdropPicker();
     } catch (err) {
         // Surfaces the real Firestore error code (e.g. "permission-denied"
@@ -8505,6 +8646,16 @@ async function toggleFavoriteCurrentItem() {
         return;
     }
     currentItem.isFavorite = !currentItem.isFavorite;
+    // Records when, not just whether - the Favourites list card's own
+    // auto-picked backdrop (see createListCard) needs to know which
+    // favorite is the most recent one, not just which items happen to
+    // be favorited, so unfavoriting the current backdrop's source
+    // correctly falls back to whichever favorite is now the most recent
+    // instead of an arbitrary one. Left in place on unfavorite rather
+    // than cleared - harmless once isFavorite is false, and simpler
+    // than deciding whether to erase history that might just get set
+    // again a moment later.
+    if (currentItem.isFavorite) currentItem.favoritedAt = new Date().toISOString();
     await saveItem(currentItem);
     updateModalContent();
     refreshActivePage();
