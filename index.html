@@ -249,7 +249,10 @@
         <div>
             <div class="section-header">
                 <div class="section-title">Lists</div>
-                <button class="section-view-all-btn" onclick="openCreateListModal()">+ New</button>
+                <div style="display: flex; gap: 14px;">
+                    <button class="section-view-all-btn" onclick="openReorderListsModal()">Reorder</button>
+                    <button class="section-view-all-btn" onclick="openCreateListModal()">+ New</button>
+                </div>
             </div>
             <div id="listsRow" class="lists-scroll-row"></div>
         </div>
@@ -772,6 +775,33 @@
             <h2 class="poster-picker-title">Choose a Backdrop</h2>
             <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">Pick from what's already in this list.</p>
             <div id="listBackdropPickerGrid" class="poster-picker-grid backdrop-mode" style="margin-top: 16px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     REORDER LISTS
+     Up/down move buttons, not drag-and-drop - genuine drag gestures are
+     notoriously inconsistent across touch, mouse, and different
+     browsers (native HTML5 drag-and-drop barely works on touch devices
+     at all), where a plain button tap behaves identically everywhere
+     this app runs. Favourites never appears here - it's always pinned
+     first in the row regardless (see renderListsRow), not a list with
+     a position of its own to reorder.
+================================================     -->
+<div id="reorderListsModal" class="modal modal-compact" onclick="closeReorderListsModalOutside(event)">
+    <div class="modal-sheet modal-sheet-compact">
+        <div class="modal-header-nav">
+            <button class="close-button" onclick="closeReorderListsModal()" aria-label="Close">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M6 6l12 12"/>
+                    <path d="M18 6L6 18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-content modal-content-top-clear">
+            <h2 class="poster-picker-title">Reorder Lists</h2>
+            <div id="reorderListsRows" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
         </div>
     </div>
 </div>
