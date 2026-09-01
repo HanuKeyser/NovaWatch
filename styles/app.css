@@ -238,7 +238,7 @@ img {
     width: 4px;
     height: 14px;
     border-radius: 3px;
-    background: linear-gradient(180deg, var(--blue-light), var(--blue));
+    background: var(--accent-fill);
     flex-shrink: 0;
 }
 
@@ -321,7 +321,7 @@ img {
     margin-top: 8px;
     padding: 4px 10px 4px 8px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--orange-gradient);
+    background: var(--glass-sheen), var(--warning-fill);
     color: white;
     font-size: 11.5px;
     font-weight: 800;
@@ -387,28 +387,17 @@ img {
     font-size: 34px;
     font-weight: 800;
     letter-spacing: -1px;
-    background: linear-gradient(115deg, #4d4d4d, #1f1f1f, #000000);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    /* Was a gradient clipped to the text shape (background-clip: text) -
+       now just a plain solid color, the much simpler way to get solid
+       text color once there's no gradient left to clip in the first
+       place. */
+    color: #1f1f1f;
 }
 
 .wrapped-hero-sub {
     font-size: 14px;
     color: var(--text-secondary);
     margin-top: 6px;
-}
-
-/* Safety net for the gradient text clip above - background-clip: text
-   is near-universally supported at this point, but a browser that
-   doesn't support it would otherwise render invisible text (color:
-   transparent with nothing actually clipping the gradient to it). This
-   falls back to a plain, solid, still-legible color instead. */
-@supports not (background-clip: text) {
-    .wrapped-hero-title {
-        background: none;
-        color: var(--text);
-    }
 }
 
 .wrapped-year-nav {
@@ -459,7 +448,7 @@ img {
     padding: 16px 20px;
     margin-top: 8px;
     border-radius: var(--radius-2xl);
-    background: var(--glass-sheen), linear-gradient(115deg, #4d4d4d, #1f1f1f, #000000);
+    background: var(--glass-sheen), #1f1f1f;
     color: white;
     font-size: 15px;
     font-weight: 800;
@@ -688,55 +677,57 @@ img {
     text-transform: uppercase;
 }
 
-/* One deliberately vivid, distinct gradient per slide - see the block
-   comment above for why these read as more saturated than the rest of
-   NovaWatch's usual glass palette. Was 8 different hues (indigo,
-   blue-purple-pink, orange-red, green-teal, pink-purple, cyan-blue,
-   purple-violet) - now 8 different grayscale treatments instead, still
-   genuinely distinct from each other (radial vs linear, light-leaning
-   vs dark-leaning, how much contrast each spans) so each slide still
-   has its own visual identity, just built from lightness and direction
-   instead of color. */
+/* One deliberately distinct flat color per slide, not a gradient at
+   all anymore - was 8 different hues (indigo, blue-purple-pink,
+   orange-red, green-teal, pink-purple, cyan-blue, purple-violet), then
+   8 different grayscale gradients, now 8 different flat shades along
+   the same gray scale instead. Each still verified against white text
+   at 9.5:1 contrast or better, well past the 4.5:1 minimum, so
+   dropping the gradient never put legibility at any real risk. */
 .wrapped-bg-intro {
-    background: radial-gradient(circle at 30% 20%, #3f3f3f, #0a0a0a 70%);
+    background: #0a0a0a;
 }
 
 .wrapped-bg-time {
-    background: linear-gradient(150deg, #6b6b6b, #3d3d3d 55%, #111111);
+    background: #262626;
 }
 
 .wrapped-bg-movies {
-    background: linear-gradient(150deg, #9a9a9a, #6b6b6b 60%, #1f1f1f);
+    background: #3d3d3d;
 }
 
 .wrapped-bg-tv {
-    background: linear-gradient(150deg, #4d4d4d, #2b2b2b 55%, #0f0f0f);
+    background: #1a1a1a;
 }
 
 .wrapped-bg-spotlight {
-    background: linear-gradient(150deg, #d1d1d1, #6b6b6b 60%, #1f1f1f);
+    background: #333333;
 }
 
 .wrapped-bg-month {
-    background: linear-gradient(150deg, #e5e5e5, #9a9a9a 60%, #3d3d3d);
+    background: #454545;
 }
 
 .wrapped-bg-rewatch {
-    background: linear-gradient(150deg, #717171, #3f3f3f 55%, #181818);
+    background: #202020;
 }
 
 .wrapped-bg-recap {
-    background: radial-gradient(circle at 70% 15%, #272727, #050505 70%);
+    background: #050505;
 }
 
 /* The top-show spotlight slide layers the actual poster in, blurred and
-   dimmed, behind the vivid gradient rather than instead of it - reads
-   as "this show, celebrated" rather than a plain photo, and still works
-   fine (just falls back to the flat gradient) for the rare case a show
-   has no poster cached. */
+   dimmed, behind a dark scrim rather than instead of it - reads as
+   "this show, celebrated" rather than a plain photo, and still works
+   fine (just falls back to the flat dark background above) for the
+   rare case a show has no poster cached. Was a top-to-bottom gradient
+   scrim (lighter at top, darker at bottom, where text most often
+   sits) - now one flat, uniform dark overlay across the whole image
+   instead, picked dark enough on its own to keep white text legible
+   everywhere on the slide, not just toward the bottom. */
 .wrapped-slide-panel.has-poster {
     background-image:
-        linear-gradient(180deg, rgba(50, 50, 50, 0.55), rgba(10, 10, 10, 0.85)),
+        linear-gradient(rgba(20, 20, 20, 0.72), rgba(20, 20, 20, 0.72)),
         var(--wrapped-poster-url);
     background-size: cover;
     background-position: center;
@@ -860,7 +851,7 @@ img {
     width: 44px;
     height: 44px;
     border-radius: var(--radius-sm);
-    background: linear-gradient(135deg, var(--blue-light), var(--blue));
+    background: var(--accent-fill);
     color: white;
     display: flex;
     align-items: center;
@@ -949,7 +940,7 @@ img {
     align-items: center;
     justify-content: center;
     text-align: center;
-    background: linear-gradient(135deg, rgba(61, 61, 61,0.14), rgba(61, 61, 61,0.05));
+    background: rgba(61, 61, 61, 0.1);
     color: var(--blue);
 }
 
@@ -1084,8 +1075,16 @@ img {
    rather than inventing a second version of the same idea. */
 .list-card-scrim {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.75) 100%);
+    /* Was a top-to-bottom gradient (transparent at top, dark at bottom,
+       where the name/count label actually sits) covering the whole
+       card. A flat tint can't fade the same way, so instead of dimming
+       the entire image uniformly - losing brightness across the whole
+       card just to darken the one third of it where text needs to sit -
+       this scrim itself only covers that bottom third now, leaving the
+       rest of the image at full, undimmed brightness. */
+    inset: auto 0 0 0;
+    height: 42%;
+    background: rgba(0, 0, 0, 0.55);
 }
 
 .list-card-label {
@@ -1236,7 +1235,7 @@ img {
 }
 
 .poster-picker-item.selected {
-    border-color: var(--flat-blue);
+    border-color: var(--accent-fill-flat);
 }
 
 .poster-picker-item::after {
@@ -1310,7 +1309,7 @@ img {
     height: 40px;
     padding: 0 22px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     font-size: 13px;
     font-weight: 700;
@@ -1483,7 +1482,7 @@ img {
    without changing the shared .search-type-btn.active style used
    elsewhere (Discover's TV Shows/Movies toggle). */
 #authScreen .search-type-btn.active {
-    background: var(--glass-sheen), var(--flat-blue);
+    background: var(--glass-sheen), var(--accent-fill-flat);
     color: white;
     box-shadow: 0 4px 12px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
@@ -1540,7 +1539,7 @@ img {
 .segmented-btn.active {
     /* Sheen layered over the color fill so the active pill reads as
        tinted glass rather than a flat colored chip. */
-    background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     box-shadow: 0 8px 18px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
@@ -1639,7 +1638,7 @@ img {
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     display: inline-flex;
     align-items: center;
@@ -1682,15 +1681,21 @@ img {
    page doesn't jump when content arrives, and it's obvious at a glance
    *what kind* of thing is loading rather than just "wait".
 ========================================================= */
-@keyframes skeletonShimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+/* Was a shimmer sweep - a moving highlight animated across the
+   placeholder via a gradient's own background-position. A shimmer is a
+   gradient in motion by definition, so with no gradients left at all,
+   this is a pulse instead now - the same "something is actively
+   loading" signal skeleton screens are meant to give, just via opacity
+   fading in and out on a flat fill rather than a highlight sweeping
+   across one. */
+@keyframes skeletonPulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
 }
 
 .skeleton {
-    background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.6) 50%, var(--surface-2) 75%);
-    background-size: 200% 100%;
-    animation: skeletonShimmer 1.4s ease-in-out infinite;
+    background: var(--surface-2);
+    animation: skeletonPulse 1.4s ease-in-out infinite;
     border-radius: var(--radius-sm);
 }
 
@@ -1758,7 +1763,7 @@ img {
     width: 4px;
     height: 14px;
     border-radius: 3px;
-    background: linear-gradient(180deg, var(--blue-light), var(--blue));
+    background: var(--accent-fill);
     flex-shrink: 0;
 }
 
@@ -1785,7 +1790,7 @@ img {
     justify-content: flex-start;
     gap: 8px;
     padding: 0 26px;
-    background: var(--glass-sheen), var(--green-gradient);
+    background: var(--glass-sheen), var(--success-fill);
     color: white;
     font-size: 12.5px;
     font-weight: 800;
@@ -1981,15 +1986,21 @@ html[data-theme="dark"] .upcoming-card-caption {
     touch-action: none;
     /* Genuinely see-through - low fill opacity so real color/light from
        whatever's underneath shows through, with heavy blur+saturation to
-       stay legible instead of muddy at that opacity. Layered on top: a
-       soft radial highlight near the top-left (light catching curved
-       glass - a flat panel has no such highlight) and a wide, soft top-
-       edge glow that fades down into the fill (a diffuse glint, not a
-       hard line) - both are background layers, not a shadow ring, so
-       nothing here reads as an outline. */
+       stay legible instead of muddy at that opacity. Was two extra
+       gradient layers on top - a soft radial highlight near the top-left
+       (simulating light catching curved glass) and a top-edge glow
+       fading into the fill - now one flat white tint instead, doing the
+       same basic "lighter near the top" job without any gradient
+       involved, just at a lower, blended-in opacity since a flat layer
+       can't fade out the way those two gradients did. Written as
+       linear-gradient() with identical stops rather than a plain
+       rgba() - a plain color is only valid on the LAST layer of a
+       stacked background; on this, a non-final layer, it's invalid and
+       silently drops the whole declaration (confirmed by actually
+       testing it, not assumed - the nav bar rendered with no background
+       at all). Visually still completely flat either way. */
     background:
-        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
+        linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12)),
         var(--glass-sheen),
         rgba(255, 255, 255, 0.16);
     backdrop-filter: blur(72px) saturate(300%);
@@ -2005,34 +2016,14 @@ html[data-theme="dark"] .upcoming-card-caption {
         inset 0 -14px 22px -16px rgba(255, 255, 255, 0.5);
 }
 
-/* Clips the shimmer/highlight layers to the pill shape via its own
-   radius (inherits the bar's 999px) rather than overflow:hidden on the
-   fixed-position parent above - overflow:hidden + backdrop-filter on a
-   position:fixed element is a known WebKit rendering trap that can make
-   the element vanish or stop repainting, especially mid-scroll. */
-.bottom-nav::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
-    background-size: 260% 260%;
-    opacity: 0.16;
-    pointer-events: none;
-    z-index: 2;
-    animation: navGlassShimmer 10s ease-in-out infinite;
-}
-
-@keyframes navGlassShimmer {
-    0%, 100% { background-position: 0% 0%; }
-    50% { background-position: 100% 100%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .bottom-nav::before {
-        animation: none;
-    }
-}
+/* Was a subtle animated shimmer sweep across the nav bar (a moving
+   gradient highlight, purely decorative - unlike the skeleton loaders'
+   own shimmer earlier, this one signaled nothing, it was just a shine
+   effect). A shimmer is a gradient in motion by definition, so with no
+   gradients left in the app at all, there's no non-gradient way to
+   keep the same effect - removed outright rather than force a
+   substitute animation that wouldn't actually read as "glass shimmer"
+   anyway. */
 
 /* Single floating "liquid glass" capsule that glides beneath whichever tab
    is active (JS positions it via transform/width), rather than each button
@@ -2237,14 +2228,16 @@ html[data-theme="dark"] .modal-sheet-compact {
        details, Achievements, NovaWrapped, the picker modals) scrolls via
        this one shared class, so this single fix covers all of them. */
     -webkit-overflow-scrolling: touch;
-    /* Soft top-lit sheen (light "entering" from the top edge) layered over
-       the SAME --bg-mesh every other surface in the app sits on (Home,
-       Discover, etc. via <body>) - previously this was a flat frosted
-       white/grey fill instead, which is the real reason full-screen
-       sheets like Settings read as a visually distinct "layer" rather
-       than feeling like part of the same app: the glass cards inside
-       them matched, but the surface underneath them didn't. */
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
+    /* Was a soft top-lit sheen gradient (light "entering" from the top
+       edge) layered over the SAME --bg-mesh every other surface in the
+       app sits on (Home, Discover, etc. via <body>) - now a flat tint
+       instead, still doing the same "reads as part of the same app,
+       not a visually distinct layer" job the original comment
+       described, just without a gradient's fade. Written as a same-
+       color linear-gradient() rather than plain rgba() since this is a
+       non-final layer (--bg-mesh comes after it) - see the .bottom-nav
+       background comment above for why that distinction matters here. */
+    background: linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.22)), var(--bg-mesh);
     background-attachment: fixed;
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
@@ -2281,7 +2274,12 @@ html[data-theme="dark"] .modal-sheet-compact {
 .modal-backdrop-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(250,250,250,0.05) 0%, rgba(250,250,250,0.96) 100%);
+    /* Was a top-to-bottom fade (nearly transparent at top, nearly
+       opaque at bottom, where the title sits) - now one flat, uniform
+       tint across the whole photo instead, dark enough on its own to
+       keep both the title at the bottom and the header buttons at the
+       top legible, not just one end of the image. */
+    background: rgba(250,250,250,0.55);
 }
 
 .modal-header-nav {
@@ -2372,7 +2370,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     height: 38px;
     padding: 0 18px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     font-size: 13.5px;
     font-weight: 700;
@@ -2456,7 +2454,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     height: 52px;
     margin: 0 auto 14px;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--red-gradient);
+    background: var(--glass-sheen), var(--danger-fill);
     color: white;
     display: flex;
     align-items: center;
@@ -2465,12 +2463,12 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .rewatch-icon-badge {
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     box-shadow: 0 8px 20px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .appearance-icon-tile {
-    background: linear-gradient(135deg, #48484a, #1c1c1e);
+    background: #333335;
 }
 
 .confirm-title {
@@ -2515,7 +2513,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .confirm-btn.danger {
-    background: var(--glass-sheen), var(--red-gradient);
+    background: var(--glass-sheen), var(--danger-fill);
     color: white;
     box-shadow: 0 6px 16px rgba(31, 31, 31, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
@@ -2529,7 +2527,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    .cancel/.danger modifier pattern above instead of being the one
    confirm-btn variant that wasn't a real class. */
 .confirm-btn.primary {
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
@@ -2772,7 +2770,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .cinema-chip .watch-provider-logo.cinema-icon {
-    background: linear-gradient(135deg, var(--blue-light), var(--blue));
+    background: var(--accent-fill);
     color: white;
     display: flex;
     align-items: center;
@@ -2852,7 +2850,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .action-button.primary {
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     border: none;
     box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
@@ -2863,21 +2861,21 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    what it originally was, now a gray like everything else). Sign In,
    Join, and Sign Out all share this exact same look. */
 .action-button.trailer {
-    background: var(--glass-sheen), var(--flat-blue);
+    background: var(--glass-sheen), var(--accent-fill-flat);
     color: white;
     border: none;
     box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.warning {
-    background: var(--glass-sheen), var(--orange-gradient);
+    background: var(--glass-sheen), var(--warning-fill);
     color: white;
     border: none;
     box-shadow: 0 6px 16px rgba(114, 114, 114, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.danger {
-    background: var(--glass-sheen), var(--red-gradient);
+    background: var(--glass-sheen), var(--danger-fill);
     color: white;
     border: none;
     box-shadow: 0 6px 16px rgba(31, 31, 31, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
@@ -2986,7 +2984,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
        disappears rather than being left to show through, and no outer
        shadow at all - just a subtle inset top highlight for a touch of
        glass dimension, nothing that reads as a glow or a ring. */
-    background: var(--glass-sheen), linear-gradient(135deg, var(--blue-light), var(--blue));
+    background: var(--glass-sheen), var(--accent-fill);
     border-color: var(--blue);
     color: white;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
@@ -3101,7 +3099,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
        departure went away with the rest of the app's color entirely
        once everything went monochrome, so this is genuinely just
        neutral gray/white now, the same as everywhere else. */
-    background: linear-gradient(150deg, rgba(255,255,255,0.55) 0%, rgba(232, 232, 232,0.42) 100%);
+    background: rgba(244, 244, 244, 0.5);
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
     border: 1px solid rgba(61, 61, 61, 0.14);
@@ -3140,7 +3138,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     width: 15px;
     height: 15px;
     border-radius: 50%;
-    background: var(--green-gradient);
+    background: var(--success-fill);
     /* Same page-background "cutout" ring as .avatar-edit-badge right
        above (was a fixed near-white #fdfdfe before - didn't match that
        sibling badge's own ring color, and stayed that same near-white in
@@ -3168,7 +3166,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     box-shadow: 0 8px 20px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
@@ -3356,7 +3354,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     min-width: 112px;
     padding: 0 18px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     color: white;
     font-size: 13px;
     font-weight: 700;
@@ -3385,13 +3383,13 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    to every other genuinely-glass control in the app. */
 .hero-pill-btn.pill-on {
     min-width: 72px;
-    background: var(--glass-sheen), var(--green-gradient);
+    background: var(--glass-sheen), var(--success-fill);
     box-shadow: 0 8px 20px rgba(163, 163, 163, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .hero-pill-btn.pill-off {
     min-width: 72px;
-    background: var(--glass-sheen), var(--red-gradient);
+    background: var(--glass-sheen), var(--danger-fill);
     box-shadow: 0 8px 20px rgba(31, 31, 31, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
@@ -3444,7 +3442,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 .region-option-check {
     width: 20px;
     height: 20px;
-    color: var(--flat-blue);
+    color: var(--accent-fill-flat);
     flex-shrink: 0;
     visibility: hidden;
 }
@@ -3502,7 +3500,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--blue-gradient);
+    background: var(--glass-sheen), var(--accent-fill);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3519,14 +3517,11 @@ html[data-theme="dark"] .avatar-status-dot {
     border-color: #060606;
 }
 
-/* Dark-mode counterpart for .large-avatar's third gradient stop (a
-   lighter gray than --blue-light, for the depth effect - see that
-   rule's comment; "blue" only in the token's own name now, not what it
-   actually renders as) - was hardcoded to the light-mode-appropriate
-   shade only, so it didn't shift lighter the way --blue-light/--blue
-   themselves do between light and dark. */
+/* Dark-mode counterpart for .large-avatar's own background below - a
+   plain gray fill, same tone family as light mode but stepped since
+   dark mode's own accent runs lighter. */
 html[data-theme="dark"] .large-avatar {
-    background: linear-gradient(150deg, #d1d1d1 0%, var(--blue-light) 45%, var(--blue) 100%);
+    background: #a8a8a8;
 }
 
 .avatar-edit-badge .icon-small {
@@ -3585,13 +3580,12 @@ html[data-theme="dark"] .large-avatar {
     justify-content: center;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    /* A third, lighter stop plus a soft inner shadow along the bottom
-       edge gives the fill some actual depth (light catching the top,
-       falling off toward the bottom) instead of a flat two-tone chip.
-       Only actually visible for the initials fallback now - real avatar
-       images cover it entirely (overflow: hidden clips to the rounded
-       corners either way). */
-    background: linear-gradient(150deg, #c1c1c1 0%, var(--blue-light) 45%, var(--blue) 100%);
+    /* Was a 3-stop gradient (light catching the top, falling off toward
+       the bottom, for some sense of depth on the initials fallback) -
+       now a plain flat fill instead. Only actually visible for the
+       initials fallback now - real avatar images cover it entirely
+       (overflow: hidden clips to the rounded corners either way). */
+    background: #8f8f8f;
     color: white;
     font-size: 23px;
     font-weight: 800;
@@ -3757,7 +3751,7 @@ html[data-theme="dark"] .large-avatar {
     border-radius: var(--radius-sm);
     font-size: 13px;
     font-weight: 700;
-    background: var(--glass-sheen), var(--flat-blue);
+    background: var(--glass-sheen), var(--accent-fill-flat);
     color: white;
     box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s ease;
@@ -3910,12 +3904,12 @@ html[data-theme="dark"] .large-avatar {
     justify-content: center;
     gap: 7px;
     padding: 9px 16px;
-    /* var(--orange-gradient), not a hand-copied duplicate of it - the
+    /* var(--warning-fill), not a hand-copied duplicate of it - the
        duplicate had drifted to a slightly different shade of orange
        (#ffb340 vs the token's #ffb15c) and, being hardcoded, never
        switched to the correct darker orange in dark mode the way every
        other orange-gradient surface in the app does. */
-    background: var(--orange-gradient);
+    background: var(--warning-fill);
     color: white;
     font-size: 12.5px;
     font-weight: 700;
@@ -3982,7 +3976,7 @@ html[data-theme="dark"] .large-avatar {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--red-gradient);
+    background: var(--danger-fill);
     color: white;
     box-shadow: 0 3px 8px rgba(31, 31, 31, 0.4);
 }
@@ -4081,12 +4075,16 @@ html[data-theme="dark"] .large-avatar {
 /* Targeted fixes for components with a hardcoded light-mode fill layered
    alongside the tokens above (see comment block header). */
 html[data-theme="dark"] .modal-sheet {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
+    /* Same flattening as the light-mode .modal-sheet rule - see that
+       comment for the non-final-layer reasoning behind the same-color
+       linear-gradient(). */
+    background: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03)), var(--bg-mesh);
     background-attachment: fixed;
 }
 
 html[data-theme="dark"] .modal-backdrop-overlay {
-    background: linear-gradient(180deg, rgba(8, 8, 10, 0.05) 0%, rgba(8, 8, 10, 0.97) 100%);
+    /* Same flattening as the light-mode rule above. */
+    background: rgba(8, 8, 10, 0.6);
 }
 
 html[data-theme="dark"] .confirm-card {
@@ -4099,7 +4097,8 @@ html[data-theme="dark"] .rewatch-icon-badge {
 }
 
 html[data-theme="dark"] .hero-card {
-    background: linear-gradient(150deg, rgba(19, 19, 19, 0.55) 0%, rgba(11, 11, 11, 0.48) 100%);
+    /* Same flattening as the light-mode .hero-card rule. */
+    background: rgba(15, 15, 15, 0.5);
     border-color: rgba(61, 61, 61, 0.18);
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
@@ -4113,7 +4112,7 @@ html[data-theme="dark"] #authScreen .search-type-btn.active {
 }
 
 html[data-theme="dark"] .appearance-icon-tile {
-    background: linear-gradient(135deg, #d1d1d1, #8e8e8e);
+    background: #b3b3b3;
 }
 
 html[data-theme="dark"] .appearance-icon-tile .appearance-icon {
@@ -4138,9 +4137,12 @@ html[data-theme="dark"] .stat {
    .search-box:focus-within comment for why. */
 
 html[data-theme="dark"] .bottom-nav {
+    /* Same flattening as the light-mode .bottom-nav rule above - was a
+       radial highlight + top-edge glow gradient pair, now one flat
+       white tint (written as a same-color linear-gradient() for the
+       same non-final-layer reason explained there). */
     background:
-        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.14), transparent 65%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
+        linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06)),
         var(--glass-sheen),
         rgba(19, 19, 19, 0.38);
     backdrop-filter: blur(72px) saturate(230%);
@@ -4160,9 +4162,11 @@ html[data-theme="dark"] .nav-indicator.dragging {
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.15);
 }
 
-html[data-theme="dark"] .skeleton {
-    background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.1) 50%, var(--surface-2) 75%);
-}
+/* Was a dark-mode-specific shimmer highlight override - now genuinely
+   unnecessary rather than just redundant: .skeleton's own base rule
+   already resolves through var(--surface-2), which is already
+   theme-aware on its own, so there's nothing left for a separate
+   dark-mode copy to actually override. */
 
 html[data-theme="dark"] .state-card {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
