@@ -12,21 +12,15 @@
    those components differ page to page. */
 
 :root {
-    /* Was four colorful corner tints (blue, peach, lavender, mint) over
-       a cool blue-grey base - now four neutral gray tints instead, same
-       soft/low-opacity treatment so glass surfaces still have real
-       depth and light to refract (a flat white base kills the glass
-       effect entirely, since blur has no contrast to show against),
-       just without any actual hue behind it. background-attachment:
-       fixed keeps it still as the page scrolls, so the refraction reads
-       as consistent, not scrolling text. */
-    --bg-mesh:
-        radial-gradient(at 12% 8%, rgba(160, 160, 160, 0.20) 0px, transparent 50%),
-        radial-gradient(at 88% 6%, rgba(180, 180, 180, 0.16) 0px, transparent 50%),
-        radial-gradient(at 92% 80%, rgba(150, 150, 150, 0.15) 0px, transparent 55%),
-        radial-gradient(at 8% 90%, rgba(190, 190, 190, 0.13) 0px, transparent 55%),
-        radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.5) 0px, transparent 65%),
-        #ececec;
+    /* Was a soft multi-tone radial mesh (four gray corner tints over a
+       base color) for glass surfaces to have some depth/light to
+       refract against - now a single flat color, no gradient at all.
+       Glass surfaces lose a little of their sense of depth without
+       something to actually refract, but stay genuinely translucent
+       and blurred either way - the sheen highlight below and each
+       surface's own blur are still doing real work, just without a
+       gradient of their own backing them anymore either. */
+    --bg-mesh: #e4e4e4;
     --surface: rgba(255, 255, 255, 0.45);
     --surface-2: rgba(255, 255, 255, 0.28);
 
@@ -75,27 +69,51 @@
     --glass-chrome-blur: blur(72px) saturate(300%);
     --glass-chrome-border: rgba(255, 255, 255, 0.5);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
+    /* Was a 5-stop diagonal gradient (a light streak sweeping across the
+       surface, the actual "shine" a glass highlight normally has) - now
+       a flat, uniform white tint instead, no direction or stops, still
+       lightening every glass surface it's layered onto the same way,
+       just as a constant wash rather than a highlight that moves across
+       it. Written as linear-gradient() with both stops the same color,
+       not a plain rgba() value, for a real technical reason rather than
+       stubbornness about the visual: this token is used as a non-final
+       layer in a stacked background (background: var(--glass-sheen),
+       something-else) in roughly 50 places throughout app.css, and a
+       flat color is only valid CSS on the LAST layer of a multi-layer
+       background - on any earlier layer, it's invalid and the entire
+       background declaration gets silently dropped by the browser, not
+       just that one layer. Confirmed by actually testing it in a real
+       browser rather than assuming: a plain rgba() here made every one
+       of those buttons/cards render with no background at all. Visually
+       this reads as completely flat either way - both gradient stops
+       being identical means there's no gradient effect to see - so
+       nothing about the actual design is different, just what CSS
+       requires to express "flat color" safely in this specific spot. */
+    --glass-sheen: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.16));
 
     --blue: #4d4d4d;
     --blue-light: #6b6b6b;
     --blue-dark: #3d3d3d;
     /* Canonical "primary" fill for every action button in the app
        (Add to Library, Mark Watched, empty-state CTAs, active segmented
-       pills, etc) - a subtle two-tone gradient instead of a flat fill so
-       primary buttons read as tinted glass like everything else, not a
-       flat color chip sitting next to translucent ones. Always paired
-       with --glass-sheen on top for the same reason. Was a genuine
-       blue - every hue in the app is gray/black/white only now, so this
-       "accent" is really just a darker step of the same neutral scale
-       everything else already uses, not a color in its own right. */
-    --blue-gradient: linear-gradient(135deg, var(--blue-light), var(--blue));
-    /* A separate, flatter tone (no two-tone gradient) used specifically
-       for Trailer / Sign In / Join / Sign Out, so that group of buttons
-       shares one consistent look distinct from the --blue-gradient
-       "primary" family used elsewhere. Same gray as --blue - "flat"
-       describes the treatment (no gradient), not a different tone. */
-    --flat-blue: #4d4d4d;
+       pills, etc) - was a two-tone gradient, now one flat fill instead,
+       paired with --glass-sheen on top the same way either way so
+       primary buttons still read as tinted glass, not a flat color
+       chip sitting next to translucent ones. Was a genuine blue before
+       that - every hue in the app is gray/black/white only now, so
+       this "accent" is really just a darker step of the same neutral
+       scale everything else already uses, not a color in its own
+       right. Renamed from --blue-gradient now that it's neither blue
+       nor a gradient - keeping a name that described neither would
+       have been actively misleading to whoever touches this next. */
+    --accent-fill: var(--blue);
+    /* Was --flat-blue, distinguishing "no two-tone gradient" from
+       --accent-fill above - now that neither one is a gradient at all,
+       there's nothing left to distinguish, so this is just an alias of
+       --accent-fill kept for Trailer/Sign In/Join/Sign Out specifically,
+       so that group's own styling doesn't need touching everywhere it's
+       referenced. */
+    --accent-fill-flat: #4d4d4d;
     /* Same "filled glass" recipe, just at different points on the same
        gray scale rather than a different hue - used anywhere a warning/
        danger/success action needs the same solid, sheen-lit glass feel
@@ -103,10 +121,12 @@
        each one is), not color: danger reads darkest/heaviest, success
        lightest, warning in between - the same "seriousness" ordering
        color used to carry, just via lightness and the icon/label next
-       to it instead of hue. */
-    --orange-gradient: linear-gradient(135deg, #9a9a9a, #6b6b6b);
-    --red-gradient: linear-gradient(135deg, #4d4d4d, #1f1f1f);
-    --green-gradient: linear-gradient(135deg, #d1d1d1, #9a9a9a);
+       to it instead of hue. Renamed from --orange/red/green-gradient,
+       same reasoning as --accent-fill above - none of these are their
+       old color or a gradient anymore. */
+    --warning-fill: #9a9a9a;
+    --danger-fill: #4d4d4d;
+    --success-fill: #d1d1d1;
 
     /* A soft near-black rather than pure #000, and near-white rather
        than pure #fff in dark mode below - enough contrast to stay
@@ -169,13 +189,10 @@ html[data-theme="dark"] {
        left at old, slightly-blue values sitting on top of it. */
     background: #060606;
 
-    --bg-mesh:
-        radial-gradient(at 15% 12%, rgba(60, 60, 60, 0.4) 0px, transparent 48%),
-        radial-gradient(at 85% 8%, rgba(36, 36, 36, 0.45) 0px, transparent 50%),
-        radial-gradient(at 90% 75%, rgba(52, 52, 52, 0.28) 0px, transparent 50%),
-        radial-gradient(at 10% 88%, rgba(38, 38, 38, 0.35) 0px, transparent 50%),
-        radial-gradient(at 50% 45%, rgba(24, 24, 24, 0.35) 0px, transparent 65%),
-        #060606;
+    /* Same flat-color treatment as light mode's own --bg-mesh above -
+       no gradient, just one solid tone close to the base background
+       itself. */
+    --bg-mesh: #101010;
     --surface: rgba(255, 255, 255, 0.05);
     --surface-2: rgba(255, 255, 255, 0.035);
 
@@ -194,25 +211,36 @@ html[data-theme="dark"] {
     --glass-chrome-blur: blur(72px) saturate(230%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 28px 60px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-    --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
+    /* Same flat-tint treatment as light mode's own --glass-sheen above,
+       just lower opacity to match how much subtler this tier already
+       was in dark mode. */
+    /* Same reasoning as light mode's own --glass-sheen above - written
+       as a same-color linear-gradient() rather than a plain rgba(),
+       since this token is used as a non-final layer in a stacked
+       background in roughly 50 places, where a plain color is invalid
+       CSS and silently drops the entire declaration. Visually still
+       just a flat tint, lower opacity to match how much subtler this
+       tier already was in dark mode. */
+    --glass-sheen: linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
 
-    /* Same reasoning as light mode's own blue/accent tokens above -
-       gray steps on the same neutral scale, not a hue. Lighter than
-       light mode's own values here, same as --text is lighter in dark
-       mode - an accent needs to sit lighter than the dark background to
-       stay visible, the same way it needs to sit darker than the light
+    /* Same reasoning as light mode's own accent tokens above - gray
+       steps on the same neutral scale, not a hue. Lighter than light
+       mode's own values here, same as --text is lighter in dark mode -
+       an accent needs to sit lighter than the dark background to stay
+       visible, the same way it needs to sit darker than the light
        background above. */
     --blue: #9a9a9a;
     --blue-light: #d1d1d1;
     --blue-dark: #6b6b6b;
-    --flat-blue: #9a9a9a;
+    --accent-fill: var(--blue);
+    --accent-fill-flat: #9a9a9a;
 
     /* Same darkest-danger/lightest-success weight ordering as light
        mode above, just shifted lighter across the board to stay
        visible against this much darker base. */
-    --orange-gradient: linear-gradient(135deg, #d1d1d1, #9a9a9a);
-    --red-gradient: linear-gradient(135deg, #9a9a9a, #4d4d4d);
-    --green-gradient: linear-gradient(135deg, #e5e5e5, #d1d1d1);
+    --warning-fill: #d1d1d1;
+    --danger-fill: #9a9a9a;
+    --success-fill: #e5e5e5;
 
     /* Same near-white rule as light mode's near-black above - #e9e9e9
        here, not a true #fff, for the primary tier, with the same
