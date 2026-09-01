@@ -439,12 +439,12 @@
                  about what it does. #modalFavoriteBtn's filled/outline
                  heart still reflects state the same way it always did -
                  see updateModalContent(). -->
-            <div class="modal-action-row">
+            <div class="modal-action-row modal-action-row-grid">
                 <button id="modalFavoriteBtn" class="modal-action-chip" onclick="toggleFavoriteCurrentItem()">
                     <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.6z"/>
                     </svg>
-                    <span>Favorite</span>
+                    <span id="modalFavoriteBtnLabel">Favorite</span>
                 </button>
                 <button class="modal-action-chip" onclick="openListPickerModal()">
                     <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -482,8 +482,8 @@
 <!-- =====================================================
      EPISODE DETAILS MODAL
 ================================================     -->
-<div id="episodeDetailsModal" class="modal modal-compact" onclick="closeEpisodeModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="episodeDetailsModal" class="modal" onclick="closeEpisodeModalOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeEpisodeModal()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
@@ -561,8 +561,8 @@
      AVATAR_OPTIONS for why (Firebase Storage, needed for uploads, isn't
      on the free Spark plan).
 ================================================     -->
-<div id="avatarPickerModal" class="modal modal-compact" onclick="closeAvatarPickerOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="avatarPickerModal" class="modal" onclick="closeAvatarPickerOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeAvatarPicker()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
@@ -761,8 +761,8 @@
      Rename/Delete not being available there either - it isn't a real
      document with a field to store this on.
 ================================================     -->
-<div id="listBackdropPickerModal" class="modal modal-compact" onclick="closeListBackdropPickerOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="listBackdropPickerModal" class="modal" onclick="closeListBackdropPickerOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeListBackdropPicker()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
@@ -789,8 +789,8 @@
      first in the row regardless (see renderListsRow), not a list with
      a position of its own to reorder.
 ================================================     -->
-<div id="reorderListsModal" class="modal modal-compact" onclick="closeReorderListsModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="reorderListsModal" class="modal" onclick="closeReorderListsModalOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeReorderListsModal()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
@@ -1214,13 +1214,10 @@
      could belong to, toggled on tap. Favourites deliberately isn't one
      of the rows here - favoriting is its own separate action (the
      heart icon right next to this button), not something that belongs
-     in a picker meant for custom lists. modal-compact, matching Choose
-     an Avatar's own sizing, rather than full-screen - a checklist of
-     someone's own lists is rarely long enough to need the whole
-     screen.
+     in a picker meant for custom lists.
 ================================================     -->
-<div id="listPickerModal" class="modal modal-compact" onclick="closeListPickerModalOutside(event)">
-    <div class="modal-sheet modal-sheet-compact">
+<div id="listPickerModal" class="modal" onclick="closeListPickerModalOutside(event)">
+    <div class="modal-sheet">
         <div class="modal-header-nav">
             <button class="close-button" onclick="closeListPickerModal()" aria-label="Close">
                 <svg class="icon" viewBox="0 0 24 24">
