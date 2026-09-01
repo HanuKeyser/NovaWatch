@@ -2087,9 +2087,9 @@ html[data-theme="dark"] .upcoming-card-caption {
 .nav-button.active .icon {
     stroke-width: 1.9;
     transform: translateY(-1px) scale(1.08);
-    /* Soft colored glow behind the active icon rather than just a color
+    /* A soft gray glow behind the active icon rather than just a color
        swap - the same "lit from within" quality the rest of the app's
-       primary blue buttons already use. */
+       primary buttons already use, just without any hue behind it now. */
     filter: drop-shadow(0 3px 8px rgba(61, 61, 61, 0.45));
 }
 
@@ -2596,10 +2596,11 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     flex-shrink: 0;
 }
 
-/* #modalFavoriteBtn specifically - filled red heart once favorited,
-   same convention as everywhere else in the app a "marked" state uses
-   the danger/red token. Icon fill is toggled between none/currentColor
-   in updateModalContent(), same as it always was. */
+/* #modalFavoriteBtn specifically - a filled heart once favorited, in
+   the same dark, heavy gray the danger token uses (no color left to
+   call it "red" anymore, but still the same "marked" convention every
+   other use of that token follows). Icon fill is toggled between none/
+   currentColor in updateModalContent(), same as it always was. */
 .modal-action-chip.favorited {
     color: var(--danger);
     border-color: rgba(31, 31, 31, 0.3);
@@ -2825,8 +2826,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 /* Same filled-glass treatment as the other action buttons (sheen +
-   flat blue + white text + inset highlight). Sign In, Join, and Sign Out
-   all share this exact same look - see --flat-blue. */
+   the flat --flat-blue tone + white text + inset highlight - named for
+   what it originally was, now a gray like everything else). Sign In,
+   Join, and Sign Out all share this exact same look. */
 .action-button.trailer {
     background: var(--glass-sheen), var(--flat-blue);
     color: white;
@@ -3060,11 +3062,12 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 24px 24px 26px;
     /* Lower fill opacity (was 0.92/0.8) - genuinely translucent now,
        matching the rest of the app's shift toward the nav bar's glass
-       language, rather than reading as a near-opaque tinted panel. Still
-       keeps its own blue tint (this card's one deliberate departure from
-       the neutral --surface everything else uses) since that's an
-       identity choice, not part of the transparency system being
-       unified here. */
+       language, rather than reading as a near-opaque tinted panel. Used
+       to keep its own deliberate blue tint here, as this card's one
+       departure from the neutral --surface everything else uses - that
+       departure went away with the rest of the app's color entirely
+       once everything went monochrome, so this is genuinely just
+       neutral gray/white now, the same as everywhere else. */
     background: linear-gradient(150deg, rgba(255,255,255,0.55) 0%, rgba(232, 232, 232,0.42) 100%);
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
@@ -3338,13 +3341,14 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 /* Reusable on/off/neutral variants of the same pill - used anywhere a
-   status is reported as active/enabled (green), off/blocked (red), or
-   simply unavailable rather than chosen (neutral) - Library Display's
-   category toggles and the notification-permission button both share
-   these rather than each hand-rolling its own colors. Same sheen+
-   gradient layering and glow shadow recipe as the default blue pill
-   (see .hero-pill-btn above), just recolored - dropping the sheen
-   layer here would make these look like a flat color chip sitting next
+   status is reported as active/enabled (lighter gray), off/blocked
+   (darker gray), or simply unavailable rather than chosen (neutral) -
+   Library Display's category toggles and the notification-permission
+   button both share these rather than each hand-rolling its own
+   weight. Same sheen+gradient layering and glow shadow recipe as the
+   default pill (see .hero-pill-btn above), just a different point on
+   the same gray scale - dropping the sheen layer here would make these
+   look like a flat color chip sitting next
    to every other genuinely-glass control in the app. */
 .hero-pill-btn.pill-on {
     min-width: 72px;
@@ -3483,10 +3487,11 @@ html[data-theme="dark"] .avatar-status-dot {
 }
 
 /* Dark-mode counterpart for .large-avatar's third gradient stop (a
-   lighter blue than --blue-light, for the depth effect - see that rule's
-   comment) - was hardcoded to the light-mode-appropriate shade only, so
-   it didn't shift lighter the way --blue-light/--blue themselves do
-   between light and dark. */
+   lighter gray than --blue-light, for the depth effect - see that
+   rule's comment; "blue" only in the token's own name now, not what it
+   actually renders as) - was hardcoded to the light-mode-appropriate
+   shade only, so it didn't shift lighter the way --blue-light/--blue
+   themselves do between light and dark. */
 html[data-theme="dark"] .large-avatar {
     background: linear-gradient(150deg, #d1d1d1 0%, var(--blue-light) 45%, var(--blue) 100%);
 }
