@@ -844,8 +844,9 @@ async function checkNotificationPermissionState() {
     // Same on/off pill classes as Notification Types and Library
     // Display - see .hero-pill-btn.pill-on/.pill-off/.pill-neutral in
     // app.css. "Unsupported" is neither on nor off (the device simply
-    // can't), so it gets the neutral variant instead of red - red
-    // should mean "you turned this off," not "this can't work here."
+    // can't), so it gets the neutral variant instead of the "off" one -
+    // that darker-gray treatment should mean "you turned this off,"
+    // not "this can't work here."
     btn.classList.remove("pill-on", "pill-off", "pill-neutral");
 
     if (!("Notification" in window)) {
@@ -6526,11 +6527,12 @@ function setUpcomingView(view) {
 // back. A vertical drag (scrolling) is left alone.
 //
 // Direction matters: swiping right always marks the up-next episode/movie
-// watched (green). Swiping left removes the item outright (red) - or, for
-// TV shows with some watched episodes already, marks it Stopped Watching
-// instead (orange) so that watch history isn't lost. Movies never have
-// partial watch history to protect here (Continue Watching only shows
-// unwatched movies), so a movie's left-swipe is always a plain removal.
+// watched (the lightest gray in the scale). Swiping left removes the item
+// outright (the darkest) - or, for TV shows with some watched episodes
+// already, marks it Stopped Watching instead (a middle gray) so that
+// watch history isn't lost. Movies never have partial watch history to
+// protect here (Continue Watching only shows unwatched movies), so a
+// movie's left-swipe is always a plain removal.
 function initContinueCardSwipe(container) {
     const threshold = 90;
 
