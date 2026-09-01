@@ -332,8 +332,8 @@ img {
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius-2xl);
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .state-title {
@@ -352,19 +352,40 @@ img {
 
 .wrapped-hero {
     text-align: center;
-    padding: 8px 0 22px;
+    padding: 20px 0 26px;
 }
 
+/* Was 25px, plain solid color - the gradient here matches
+   .wrapped-start-btn's own (purple/pink/orange), tying the landing
+   screen's own identity to the same vivid, celebratory palette the
+   slideshow itself already uses, rather than a plain heading sitting
+   above a colorful button with no visual relationship between them. */
 .wrapped-hero-title {
-    font-size: 25px;
+    font-size: 34px;
     font-weight: 800;
-    letter-spacing: -0.6px;
+    letter-spacing: -1px;
+    background: linear-gradient(115deg, #8b5cf6, #ec4899, #f97316);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
 }
 
 .wrapped-hero-sub {
-    font-size: 13.5px;
+    font-size: 14px;
     color: var(--text-secondary);
-    margin-top: 4px;
+    margin-top: 6px;
+}
+
+/* Safety net for the gradient text clip above - background-clip: text
+   is near-universally supported at this point, but a browser that
+   doesn't support it would otherwise render invisible text (color:
+   transparent with nothing actually clipping the gradient to it). This
+   falls back to a plain, solid, still-legible color instead. */
+@supports not (background-clip: text) {
+    .wrapped-hero-title {
+        background: none;
+        color: var(--text);
+    }
 }
 
 .wrapped-year-nav {
@@ -459,12 +480,21 @@ img {
     gap: 5px;
 }
 
+/* Was 3px - thin enough to look elegant but too thin to reliably tap,
+   now that each segment jumps straight to that slide (see
+   jumpToWrappedSlide in app.js). Padding on the row itself, not
+   overflow tricks on the segment - overflow: hidden here is what keeps
+   the fill bar below correctly clipped to its own rounded shape, so
+   expanding the tap target via a negative-offset pseudo-element would
+   just get clipped away by that same rule. A slightly taller bar is a
+   simpler, more robust fix for the same problem. */
 .wrapped-progress-seg {
     flex: 1;
-    height: 3px;
+    height: 5px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.3);
     overflow: hidden;
+    cursor: pointer;
 }
 
 .wrapped-progress-seg::after {
@@ -506,6 +536,53 @@ img {
 
 .wrapped-tap-zone-right {
     right: 0;
+}
+
+/* Visible, discoverable versions of the invisible tap zones above -
+   see the HTML comment on these buttons in startWrappedSlideshow for
+   the full reasoning. Sit above the tap zones (z-index) but stay out
+   of the way of the actual slide content in the middle, at the
+   vertical center on either edge - a familiar "carousel arrow"
+   position that reads as navigation immediately, even to someone who's
+   never used a tap-to-advance story format before. */
+.wrapped-nav-arrow {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 16;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: white;
+    transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.wrapped-nav-arrow:active {
+    transform: translateY(-50%) scale(0.88);
+}
+
+.wrapped-nav-arrow:disabled {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.wrapped-nav-arrow-left {
+    left: 14px;
+}
+
+.wrapped-nav-arrow-right {
+    right: 14px;
+}
+
+.wrapped-nav-arrow .icon {
+    width: 20px;
+    height: 20px;
 }
 
 .wrapped-slide-panel {
@@ -732,8 +809,8 @@ img {
        translucent for free via --surface/--glass-border above; this is
        the one value on this rule that wasn't token-driven and needed
        bumping to match by hand. */
-    backdrop-filter: blur(64px) saturate(260%);
-    -webkit-backdrop-filter: blur(64px) saturate(260%);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     box-shadow: var(--glass-shadow);
@@ -2129,8 +2206,8 @@ html[data-theme="dark"] .modal-sheet-compact {
        them matched, but the surface underneath them didn't. */
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
     background-attachment: fixed;
-    backdrop-filter: blur(70px) saturate(230%);
-    -webkit-backdrop-filter: blur(70px) saturate(230%);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
     border-radius: 0;
     border: none;
     position: relative;
@@ -2319,8 +2396,8 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 28px 24px 24px;
     text-align: center;
     background: var(--glass-sheen), rgba(248, 250, 252, 0.6);
-    backdrop-filter: blur(66px) saturate(270%);
-    -webkit-backdrop-filter: blur(66px) saturate(270%);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
     border-radius: var(--radius-2xl);
     box-shadow: 0 30px 70px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     transform: scale(0.92);
@@ -2456,6 +2533,30 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     flex-wrap: wrap;
     gap: 8px;
     margin: 4px 0 16px;
+}
+
+/* Details modal's own action row specifically (Favorite/Add to List/
+   Share, exactly 3 items) - matches the equal-width 3-column grid
+   directly below it (Watch/Trailer/Remove, .modal-actions-row) exactly,
+   rather than the flex-wrap default every other modal's action row
+   still uses (Episode's single Share chip, List Detail's four) - those
+   don't map cleanly onto a fixed 3-column grid the way exactly 3 items
+   does, so they keep sizing to their own content instead. */
+.modal-action-row-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.modal-action-row-grid .modal-action-chip {
+    justify-content: center;
+    min-height: 46px;
+    height: auto;
+    overflow: hidden;
+}
+
+.modal-action-row-grid .modal-action-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .modal-action-chip {
@@ -2958,8 +3059,8 @@ html[data-theme="dark"] .modal-header-nav .close-button {
        identity choice, not part of the transparency system being
        unified here. */
     background: linear-gradient(150deg, rgba(255,255,255,0.55) 0%, rgba(224,238,255,0.42) 100%);
-    backdrop-filter: blur(64px) saturate(260%);
-    -webkit-backdrop-filter: blur(64px) saturate(260%);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
     border: 1px solid rgba(0, 102, 204, 0.14);
     border-radius: var(--radius-2xl);
     box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
@@ -3694,8 +3795,8 @@ html[data-theme="dark"] .large-avatar {
     /* Same reasoning as .modal-sheet above. */
     -webkit-overflow-scrolling: touch;
     background: var(--surface);
-    backdrop-filter: blur(66px) saturate(270%);
-    -webkit-backdrop-filter: blur(66px) saturate(270%);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     padding: 36px 26px 28px;
