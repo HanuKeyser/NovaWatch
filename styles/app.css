@@ -1070,9 +1070,14 @@ img {
     object-fit: cover;
 }
 
-/* Same gradient-scrim-over-image pattern already used for the modal
+/* Same legibility-scrim-over-image pattern already used for the modal
    backdrop header elsewhere (.modal-backdrop-overlay) - reused here
-   rather than inventing a second version of the same idea. */
+   rather than inventing a second version of the same idea. Only
+   rendered at all when the card actually has a backdrop image behind
+   it (see createListCard's own conditional) - with no photo there,
+   there's nothing for a scrim to be protecting text legibility
+   against, and it would just show as an unexplained dark band over the
+   plain fallback background instead. */
 .list-card-scrim {
     position: absolute;
     /* Was a top-to-bottom gradient (transparent at top, dark at bottom,
@@ -1093,6 +1098,20 @@ img {
     right: 12px;
     bottom: 10px;
     color: white;
+}
+
+/* White text only makes sense with a dark photo/scrim behind it (the
+   normal case) - without a backdrop image at all, the card falls back
+   to its own plain, light --surface-2 fill (see createListCard), where
+   white-on-light-gray was nearly unreadable. Switches to the app's
+   normal text color for that specific fallback case instead. */
+.list-card.no-backdrop .list-card-label {
+    color: var(--text);
+}
+
+.list-card.no-backdrop .list-card-count {
+    color: var(--text-secondary);
+    opacity: 1;
 }
 
 .list-card-name {
