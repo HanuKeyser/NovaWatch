@@ -22,7 +22,7 @@
       "url": "/?shortcut=discover",
       "icons": [
         {
-          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
+          "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -35,7 +35,7 @@
       "url": "/?shortcut=library",
       "icons": [
         {
-          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
+          "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -48,7 +48,7 @@
       "url": "/?shortcut=upcoming",
       "icons": [
         {
-          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
+          "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -57,19 +57,19 @@
   ],
   "icons": [
     {
-      "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
+      "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
+      "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://www.novawatch.site/images/NovaWatch_App_Icon_Maskable.png",
+      "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
