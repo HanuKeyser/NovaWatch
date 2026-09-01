@@ -112,8 +112,12 @@
        there's nothing left to distinguish, so this is just an alias of
        --accent-fill kept for Trailer/Sign In/Join/Sign Out specifically,
        so that group's own styling doesn't need touching everywhere it's
-       referenced. */
-    --accent-fill-flat: #4d4d4d;
+       referenced. Was a hardcoded literal that happened to equal --blue
+       rather than actually referencing it - harmless while both stayed
+       in sync by coincidence, but a real risk of drift the moment
+       either one changed without a reason to touch the other. Written
+       as var(--blue) directly now so the two can't quietly diverge. */
+    --accent-fill-flat: var(--blue);
     /* Same "filled glass" recipe, just at different points on the same
        gray scale rather than a different hue - used anywhere a warning/
        danger/success action needs the same solid, sheen-lit glass feel
@@ -128,19 +132,19 @@
     --danger-fill: #4d4d4d;
     --success-fill: #d1d1d1;
 
-    /* A soft near-black rather than pure #000, and near-white rather
-       than pure #fff in dark mode below - enough contrast to stay
-       fully readable while feeling a shade warmer/less stark than true
-       black-on-white. Secondary/muted are genuinely distinct steps down
-       from primary (Tailwind's own gray scale, matching how the rest of
-       this palette is built) - found these three flattened to the exact
-       same value during a full audit, which meant zero visual hierarchy
-       across the ~38 places in app.css that use secondary/muted text
-       expecting it to actually recede versus primary (subtitles, stat
-       labels, timestamps, disabled-looking text). Not a deliberate
-       simplification anywhere on record - fixed to what the surrounding
-       comment already implied these should be. */
-    --text: #1c1c1c;
+    /* Was a soft near-black (#1c1c1c) rather than pure #000 - now
+       actual pure black for the primary tier specifically, per an
+       explicit request for text to be pure black rather than merely
+       dark. Secondary/muted stay as distinct, lighter steps rather
+       than also becoming pure black - flattening all three to the same
+       value would erase the hierarchy those two tokens exist for
+       (subtitles, stat labels, timestamps, disabled-looking text
+       receding versus primary content, not competing with it). Dark
+       mode's own --text below stays near-white, not touched by this -
+       "pure black text" doesn't have a sensible meaning against a
+       black background, where black is the page itself, not the text
+       sitting on top of it. */
+    --text: #000000;
     --text-secondary: #4d4d4d;
     --text-muted: #6b6b6b;
 
@@ -233,7 +237,7 @@ html[data-theme="dark"] {
     --blue-light: #d1d1d1;
     --blue-dark: #6b6b6b;
     --accent-fill: var(--blue);
-    --accent-fill-flat: #9a9a9a;
+    --accent-fill-flat: var(--blue);
 
     /* Same darkest-danger/lightest-success weight ordering as light
        mode above, just shifted lighter across the board to stay
