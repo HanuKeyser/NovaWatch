@@ -609,7 +609,7 @@ function renderAchievementsList() {
         return `
             <div class="analytics-card settings-card" style="padding: 14px; opacity: ${isUnlocked ? '1' : '0.55'};">
                 <div class="settings-row" style="padding: 0;">
-                    <div class="settings-row-icon" style="background: ${isUnlocked ? 'var(--glass-sheen), var(--orange-gradient)' : 'var(--surface-2)'}; color: ${isUnlocked ? 'white' : 'var(--text-muted)'};">
+                    <div class="settings-row-icon" style="background: ${isUnlocked ? 'var(--glass-sheen), var(--warning-fill)' : 'var(--surface-2)'}; color: ${isUnlocked ? 'white' : 'var(--text-muted)'};">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg>
                     </div>
                     <div class="settings-row-text">
@@ -4490,6 +4490,11 @@ function setSearchType(type) {
     currentSearchType = type;
     document.getElementById("searchTypeTV").classList.toggle("active", type === 'tv');
     document.getElementById("searchTypeMovie").classList.toggle("active", type === 'movie');
+    // Keeps the sliding indicator in sync for a plain tap too, not just
+    // a drag release (drag already repositions it directly in
+    // finishDrag) - a tap never touches the indicator otherwise, since
+    // this function is the only thing that runs for it.
+    updateSegmentedIndicator(document.querySelector("#discoverPage .segmented-toggle"), document.getElementById("searchTypeIndicator"));
 
     const searchInput = document.getElementById("onlineSearchInput");
     const query = searchInput ? searchInput.value.trim() : "";
@@ -5487,34 +5492,50 @@ function initNavBarDragToSwitch() {
 
 document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 
-// Generalized version of the bottom nav bar's own drag-to-switch above,
-// for the app's two-way TV Shows / Movies toggles (Search, Upcoming) -
-// same underlying gesture people already learned from the nav bar,
-// applied here too rather than those toggles only ever supporting a
-// tap. Simpler than the nav bar's own version in one real way: this
-// toggle has no separate sliding pill of its own (each button just
-// carries its own .active fill directly, via CSS, rather than a
-// floating indicator element sitting behind them) - so there's no pill
-// to visually drag continuously. Instead, whichever half of the toggle
-// the finger is currently over gets a live, purely-visual .active
-// preview during the drag itself (toggled directly, not by calling the
-// real switch function on every frame - doing that on every pointermove
-// would mean re-running a full search/render dozens of times per
-// second, not the same thing as a lightweight visual preview at all).
-// The real switch function only actually runs once, on release, with
-// whichever side the drag ended up on - by then its own class-toggling
-// is just confirming what the live preview already showed.
-function initSegmentedDragToSwitch(containerEl, leftBtn, rightBtn, switchFn, leftValue, rightValue) {
-    if (!containerEl || !leftBtn || !rightBtn) return;
+// Same architecture as updateNavIndicator/positionNavIndicatorAt above,
+// generalized for the two TV Shows/Movies toggles (Search, Upcoming) -
+// a real sliding pill behind the buttons, not each button carrying its
+// own fill directly.
+function positionSegmentedIndicatorAt(containerEl, indicatorEl, btn) {
+    if (!containerEl || !indicatorEl || !btn) return;
+    const rect = containerEl.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    indicatorEl.style.width = `${btnRect.width}px`;
+    indicatorEl.style.transform = `translateX(${btnRect.left - rect.left}px)`;
+}
+
+function updateSegmentedIndicator(containerEl, indicatorEl, animate = true) {
+    if (!containerEl || !indicatorEl) return;
+    const activeBtn = containerEl.querySelector(".segmented-btn.active");
+    if (!activeBtn) return;
+
+    if (!animate) indicatorEl.style.transition = "none";
+    positionSegmentedIndicatorAt(containerEl, indicatorEl, activeBtn);
+    if (!animate) {
+        indicatorEl.getBoundingClientRect();
+        indicatorEl.style.transition = "";
+    }
+}
+
+// Genuinely the same gesture as the bottom nav bar's own
+// initNavBarDragToSwitch above, not a simplified approximation of it -
+// generalized to work for any two-button toggle with a sliding
+// indicator behind it, so the TV Shows/Movies toggles (Search,
+// Upcoming) behave identically to the nav bar rather than a lookalike
+// with different underlying mechanics. See initNavBarDragToSwitch's own
+// comments for the full reasoning behind each piece (continuous 1:1
+// tracking during the drag with hit-testing deferred entirely to
+// release, nearest-button snapping rather than strict pixel-precision
+// hit-testing, the click-suppression timer, why released-outside snaps
+// back instead of committing) - none of that is repeated here since
+// it's identical, not adapted.
+function initSegmentedDragToSwitch(containerEl, indicatorEl, leftBtn, rightBtn, switchFn, leftValue, rightValue) {
+    if (!containerEl || !indicatorEl || !leftBtn || !rightBtn) return;
 
     const DRAG_THRESHOLD = 22;
-    let startX = 0, startY = 0, dragging = false, pointerId = null;
+    let startX = 0, startY = 0, dragging = false, pointerId = null, dragWidth = 0;
     let suppressNextClick = false, suppressClickTimer = null;
-    let liveValue = null, originalValue = null;
 
-    // Same belt-and-suspenders reasoning as the nav bar's own version -
-    // swallows whatever click follows a drag so it can't silently
-    // revert the side that was just switched to.
     containerEl.addEventListener("click", (e) => {
         if (suppressNextClick) {
             e.preventDefault();
@@ -5530,10 +5551,6 @@ function initSegmentedDragToSwitch(containerEl, leftBtn, rightBtn, switchFn, lef
         startY = e.clientY;
         dragging = false;
         pointerId = e.pointerId;
-        liveValue = null;
-        // Captured once, up front, so a cancelled drag (see finishDrag)
-        // has something real to restore rather than guessing.
-        originalValue = leftBtn.classList.contains("active") ? leftValue : rightValue;
     });
 
     containerEl.addEventListener("pointermove", (e) => {
@@ -5545,51 +5562,55 @@ function initSegmentedDragToSwitch(containerEl, leftBtn, rightBtn, switchFn, lef
             if (Math.abs(dx) < DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
             dragging = true;
             containerEl.setPointerCapture(pointerId);
+            indicatorEl.style.transition = "none";
+            dragWidth = indicatorEl.getBoundingClientRect().width;
         }
 
         const rect = containerEl.getBoundingClientRect();
-        const overRight = (e.clientX - rect.left) > (rect.width / 2);
-        const newValue = overRight ? rightValue : leftValue;
-        if (newValue !== liveValue) {
-            liveValue = newValue;
-            leftBtn.classList.toggle("active", !overRight);
-            rightBtn.classList.toggle("active", overRight);
-        }
+        const rawX = e.clientX - rect.left - (dragWidth / 2);
+        const clampedX = Math.max(0, Math.min(rawX, rect.width - dragWidth));
+        indicatorEl.style.width = `${dragWidth}px`;
+        indicatorEl.style.transform = `translateX(${clampedX}px)`;
     });
 
     function finishDrag(e) {
         if (pointerId === null || e.pointerId !== pointerId) return;
 
         if (dragging) {
-            // Same "released outside, snap back" safety net as the nav
-            // bar's own version - a wild drag that ends up released far
-            // above/below the toggle entirely (dragged into the search
-            // bar above it, say) reads as an aborted gesture, not "commit
-            // to whichever side the last x-coordinate happened to be
-            // on." Horizontal position alone isn't checked the same way,
-            // since it's still meaningful arbitrarily far left/right of
-            // the toggle - only a vertical departure this large signals
-            // the finger genuinely left the control.
-            const rect = containerEl.getBoundingClientRect();
-            const releasedNearby = e.clientY >= rect.top - rect.height && e.clientY <= rect.bottom + rect.height;
+            indicatorEl.style.transition = "";
 
-            if (liveValue != null && releasedNearby) {
+            const rect = containerEl.getBoundingClientRect();
+            const withinBounds = e.clientX >= rect.left && e.clientX <= rect.right
+                && e.clientY >= rect.top && e.clientY <= rect.bottom;
+
+            let releaseButton = null;
+            if (withinBounds) {
+                let closestDist = Infinity;
+                [leftBtn, rightBtn].forEach((btn) => {
+                    const r = btn.getBoundingClientRect();
+                    const dist = Math.abs(e.clientX - (r.left + r.width / 2));
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        releaseButton = btn;
+                    }
+                });
+            }
+
+            if (releaseButton) {
                 e.preventDefault();
                 suppressNextClick = true;
                 clearTimeout(suppressClickTimer);
                 suppressClickTimer = setTimeout(() => { suppressNextClick = false; }, 400);
-                switchFn(liveValue);
+                switchFn(releaseButton === leftBtn ? leftValue : rightValue);
+                positionSegmentedIndicatorAt(containerEl, indicatorEl, releaseButton);
             } else {
-                // Snap the live preview back to whatever was actually
-                // active before this drag started, undoing the preview.
-                leftBtn.classList.toggle("active", originalValue === leftValue);
-                rightBtn.classList.toggle("active", originalValue === rightValue);
+                const activeBtn = containerEl.querySelector(".segmented-btn.active");
+                positionSegmentedIndicatorAt(containerEl, indicatorEl, activeBtn);
             }
         }
 
         dragging = false;
         pointerId = null;
-        liveValue = null;
     }
 
     containerEl.addEventListener("pointerup", finishDrag);
@@ -5597,18 +5618,31 @@ function initSegmentedDragToSwitch(containerEl, leftBtn, rightBtn, switchFn, lef
 }
 
 function initTVMovieToggleDragging() {
+    const searchContainer = document.querySelector("#discoverPage .segmented-toggle");
+    const searchIndicator = document.getElementById("searchTypeIndicator");
+    updateSegmentedIndicator(searchContainer, searchIndicator, false);
     initSegmentedDragToSwitch(
-        document.querySelector("#discoverPage .segmented-toggle"),
+        searchContainer, searchIndicator,
         document.getElementById("searchTypeTV"),
         document.getElementById("searchTypeMovie"),
         setSearchType, "tv", "movie"
     );
+
+    const upcomingTV = document.getElementById("upcomingTabTV");
+    const upcomingContainer = upcomingTV ? upcomingTV.parentElement : null;
+    const upcomingIndicator = document.getElementById("upcomingTypeIndicator");
+    updateSegmentedIndicator(upcomingContainer, upcomingIndicator, false);
     initSegmentedDragToSwitch(
-        document.getElementById("upcomingTabTV") ? document.getElementById("upcomingTabTV").parentElement : null,
-        document.getElementById("upcomingTabTV"),
+        upcomingContainer, upcomingIndicator,
+        upcomingTV,
         document.getElementById("upcomingTabMovies"),
         setUpcomingView, "tv", "movies"
     );
+
+    window.addEventListener("resize", () => {
+        updateSegmentedIndicator(searchContainer, searchIndicator, false);
+        updateSegmentedIndicator(upcomingContainer, upcomingIndicator, false);
+    });
 }
 
 document.addEventListener("DOMContentLoaded", initTVMovieToggleDragging);
@@ -6640,6 +6674,9 @@ function setUpcomingView(view) {
 
     document.getElementById("upcomingTabTV").classList.toggle("active", view === 'tv');
     document.getElementById("upcomingTabMovies").classList.toggle("active", view === 'movies');
+    // Same reasoning as setSearchType's own indicator update above.
+    const upcomingTV = document.getElementById("upcomingTabTV");
+    updateSegmentedIndicator(upcomingTV ? upcomingTV.parentElement : null, document.getElementById("upcomingTypeIndicator"));
 
     document.getElementById("upcomingViewTV").style.display = view === 'tv' ? 'block' : 'none';
     document.getElementById("upcomingViewMovies").style.display = view === 'movies' ? 'block' : 'none';
@@ -6665,9 +6702,9 @@ function initContinueCardSwipe(container) {
     const RIGHT_BG_HTML = `<span>Mark Watched</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
     const STOP_BG_HTML = `<span>Stop Watching</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
     const REMOVE_BG_HTML = `<span>Remove</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
-    const RIGHT_BG_COLOR = "var(--glass-sheen), var(--green-gradient)";
-    const STOP_BG_COLOR = "var(--glass-sheen), var(--orange-gradient)";
-    const REMOVE_BG_COLOR = "var(--glass-sheen), var(--red-gradient)";
+    const RIGHT_BG_COLOR = "var(--glass-sheen), var(--success-fill)";
+    const STOP_BG_COLOR = "var(--glass-sheen), var(--warning-fill)";
+    const REMOVE_BG_COLOR = "var(--glass-sheen), var(--danger-fill)";
 
     container.querySelectorAll(".continue-card").forEach(card => {
         let startX = 0, startY = 0, deltaX = 0, dragging = false, axisLocked = null, pointerId = null;
@@ -7372,16 +7409,15 @@ function openListDetailModal(listId, isFavorites) {
     if (modal.classList.contains("open")) return;
 
     // Rename/Delete/Share only make sense for a real list document, so
-    // those three stay hidden for the automatic Favourites list -
-    // Backdrop is the one exception now, since it works for Favourites
-    // too (see openListBackdropPicker/selectListBackdrop, which save its
-    // choice on the user's own account document instead of a list
-    // document that doesn't exist for Favourites). The row container
-    // itself always stays visible, since Backdrop alone is enough to
-    // justify it - only individual buttons within it toggle.
-    document.getElementById("listDetailShareBtn").style.display = isFavorites ? "none" : "";
-    document.getElementById("listDetailRenameBtn").style.display = isFavorites ? "none" : "";
-    document.getElementById("listDetailDeleteBtn").style.display = isFavorites ? "none" : "";
+    // this whole row hides for the automatic Favourites list - unlike
+    // when Backdrop lived here too (it doesn't anymore; long-pressing
+    // the list's own card is how that's reached now, for every list
+    // including Favourites), there's nothing left in this row that
+    // applies to Favourites at all, so hiding the individual buttons
+    // one by one would leave an empty row still taking up its own
+    // margin space rather than actually disappearing.
+    const actionRow = document.getElementById("listDetailActionRow");
+    if (actionRow) actionRow.style.display = isFavorites ? "none" : "";
 
     renderListDetailContent();
     modal.classList.add("open");
