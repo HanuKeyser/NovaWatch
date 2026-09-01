@@ -117,19 +117,32 @@ function getTodaysReleasesForUser(libraryItems, timeZone) {
                 results.push({
                     category: 'movieReleases',
                     releaseId: `movie:${item.id}`,
-                    title: item.title,
-                    subtitle: 'Movie Release'
+                    // A full, natural clause per item now, not a
+                    // "Title - Subtitle" template glued together
+                    // downstream - see the comment on newEpisodes/
+                    // showPremieres below for why that template read
+                    // clunkily for TV specifically.
+                    label: `${item.title} is out now`
                 });
             }
         } else if (Array.isArray(item.episodes)) {
             item.episodes.forEach(ep => {
                 if (!ep.releaseDate || !isReleasedToday(ep.releaseDate, timeZone) || !hasReleased(ep.releaseDate)) return;
                 const isPremiere = ep.season === 1 && ep.number === 1;
+                // Was "${item.title} - Season ${ep.season} Episode
+                // ${ep.number} release" - grammatically a noun phrase
+                // bolted onto another noun phrase with a dash, not
+                // something anyone would actually say. S1E3 matches the
+                // abbreviation the engagement reminder already uses
+                // elsewhere in this same file (see the S${season}E
+                // ${number} body a few functions down), and naming the
+                // actual episode title - already available on every
+                // episode object - gives real information instead of
+                // just a position in the season.
                 results.push({
                     category: isPremiere ? 'showPremieres' : 'newEpisodes',
                     releaseId: `tv:${item.id}:${ep.id}`,
-                    title: item.title,
-                    subtitle: `Season ${ep.season} Episode ${ep.number} release`
+                    label: `${item.title} S${ep.season}E${ep.number}: ${ep.title} is out now`
                 });
             });
         }
@@ -460,7 +473,7 @@ async function run() {
         // that one slot in the first place, so there's nothing for APNs
         // to discard.
         const title = newReleases.length === 1 ? 'New Release' : `${newReleases.length} New Releases Today`;
-        const labels = newReleases.map(r => `${r.title} - ${r.subtitle}`);
+        const labels = newReleases.map(r => r.label);
         const MAX_NAMED = 3;
         const body = labels.length <= MAX_NAMED
             ? labels.join('; ')
