@@ -12,23 +12,21 @@
    those components differ page to page. */
 
 :root {
-    /* Previously a flat white/grey mesh (deliberately colorless) - now a
-       soft multi-tone mesh instead, so translucent glass surfaces have
-       actual color and light to refract rather than white-on-white.
-       Kept low-saturation/low-opacity so it still reads as premium and
-       quiet rather than busy - four soft corner tints (blue, peach,
-       lavender, mint) over a cool blue-grey base (not pure white - a
-       pure-white base kills the glass effect, since blur has no
-       contrast to show against). background-attachment: fixed keeps it
-       still as the page scrolls, so the refraction reads as consistent,
-       not scrolling text. */
+    /* Was four colorful corner tints (blue, peach, lavender, mint) over
+       a cool blue-grey base - now four neutral gray tints instead, same
+       soft/low-opacity treatment so glass surfaces still have real
+       depth and light to refract (a flat white base kills the glass
+       effect entirely, since blur has no contrast to show against),
+       just without any actual hue behind it. background-attachment:
+       fixed keeps it still as the page scrolls, so the refraction reads
+       as consistent, not scrolling text. */
     --bg-mesh:
-        radial-gradient(at 12% 8%, rgba(120, 170, 255, 0.22) 0px, transparent 50%),
-        radial-gradient(at 88% 6%, rgba(255, 190, 150, 0.16) 0px, transparent 50%),
-        radial-gradient(at 92% 80%, rgba(170, 140, 255, 0.15) 0px, transparent 55%),
-        radial-gradient(at 8% 90%, rgba(130, 220, 195, 0.13) 0px, transparent 55%),
+        radial-gradient(at 12% 8%, rgba(160, 160, 160, 0.20) 0px, transparent 50%),
+        radial-gradient(at 88% 6%, rgba(180, 180, 180, 0.16) 0px, transparent 50%),
+        radial-gradient(at 92% 80%, rgba(150, 150, 150, 0.15) 0px, transparent 55%),
+        radial-gradient(at 8% 90%, rgba(190, 190, 190, 0.13) 0px, transparent 55%),
         radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.5) 0px, transparent 65%),
-        #e8edf4;
+        #ececec;
     --surface: rgba(255, 255, 255, 0.45);
     --surface-2: rgba(255, 255, 255, 0.28);
 
@@ -41,8 +39,8 @@
        (dark-on-dark especially), just far softer than before. */
     --glass-border: rgba(255, 255, 255, 0.6);
     --glass-border-subtle: rgba(255, 255, 255, 0.32);
-    --glass-shadow: 0 8px 32px rgba(31, 41, 55, 0.08);
-    --glass-shadow-sm: 0 4px 16px rgba(31, 41, 55, 0.06);
+    --glass-shadow: 0 8px 32px rgba(31, 31, 31, 0.08);
+    --glass-shadow-sm: 0 4px 16px rgba(31, 31, 31, 0.06);
     /* The general content-surface glass recipe (cards, sheets, modals) -
        genuinely see-through with just enough blur/saturation to stay
        legible. Deliberately one full step lighter than the chrome tier
@@ -79,28 +77,36 @@
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
 
-    --blue: #3b82f6;
-    --blue-light: #60a5fa;
-    --blue-dark: #2563eb;
-    /* Canonical "primary" fill for every blue action button in the app
+    --blue: #4d4d4d;
+    --blue-light: #6b6b6b;
+    --blue-dark: #3d3d3d;
+    /* Canonical "primary" fill for every action button in the app
        (Add to Library, Mark Watched, empty-state CTAs, active segmented
        pills, etc) - a subtle two-tone gradient instead of a flat fill so
        primary buttons read as tinted glass like everything else, not a
        flat color chip sitting next to translucent ones. Always paired
-       with --glass-sheen on top for the same reason. */
+       with --glass-sheen on top for the same reason. Was a genuine
+       blue - every hue in the app is gray/black/white only now, so this
+       "accent" is really just a darker step of the same neutral scale
+       everything else already uses, not a color in its own right. */
     --blue-gradient: linear-gradient(135deg, var(--blue-light), var(--blue));
-    /* A separate, flatter blue (no two-tone gradient) used specifically
+    /* A separate, flatter tone (no two-tone gradient) used specifically
        for Trailer / Sign In / Join / Sign Out, so that group of buttons
        shares one consistent look distinct from the --blue-gradient
-       "primary" family used elsewhere. Same accent blue as --blue -
-       "flat" describes the treatment (no gradient), not a different hue. */
-    --flat-blue: #3b82f6;
-    /* Same "filled glass" recipe as blue, just in the other accent colors -
-       used anywhere a warning/danger/success action needs the same solid,
-       sheen-lit glass feel as a primary blue button. */
-    --orange-gradient: linear-gradient(135deg, #fb923c, #f97316);
-    --red-gradient: linear-gradient(135deg, #f87171, #ef4444);
-    --green-gradient: linear-gradient(135deg, #4ade80, #22c55e);
+       "primary" family used elsewhere. Same gray as --blue - "flat"
+       describes the treatment (no gradient), not a different tone. */
+    --flat-blue: #4d4d4d;
+    /* Same "filled glass" recipe, just at different points on the same
+       gray scale rather than a different hue - used anywhere a warning/
+       danger/success action needs the same solid, sheen-lit glass feel
+       as a primary button. Differentiated by weight now (how dark/light
+       each one is), not color: danger reads darkest/heaviest, success
+       lightest, warning in between - the same "seriousness" ordering
+       color used to carry, just via lightness and the icon/label next
+       to it instead of hue. */
+    --orange-gradient: linear-gradient(135deg, #9a9a9a, #6b6b6b);
+    --red-gradient: linear-gradient(135deg, #4d4d4d, #1f1f1f);
+    --green-gradient: linear-gradient(135deg, #d1d1d1, #9a9a9a);
 
     /* A soft near-black rather than pure #000, and near-white rather
        than pure #fff in dark mode below - enough contrast to stay
@@ -114,14 +120,18 @@
        labels, timestamps, disabled-looking text). Not a deliberate
        simplification anywhere on record - fixed to what the surrounding
        comment already implied these should be. */
-    --text: #1a1d23;
-    --text-secondary: #4b5563;
-    --text-muted: #6b7280;
+    --text: #1c1c1c;
+    --text-secondary: #4d4d4d;
+    --text-muted: #6b6b6b;
 
     --border: rgba(0, 0, 0, 0.08);
 
-    --success: #22c55e;
-    --danger: #ef4444;
+    /* Was green/red - see the --orange/red/green-gradient comment above
+       for the same reasoning: danger reads as the darkest, heaviest
+       gray in the scale, success as a lighter one, so there's still a
+       real, felt difference between the two even without hue. */
+    --success: #6b6b6b;
+    --danger: #1f1f1f;
 
     --radius: 20px;
 
@@ -141,29 +151,31 @@
 }
 
 html {
-    background: #e8edf4;
+    background: #ececec;
     color-scheme: light;
 }
 
 html[data-theme="dark"] {
     color-scheme: dark;
-    /* Was #0a0d14 - genuinely darkened toward true black now, not just
-       "dark navy". Still not pure #000 (kept a faint blue undertone
-       rather than a flat, fully neutral black) for the same reason as
-       before: translucent glass surfaces need some depth in the base
-       for the blur to read against, or they look muddy/flat instead of
-       luminous - but every dark-mode surface below is darkened to
-       match this new, meaningfully blacker base, not left at their old
-       values sitting on top of it. */
-    background: #050609;
+    /* Was #0a0d14, then genuinely darkened toward true black (kept a
+       faint blue undertone at the time, for the same "glass needs some
+       depth to read against" reason as the light-mode comment above) -
+       now that faint blue lean is gone too, a fully neutral near-black
+       rather than a black with any hue to it at all. Still not pure
+       #000 for the same reason as before: translucent glass surfaces
+       need some depth in the base for the blur to read against, or
+       they look muddy/flat instead of luminous - every dark-mode
+       surface below is darkened/neutralized to match this base, not
+       left at old, slightly-blue values sitting on top of it. */
+    background: #060606;
 
     --bg-mesh:
-        radial-gradient(at 15% 12%, rgba(50, 58, 78, 0.4) 0px, transparent 48%),
-        radial-gradient(at 85% 8%, rgba(28, 32, 44, 0.45) 0px, transparent 50%),
-        radial-gradient(at 90% 75%, rgba(42, 48, 66, 0.28) 0px, transparent 50%),
-        radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.35) 0px, transparent 50%),
-        radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.35) 0px, transparent 65%),
-        #050609;
+        radial-gradient(at 15% 12%, rgba(60, 60, 60, 0.4) 0px, transparent 48%),
+        radial-gradient(at 85% 8%, rgba(36, 36, 36, 0.45) 0px, transparent 50%),
+        radial-gradient(at 90% 75%, rgba(52, 52, 52, 0.28) 0px, transparent 50%),
+        radial-gradient(at 10% 88%, rgba(38, 38, 38, 0.35) 0px, transparent 50%),
+        radial-gradient(at 50% 45%, rgba(24, 24, 24, 0.35) 0px, transparent 65%),
+        #060606;
     --surface: rgba(255, 255, 255, 0.05);
     --surface-2: rgba(255, 255, 255, 0.035);
 
@@ -178,34 +190,43 @@ html[data-theme="dark"] {
        background above, so the nav bar and other chrome-tier surfaces
        actually read as black glass rather than dark gray glass sitting
        on top of a blacker page underneath them. */
-    --glass-chrome-fill: rgba(18, 18, 22, 0.55);
+    --glass-chrome-fill: rgba(18, 18, 18, 0.55);
     --glass-chrome-blur: blur(72px) saturate(230%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 28px 60px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
 
-    --blue: #60a5fa;
-    --blue-light: #93c5fd;
-    --blue-dark: #3b82f6;
-    --flat-blue: #60a5fa;
+    /* Same reasoning as light mode's own blue/accent tokens above -
+       gray steps on the same neutral scale, not a hue. Lighter than
+       light mode's own values here, same as --text is lighter in dark
+       mode - an accent needs to sit lighter than the dark background to
+       stay visible, the same way it needs to sit darker than the light
+       background above. */
+    --blue: #9a9a9a;
+    --blue-light: #d1d1d1;
+    --blue-dark: #6b6b6b;
+    --flat-blue: #9a9a9a;
 
-    --orange-gradient: linear-gradient(135deg, #fdba74, #fb923c);
-    --red-gradient: linear-gradient(135deg, #fca5a5, #f87171);
-    --green-gradient: linear-gradient(135deg, #86efac, #4ade80);
+    /* Same darkest-danger/lightest-success weight ordering as light
+       mode above, just shifted lighter across the board to stay
+       visible against this much darker base. */
+    --orange-gradient: linear-gradient(135deg, #d1d1d1, #9a9a9a);
+    --red-gradient: linear-gradient(135deg, #9a9a9a, #4d4d4d);
+    --green-gradient: linear-gradient(135deg, #e5e5e5, #d1d1d1);
 
-    /* Same near-white rule as light mode's near-black above - #e6e9ef
+    /* Same near-white rule as light mode's near-black above - #e9e9e9
        here, not a true #fff, for the primary tier, with the same
        genuinely-distinct secondary/muted steps (see the light-mode
        comment above for why these three were flattened and needed
        fixing). */
-    --text: #e6e9ef;
-    --text-secondary: #9ca3af;
-    --text-muted: #71717a;
+    --text: #e9e9e9;
+    --text-secondary: #9a9a9a;
+    --text-muted: #717171;
 
     --border: rgba(255, 255, 255, 0.1);
 
-    --success: #4ade80;
-    --danger: #f87171;
+    --success: #d1d1d1;
+    --danger: #9a9a9a;
 }
 
 html[data-theme="dark"] body {
