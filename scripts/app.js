@@ -6005,7 +6005,7 @@ function createListCard(list, isFavorites) {
     const listIdAttr = isFavorites ? '' : list.id;
 
     return `
-        <div class="list-card"
+        <div class="list-card${backdropSrc ? '' : ' no-backdrop'}"
              onclick="handleListCardClick(event, '${listIdAttr}', ${isFavorites})"
              onmousedown="startListPress('${listIdAttr}', ${isFavorites}, event)"
              onmouseup="endListPress()"
@@ -6015,7 +6015,7 @@ function createListCard(list, isFavorites) {
              ontouchend="endListPress()"
              ontouchcancel="endListPress()">
             ${visualHTML}
-            <div class="list-card-scrim"></div>
+            ${backdropSrc ? '<div class="list-card-scrim"></div>' : ''}
             <div class="list-card-label">
                 <div class="list-card-name">${escapeHTML(isFavorites ? "Favourites" : list.name)}</div>
                 <div class="list-card-count">${items.length} ${items.length === 1 ? 'title' : 'titles'}</div>
