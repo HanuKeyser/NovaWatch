@@ -221,7 +221,12 @@ html[data-theme="dark"] {
        fixing). */
     --text: #e9e9e9;
     --text-secondary: #9a9a9a;
-    --text-muted: #717171;
+    /* Was #717171 - measured at 4.15:1 against this theme's background
+       during a contrast check, just under WCAG AA's 4.5:1 minimum for
+       normal text. Nudged lighter to #797979 (4.65:1) to clear it with
+       a real margin, while staying clearly one step darker than
+       --text-secondary's own 7.2:1. */
+    --text-muted: #797979;
 
     --border: rgba(255, 255, 255, 0.1);
 
