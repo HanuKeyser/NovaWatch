@@ -17,7 +17,7 @@
 // - not this file directly - is what actually gets registered; see the
 // conditional registration logic at the bottom of app.js for why.
 
-const CACHE_NAME = "novawatch-shell-v121";
+const CACHE_NAME = "novawatch-shell-v122";
 
 self.addEventListener("install", (event) => {
     // self.registration.scope is the actual folder this worker controls
