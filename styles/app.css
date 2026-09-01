@@ -1725,18 +1725,15 @@ img {
     cursor: default;
 }
 
-.spinner {
-    width: 34px;
-    height: 34px;
-    border: 3px solid rgba(0, 0, 0, 0.08);
-    border-top-color: var(--blue);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+/* .spinner and its @keyframes spin used to live here - a plain rotating
+   ring, the predecessor to the skeleton loaders directly below, which
+   replaced it everywhere a loading state needed showing (a
+   content-shaped placeholder gives a much better sense of "what's
+   arriving" than a generic spinner ever did). Confirmed zero actual
+   uses anywhere in the app - not even in a comment - before removing
+   it now; the word "spinner" appearing once elsewhere in prose,
+   describing what a stuck load could look like, was never a reference
+   to this class at all. */
 
 /* =========================================================
    SKELETON LOADERS
