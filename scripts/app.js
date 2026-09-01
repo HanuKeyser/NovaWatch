@@ -5487,6 +5487,132 @@ function initNavBarDragToSwitch() {
 
 document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 
+// Generalized version of the bottom nav bar's own drag-to-switch above,
+// for the app's two-way TV Shows / Movies toggles (Search, Upcoming) -
+// same underlying gesture people already learned from the nav bar,
+// applied here too rather than those toggles only ever supporting a
+// tap. Simpler than the nav bar's own version in one real way: this
+// toggle has no separate sliding pill of its own (each button just
+// carries its own .active fill directly, via CSS, rather than a
+// floating indicator element sitting behind them) - so there's no pill
+// to visually drag continuously. Instead, whichever half of the toggle
+// the finger is currently over gets a live, purely-visual .active
+// preview during the drag itself (toggled directly, not by calling the
+// real switch function on every frame - doing that on every pointermove
+// would mean re-running a full search/render dozens of times per
+// second, not the same thing as a lightweight visual preview at all).
+// The real switch function only actually runs once, on release, with
+// whichever side the drag ended up on - by then its own class-toggling
+// is just confirming what the live preview already showed.
+function initSegmentedDragToSwitch(containerEl, leftBtn, rightBtn, switchFn, leftValue, rightValue) {
+    if (!containerEl || !leftBtn || !rightBtn) return;
+
+    const DRAG_THRESHOLD = 22;
+    let startX = 0, startY = 0, dragging = false, pointerId = null;
+    let suppressNextClick = false, suppressClickTimer = null;
+    let liveValue = null, originalValue = null;
+
+    // Same belt-and-suspenders reasoning as the nav bar's own version -
+    // swallows whatever click follows a drag so it can't silently
+    // revert the side that was just switched to.
+    containerEl.addEventListener("click", (e) => {
+        if (suppressNextClick) {
+            e.preventDefault();
+            e.stopPropagation();
+            suppressNextClick = false;
+            clearTimeout(suppressClickTimer);
+        }
+    }, true);
+
+    containerEl.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        startX = e.clientX;
+        startY = e.clientY;
+        dragging = false;
+        pointerId = e.pointerId;
+        liveValue = null;
+        // Captured once, up front, so a cancelled drag (see finishDrag)
+        // has something real to restore rather than guessing.
+        originalValue = leftBtn.classList.contains("active") ? leftValue : rightValue;
+    });
+
+    containerEl.addEventListener("pointermove", (e) => {
+        if (e.pointerId !== pointerId) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        if (!dragging) {
+            if (Math.abs(dx) < DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+            dragging = true;
+            containerEl.setPointerCapture(pointerId);
+        }
+
+        const rect = containerEl.getBoundingClientRect();
+        const overRight = (e.clientX - rect.left) > (rect.width / 2);
+        const newValue = overRight ? rightValue : leftValue;
+        if (newValue !== liveValue) {
+            liveValue = newValue;
+            leftBtn.classList.toggle("active", !overRight);
+            rightBtn.classList.toggle("active", overRight);
+        }
+    });
+
+    function finishDrag(e) {
+        if (pointerId === null || e.pointerId !== pointerId) return;
+
+        if (dragging) {
+            // Same "released outside, snap back" safety net as the nav
+            // bar's own version - a wild drag that ends up released far
+            // above/below the toggle entirely (dragged into the search
+            // bar above it, say) reads as an aborted gesture, not "commit
+            // to whichever side the last x-coordinate happened to be
+            // on." Horizontal position alone isn't checked the same way,
+            // since it's still meaningful arbitrarily far left/right of
+            // the toggle - only a vertical departure this large signals
+            // the finger genuinely left the control.
+            const rect = containerEl.getBoundingClientRect();
+            const releasedNearby = e.clientY >= rect.top - rect.height && e.clientY <= rect.bottom + rect.height;
+
+            if (liveValue != null && releasedNearby) {
+                e.preventDefault();
+                suppressNextClick = true;
+                clearTimeout(suppressClickTimer);
+                suppressClickTimer = setTimeout(() => { suppressNextClick = false; }, 400);
+                switchFn(liveValue);
+            } else {
+                // Snap the live preview back to whatever was actually
+                // active before this drag started, undoing the preview.
+                leftBtn.classList.toggle("active", originalValue === leftValue);
+                rightBtn.classList.toggle("active", originalValue === rightValue);
+            }
+        }
+
+        dragging = false;
+        pointerId = null;
+        liveValue = null;
+    }
+
+    containerEl.addEventListener("pointerup", finishDrag);
+    containerEl.addEventListener("pointercancel", finishDrag);
+}
+
+function initTVMovieToggleDragging() {
+    initSegmentedDragToSwitch(
+        document.querySelector("#discoverPage .segmented-toggle"),
+        document.getElementById("searchTypeTV"),
+        document.getElementById("searchTypeMovie"),
+        setSearchType, "tv", "movie"
+    );
+    initSegmentedDragToSwitch(
+        document.getElementById("upcomingTabTV") ? document.getElementById("upcomingTabTV").parentElement : null,
+        document.getElementById("upcomingTabTV"),
+        document.getElementById("upcomingTabMovies"),
+        setUpcomingView, "tv", "movies"
+    );
+}
+
+document.addEventListener("DOMContentLoaded", initTVMovieToggleDragging);
+
 // Switches between the TV Shows / Movies sub-views inside the Library
 // tab, toggling the segmented control and showing/hiding each sub-view's
 // container rather than re-rendering the whole page.
