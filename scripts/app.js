@@ -344,7 +344,16 @@ const ACHIEVEMENTS = [
     { id: 'movies_10', tier: 'free', title: '10 Movies Watched', description: 'Watch 10 movies.', check: (s) => s.moviesWatched >= 10 },
     { id: 'shows_10', tier: 'free', title: '10 Shows Completed', description: 'Finish watching 10 TV shows.', check: (s) => s.showsCompleted >= 10 },
     { id: 'streak_7', tier: 'free', title: '7-Day Streak', description: 'Watch something 7 days in a row.', check: (s) => s.longestStreak >= 7 },
-    { id: 'first_rewatch', tier: 'free', title: 'First Rewatch', description: 'Log your first rewatch.', check: (s) => s.totalRewatches >= 1 }
+    { id: 'first_rewatch', tier: 'free', title: 'First Rewatch', description: 'Log your first rewatch.', check: (s) => s.totalRewatches >= 1 },
+    { id: 'night_owl', tier: 'free', title: 'Night Owl', description: 'Watch something between midnight and 5am.', check: (s) => s.nightOwlWatch },
+    { id: 'time_capsule', tier: 'free', title: 'Time Capsule', description: 'Watch something released 25 or more years ago.', check: (s) => s.timeCapsuleWatch },
+    { id: 'opening_weekend', tier: 'free', title: 'Opening Weekend', description: 'Watch something within 3 days of its release.', check: (s) => s.openingWeekendWatch },
+    { id: 'marathon_day', tier: 'free', title: 'Marathon Day', description: 'Watch 5 or more episodes of the same show in a single day.', check: (s) => s.marathonDay },
+    { id: 'double_feature', tier: 'free', title: 'Double Feature', description: 'Watch a movie and a TV episode on the same day.', check: (s) => s.doubleFeatureDay },
+    { id: 'the_collector', tier: 'free', title: 'The Collector', description: 'Have 100 or more titles in your library.', check: (s) => s.libraryCount >= 100 },
+    { id: 'list_maker', tier: 'free', title: 'List Maker', description: 'Create 3 or more custom lists.', check: (s) => s.listCount >= 3 },
+    { id: 'heart_eyes', tier: 'free', title: 'Heart Eyes', description: 'Favorite 10 or more titles.', check: (s) => s.favoriteCount >= 10 },
+    { id: 'word_of_mouth', tier: 'free', title: 'Word of Mouth', description: 'Share a show, movie, episode, or list.', check: (s) => s.hasShared }
 ];
 
 // Not currently active - see comment block above. Untouched otherwise so
@@ -405,13 +414,39 @@ function computeAchievementStats() {
     let anyItems = false;
     const watchedDates = new Set();
 
+    // New stats below - each backing one of the newer, more specific
+    // achievements rather than another "watch N more things" variant of
+    // what already existed.
+    let nightOwlWatch = false;
+    let timeCapsuleWatch = false;
+    let openingWeekendWatch = false;
+    const movieWatchDates = new Set();
+    const episodeWatchDates = new Set();
+    // Keyed by "showId::date" - counts episodes of the SAME show watched
+    // on the SAME day, for Marathon Day below. A day with 5 episodes
+    // spread across 3 different shows shouldn't count the same as 5
+    // episodes of one show back to back.
+    const showDayEpisodeCounts = new Map();
+    const now = new Date();
+
     state.library.forEach(item => {
         if (item.type === 'movie') {
             anyItems = true;
             if (item.watched) {
                 moviesWatched++;
                 totalRewatches += (item.rewatchCount || 0);
-                if (item.lastWatchedAt) watchedDates.add(item.lastWatchedAt.slice(0, 10));
+                if (item.lastWatchedAt) {
+                    const d = item.lastWatchedAt.slice(0, 10);
+                    watchedDates.add(d);
+                    movieWatchDates.add(d);
+                    if (new Date(item.lastWatchedAt).getHours() < 5) nightOwlWatch = true;
+                    if (item.releaseDate) {
+                        const ageYears = (now - new Date(item.releaseDate)) / (365.25 * 24 * 60 * 60 * 1000);
+                        if (ageYears >= 25) timeCapsuleWatch = true;
+                        const daysSinceRelease = (new Date(item.lastWatchedAt) - new Date(item.releaseDate)) / (24 * 60 * 60 * 1000);
+                        if (daysSinceRelease >= 0 && daysSinceRelease <= 3) openingWeekendWatch = true;
+                    }
+                }
             } else {
                 clearedWatchlist = false;
             }
@@ -431,7 +466,20 @@ function computeAchievementStats() {
             item.episodes.forEach(ep => {
                 if (ep.watched) {
                     totalRewatches += (ep.rewatchCount || 0);
-                    if (ep.watchedAt) watchedDates.add(ep.watchedAt.slice(0, 10));
+                    if (ep.watchedAt) {
+                        const d = ep.watchedAt.slice(0, 10);
+                        watchedDates.add(d);
+                        episodeWatchDates.add(d);
+                        if (new Date(ep.watchedAt).getHours() < 5) nightOwlWatch = true;
+                        if (ep.releaseDate) {
+                            const ageYears = (now - new Date(ep.releaseDate)) / (365.25 * 24 * 60 * 60 * 1000);
+                            if (ageYears >= 25) timeCapsuleWatch = true;
+                            const daysSinceRelease = (new Date(ep.watchedAt) - new Date(ep.releaseDate)) / (24 * 60 * 60 * 1000);
+                            if (daysSinceRelease >= 0 && daysSinceRelease <= 3) openingWeekendWatch = true;
+                        }
+                        const key = `${item.id}::${d}`;
+                        showDayEpisodeCounts.set(key, (showDayEpisodeCounts.get(key) || 0) + 1);
+                    }
                 }
             });
 
@@ -456,7 +504,18 @@ function computeAchievementStats() {
         prevDate = d;
     });
 
-    return { moviesWatched, showsCompleted, totalRewatches, longestStreak, rewatchedFullSeason, clearedWatchlist, sameWeekFinish };
+    const marathonDay = [...showDayEpisodeCounts.values()].some(count => count >= 5);
+    const doubleFeatureDay = [...movieWatchDates].some(d => episodeWatchDates.has(d));
+    const libraryCount = state.library.length;
+    const listCount = state.lists.length;
+    const favoriteCount = state.library.filter(i => i.isFavorite).length;
+
+    return {
+        moviesWatched, showsCompleted, totalRewatches, longestStreak, rewatchedFullSeason,
+        clearedWatchlist, sameWeekFinish, nightOwlWatch, timeCapsuleWatch, openingWeekendWatch,
+        marathonDay, doubleFeatureDay, libraryCount, listCount, favoriteCount,
+        hasShared: !!state.hasSharedSomething
+    };
 }
 
 // Called from refreshActivePage() after any watched/rewatch-changing
@@ -2492,6 +2551,12 @@ function openNovaWrappedModal() {
 function closeNovaWrappedModal() {
     document.getElementById("novaWrappedModal").classList.remove("open");
     unlockBodyScroll("novaWrappedModal");
+    // Only ever added while the slideshow itself was active (see
+    // startWrappedSlideshow) - removing it unconditionally here is safe
+    // either way, since removeEventListener on a listener that was never
+    // added (closing from the year-picker landing screen, which never
+    // attaches this) is simply a no-op, not an error.
+    document.removeEventListener("keydown", handleWrappedKeydown);
 }
 
 function closeNovaWrappedModalOutside(event) {
@@ -2834,9 +2899,31 @@ function startWrappedSlideshow() {
             <div class="wrapped-tap-zone wrapped-tap-zone-left" onclick="wrappedGoBack()"></div>
             <div class="wrapped-tap-zone wrapped-tap-zone-right" onclick="wrappedGoNext()"></div>
         </div>
+        <!-- Visible, tappable arrows alongside the tap zones above, not
+             instead of them - a full-bleed invisible tap zone is the
+             established convention for story-style formats (Instagram/
+             Snapchat), but it's discoverable only if you already know
+             that convention exists. A visible control means someone
+             seeing this for the first time doesn't have to guess where
+             the screen is tappable at all. stopPropagation so tapping
+             the arrow doesn't also fire the tap zone underneath it. -->
+        <button class="wrapped-nav-arrow wrapped-nav-arrow-left" id="wrappedArrowPrev" onclick="event.stopPropagation(); wrappedGoBack()" aria-label="Previous">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button class="wrapped-nav-arrow wrapped-nav-arrow-right" id="wrappedArrowNext" onclick="event.stopPropagation(); wrappedGoNext()" aria-label="Next">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+        <div class="wrapped-slide-counter" id="wrappedSlideCounter"></div>
     `;
+    // Each segment is tappable too, not just fillable - jumps straight
+    // to that slide instead of only ever being able to step one at a
+    // time, the same "tap the progress dots to jump" pattern most
+    // story-style formats with a visible progress row already support.
     document.getElementById("wrappedProgressRow").innerHTML =
-        wrappedSlides.map((_, i) => `<div class="wrapped-progress-seg" id="wrappedSeg${i}"></div>`).join('');
+        wrappedSlides.map((_, i) => `<div class="wrapped-progress-seg" id="wrappedSeg${i}" onclick="jumpToWrappedSlide(${i})"></div>`).join('');
+
+    initWrappedSwipeGesture();
+    document.addEventListener("keydown", handleWrappedKeydown);
 
     renderWrappedSlideAt(0);
 }
@@ -2852,6 +2939,19 @@ function renderWrappedSlideAt(index) {
         seg.classList.toggle('filled', i < index);
         seg.classList.toggle('active', i === index);
     });
+
+    const counter = document.getElementById("wrappedSlideCounter");
+    if (counter) counter.textContent = `${index + 1} / ${wrappedSlides.length}`;
+
+    // The Next arrow visually disables on the last slide rather than
+    // just silently doing nothing when tapped there (wrappedGoNext()
+    // already no-ops past the end) - a visible, tappable-looking button
+    // that does nothing is a worse experience than one that's clearly
+    // not available right now. Previous never disables, even on the
+    // first slide - going back there exits to the year picker screen
+    // instead (see wrappedGoBack()), which is a real, valid action.
+    const nextArrow = document.getElementById("wrappedArrowNext");
+    if (nextArrow) nextArrow.disabled = index >= wrappedSlides.length - 1;
 
     const existing = stage.querySelector('.wrapped-slide-panel');
     if (existing) existing.remove();
@@ -2871,6 +2971,16 @@ function renderWrappedSlideAt(index) {
     stage.insertBefore(panel, stage.firstChild);
 }
 
+// Jumps straight to a specific slide via its progress segment (see
+// startWrappedSlideshow) - same rendering path a normal next/back step
+// already uses, just landing on an arbitrary index instead of an
+// adjacent one.
+function jumpToWrappedSlide(index) {
+    if (index < 0 || index >= wrappedSlides.length || index === wrappedSlideIndex) return;
+    wrappedSlideIndex = index;
+    renderWrappedSlideAt(wrappedSlideIndex);
+}
+
 function wrappedGoNext() {
     if (wrappedSlideIndex >= wrappedSlides.length - 1) return;
     wrappedSlideIndex++;
@@ -2887,6 +2997,57 @@ function wrappedGoBack() {
     }
     wrappedSlideIndex--;
     renderWrappedSlideAt(wrappedSlideIndex);
+}
+
+// Swipe left/right, not just tap zones - a story format like this one
+// is conventionally navigated by swipe on a touch device (the same
+// Instagram/Snapchat-style interaction language the tap zones already
+// borrow from), so relying on tap alone left out the gesture people are
+// actually most likely to reach for first. Runs once when the
+// slideshow starts (see startWrappedSlideshow) rather than being
+// re-attached on every single slide change - the listeners live on the
+// stage itself, not any one slide's own DOM, so they don't need to be.
+// A horizontal swipe is distinguished from a vertical one (scroll/
+// dismiss) by checking which axis moved further, so an accidental
+// diagonal drag doesn't misfire as a slide change.
+function initWrappedSwipeGesture() {
+    const stage = document.getElementById("wrappedSlideStage");
+    if (!stage) return;
+    let startX = 0, startY = 0, tracking = false;
+
+    stage.addEventListener("touchstart", (e) => {
+        if (e.touches.length !== 1) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        tracking = true;
+    }, { passive: true });
+
+    stage.addEventListener("touchend", (e) => {
+        if (!tracking) return;
+        tracking = false;
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const dx = endX - startX;
+        const dy = endY - startY;
+        // Under ~40px isn't a deliberate swipe - closer to a tap that
+        // moved slightly, which the tap zones underneath already handle
+        // on their own.
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        if (dx < 0) wrappedGoNext(); else wrappedGoBack();
+    }, { passive: true });
+}
+
+// Left/right arrow keys, for anyone on a desktop browser rather than a
+// touchscreen - tap zones and swipe both assume touch/click input, which
+// a keyboard has neither of. Escape closes the slideshow entirely, the
+// keyboard equivalent of the header's own close button. Attached once
+// when the slideshow starts, removed when it ends (see
+// startWrappedSlideshow/closeNovaWrappedModal) rather than left
+// listening app-wide the whole time this modal isn't even open.
+function handleWrappedKeydown(e) {
+    if (e.key === "ArrowRight") wrappedGoNext();
+    else if (e.key === "ArrowLeft") wrappedGoBack();
+    else if (e.key === "Escape") closeNovaWrappedModal();
 }
 
 async function shareNovaWrapped() {
@@ -5680,10 +5841,18 @@ function createListCard(list, isFavorites) {
         ? `<img class="list-card-backdrop" src="${tmdbThumb(backdropSrc, 'w780')}" alt="" loading="lazy" decoding="async">`
         : '';
 
-    const openAttr = isFavorites ? `openListDetailModal(null, true)` : `openListDetailModal('${list.id}')`;
+    const listIdAttr = isFavorites ? '' : list.id;
 
     return `
-        <div class="list-card" onclick="${openAttr}">
+        <div class="list-card"
+             onclick="handleListCardClick(event, '${listIdAttr}', ${isFavorites})"
+             onmousedown="startListPress('${listIdAttr}', ${isFavorites}, event)"
+             onmouseup="endListPress()"
+             onmouseleave="endListPress()"
+             ontouchstart="startListPress('${listIdAttr}', ${isFavorites}, event)"
+             ontouchmove="moveListPress(event)"
+             ontouchend="endListPress()"
+             ontouchcancel="endListPress()">
             ${visualHTML}
             <div class="list-card-scrim"></div>
             <div class="list-card-label">
@@ -5695,33 +5864,38 @@ function createListCard(list, isFavorites) {
 }
 
 // Shared by renderListsRow and the Reorder Lists modal, so both always
-// agree on the same order. Sorts by an explicit order field once one
-// exists (assigned the first time anyone actually reorders anything -
-// see moveList below), falling back to creation order for anyone who's
-// never touched reordering at all, which is exactly the order they'd
-// already been seeing.
-function getOrderedLists() {
-    return state.lists.slice().sort((a, b) => {
-        if (a.order != null && b.order != null) return a.order - b.order;
-        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-    });
+// agree on the same order. Favourites is included as a movable entry
+// now too (see moveList below) - it has no list document of its own,
+// so its position is stored as favoritesOrder on the account's own
+// document instead, the same pattern favoritesBackdropUrl already
+// established. Once anything has an explicit order value (assigned the
+// first time anyone actually reorders anything at all), everything
+// sorts purely by that. Before that first reorder, Favourites stays
+// first and lists fall back to creation order - exactly the behavior
+// this app already had before reordering existed at all, so nobody
+// sees anything change until they actually touch it.
+function getOrderedListEntries() {
+    const favoritesEntry = { id: '__favorites__', isFavorites: true, order: state.favoritesOrder };
+    const listEntries = state.lists.map(l => ({ id: l.id, isFavorites: false, list: l, order: l.order }));
+    const all = [favoritesEntry, ...listEntries];
+
+    if (all.some(e => e.order != null)) {
+        return all.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
+    }
+
+    return [
+        favoritesEntry,
+        ...listEntries.sort((a, b) => new Date(a.list.createdAt || 0) - new Date(b.list.createdAt || 0))
+    ];
 }
 
 function renderListsRow() {
     const container = document.getElementById("listsRow");
     if (!container) return;
 
-    // Favourites always renders first and always exists, even with zero
-    // favorited items yet - it's never one of state.lists' own documents
-    // (see getFavoriteListItems), so it's added here rather than ever
-    // needing to be created. Also never reorderable - it's always
-    // pinned first, not a list with a position of its own.
-    const favoritesCard = createListCard(null, true);
-    const userCards = getOrderedLists()
-        .map(list => createListCard(list, false))
+    container.innerHTML = getOrderedListEntries()
+        .map(e => createListCard(e.isFavorites ? null : e.list, e.isFavorites))
         .join("");
-
-    container.innerHTML = favoritesCard + userCards;
 }
 
 /* =========================================================
@@ -5746,21 +5920,16 @@ function closeReorderListsModalOutside(event) {
 
 function renderReorderListsContent() {
     const container = document.getElementById("reorderListsRows");
-    const lists = getOrderedLists();
+    const entries = getOrderedListEntries();
 
-    if (lists.length === 0) {
-        container.innerHTML = emptyState("No Lists Yet", "Create a list first, then come back here to reorder it against others.");
-        return;
-    }
-
-    container.innerHTML = lists.map((list, i) => `
+    container.innerHTML = entries.map((entry, i) => `
         <div class="reorder-list-row">
-            <div class="reorder-list-name">${escapeHTML(list.name)}</div>
+            <div class="reorder-list-name">${escapeHTML(entry.isFavorites ? "Favourites" : entry.list.name)}</div>
             <div class="reorder-list-controls">
-                <button class="reorder-move-btn" onclick="moveList('${list.id}', -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">
+                <button class="reorder-move-btn" onclick="moveList('${entry.id}', -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">
                     <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
                 </button>
-                <button class="reorder-move-btn" onclick="moveList('${list.id}', 1)" ${i === lists.length - 1 ? 'disabled' : ''} aria-label="Move down">
+                <button class="reorder-move-btn" onclick="moveList('${entry.id}', 1)" ${i === entries.length - 1 ? 'disabled' : ''} aria-label="Move down">
                     <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
                 </button>
             </div>
@@ -5768,48 +5937,103 @@ function renderReorderListsContent() {
     `).join("");
 }
 
+// entryId: a real list's own id, or '__favorites__' for the automatic
+// Favourites list, which is now a movable entry in this same ordering
+// too - see getOrderedListEntries above for why that needed its own
+// dedicated field (favoritesOrder, on the account document, since
+// Favourites has no list document of its own to store this on).
 // direction: -1 to move earlier, 1 to move later. Simple adjacent-swap
 // move buttons rather than drag-and-drop - genuine drag gestures behave
 // inconsistently across touch, mouse, and different browsers (native
 // HTML5 drag-and-drop in particular barely works on touch devices at
 // all), where a plain button tap works identically everywhere this app
 // runs. The first move for any account backfills a real order value
-// onto every list at once (from whatever order they're already
+// onto every entry at once (from whatever order they're already
 // showing in, so nothing visibly jumps the first time this runs) -
-// after that, every list already has one and this just swaps two
-// adjacent values.
-async function moveList(listId, direction) {
+// after that, every entry already has one and this just swaps two
+// adjacent values. The Firestore batch mixes a user-document update
+// (for Favourites) with list-document updates (for everything else) in
+// the same commit where needed - a single batch isn't limited to one
+// collection or document shape, so this doesn't need two separate
+// writes just because the two kinds of entry are stored differently.
+async function moveList(entryId, direction) {
     if (!auth || !auth.currentUser) return;
-    const lists = getOrderedLists();
-    const index = lists.findIndex(l => l.id === listId);
+    const entries = getOrderedListEntries();
+    const index = entries.findIndex(e => e.id === entryId);
     const targetIndex = index + direction;
-    if (index === -1 || targetIndex < 0 || targetIndex >= lists.length) return;
+    if (index === -1 || targetIndex < 0 || targetIndex >= entries.length) return;
 
-    const needsBackfill = lists.some(l => l.order == null);
+    const needsBackfill = entries.some(e => e.order == null);
+    // Snapshots every entry that's about to change - just a/b normally,
+    // but backfill touches every entry at once the first time anyone
+    // reorders anything at all, so a failure needs to be able to put
+    // all of them back, not just the two that were actually being
+    // swapped.
+    const touched = needsBackfill ? entries : [entries[index], entries[targetIndex]];
+    const previousOrders = touched.map(e => e.order);
+
     if (needsBackfill) {
-        lists.forEach((l, i) => { l.order = i; });
+        entries.forEach((e, i) => { e.order = i; });
     }
 
-    const a = lists[index];
-    const b = lists[targetIndex];
+    const a = entries[index];
+    const b = entries[targetIndex];
     const aOrder = a.order;
     a.order = b.order;
     b.order = aOrder;
 
     try {
-        const listsRef = db.collection("users").doc(auth.currentUser.uid).collection("lists");
+        const userRef = db.collection("users").doc(auth.currentUser.uid);
+        const listsRef = userRef.collection("lists");
         const batch = db.batch();
+        const writeEntry = (e) => {
+            if (e.isFavorites) {
+                batch.update(userRef, { favoritesOrder: e.order });
+                state.favoritesOrder = e.order;
+            } else {
+                batch.update(listsRef.doc(e.id), { order: e.order });
+                // Was missing entirely - e.order is a copied value on
+                // this wrapper object (see getOrderedListEntries above),
+                // not a live reference back to the real list object in
+                // state.lists, so mutating it here alone never actually
+                // changed anything either render function would read.
+                // Reordering only appeared to work once the Firestore
+                // listener round-tripped back with the server's own
+                // confirmation - not instantly, the same class of bug
+                // fixed in add/removeItemFromList and deleteList above.
+                e.list.order = e.order;
+            }
+        };
         if (needsBackfill) {
-            lists.forEach(l => batch.update(listsRef.doc(l.id), { order: l.order }));
+            entries.forEach(writeEntry);
         } else {
-            batch.update(listsRef.doc(a.id), { order: a.order });
-            batch.update(listsRef.doc(b.id), { order: b.order });
+            writeEntry(a);
+            writeEntry(b);
         }
         await batch.commit();
         renderReorderListsContent();
+        // The Reorder modal's own list above is a separate render pass
+        // from the Lists row on Library's home page - without this too,
+        // that row would keep showing the pre-move order until the
+        // person navigated away and back, or the Firestore listener
+        // eventually caught up.
+        renderListsRow();
     } catch (err) {
         console.error("Reorder lists FAILED", err);
         showErrorToast(`Couldn't reorder lists (${err.code || err.message || 'unknown error'}).`);
+        // Rolls every touched entry back to its pre-move order on a
+        // genuine failure - otherwise the reordered position would
+        // stick locally even though the server never actually saved it.
+        touched.forEach((e, i) => {
+            e.order = previousOrders[i];
+            if (e.isFavorites) {
+                state.favoritesOrder = previousOrders[i];
+            } else {
+                e.list.order = previousOrders[i];
+            }
+        });
+        renderReorderListsContent();
+        renderListsRow();
     }
 }
 
@@ -6814,7 +7038,28 @@ async function saveList() {
         const listsRef = db.collection("users").doc(auth.currentUser.uid).collection("lists");
 
         if (editingListId) {
-            await listsRef.doc(editingListId).update({ name });
+            const list = state.lists.find(l => l.id === editingListId);
+            const previousName = list ? list.name : null;
+            // Same reasoning as every other list mutation above -
+            // updates the local copy immediately so the Lists row's own
+            // card, and this list's own title if its detail view is
+            // open underneath, show the new name the instant this
+            // returns rather than waiting on a round-trip.
+            if (list) list.name = name;
+            renderListsRow();
+            if (document.getElementById("listDetailModal").classList.contains("open")) {
+                renderListDetailContent();
+            }
+            try {
+                await listsRef.doc(editingListId).update({ name });
+            } catch (err) {
+                if (list) list.name = previousName;
+                renderListsRow();
+                if (document.getElementById("listDetailModal").classList.contains("open")) {
+                    renderListDetailContent();
+                }
+                throw err;
+            }
         } else {
             const newRef = listsRef.doc();
             // If this list is being created from within the Add to List
@@ -6826,7 +7071,21 @@ async function saveList() {
             // instead of a separate follow-up step.
             const pickerOpen = document.getElementById("listPickerModal").classList.contains("open");
             const initialItemIds = (pickerOpen && currentItem) ? [currentItem.id] : [];
-            await newRef.set({ id: newRef.id, name, itemIds: initialItemIds, createdAt: new Date().toISOString() });
+            const newList = { id: newRef.id, name, itemIds: initialItemIds, createdAt: new Date().toISOString() };
+            // newRef.id is a real, permanent id generated client-side by
+            // the SDK, not a placeholder - Firestore always assigns the
+            // document's id up front, before the write is ever sent, so
+            // this is safe to add locally right away rather than
+            // waiting for the write to come back with an id to use.
+            state.lists.push(newList);
+            renderListsRow();
+            try {
+                await newRef.set(newList);
+            } catch (err) {
+                state.lists = state.lists.filter(l => l.id !== newRef.id);
+                renderListsRow();
+                throw err;
+            }
         }
 
         closeCreateListModal();
@@ -6843,13 +7102,33 @@ async function saveList() {
 }
 
 async function deleteList(listId) {
-    if (!auth || !auth.currentUser) return;
+    if (!auth || !auth.currentUser) return false;
+    const index = state.lists.findIndex(l => l.id === listId);
+    const removed = index !== -1 ? state.lists[index] : null;
+    // Same optimistic-local-update reasoning as add/removeItemFromList
+    // above - removes it from the local copy immediately rather than
+    // waiting on a round-trip, so the Lists row (and Reorder Lists, if
+    // that's where this was triggered from) drops the card the instant
+    // this returns.
+    if (removed) state.lists.splice(index, 1);
+    renderListsRow();
+
     try {
         await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).delete();
         showToast("List deleted.", "success");
+        return true;
     } catch (err) {
         console.error("List delete FAILED", err);
         showErrorToast(`Couldn't delete this list (${err.code || err.message || 'unknown error'}).`);
+        // Rolls the optimistic removal back out on a genuine failure,
+        // at its original position rather than just appended to the
+        // end - otherwise the list would keep looking deleted even
+        // though the server never actually removed it.
+        if (removed) {
+            state.lists.splice(index, 0, removed);
+            renderListsRow();
+        }
+        return false;
     }
 }
 
@@ -6865,13 +7144,27 @@ async function addItemToList(listId, itemId) {
     if (!list) return;
     if (list.itemIds.includes(itemId)) return;
 
+    const previousItemIds = list.itemIds;
+    const itemIds = [...list.itemIds, itemId];
+    // Same reasoning as removeItemFromList's own local update above -
+    // updates the local copy immediately, before the write, so anything
+    // reading state.lists (the Lists row's card, this list's own
+    // checkbox state in the Add to List picker) is correct the instant
+    // this function returns rather than waiting on a round-trip.
+    list.itemIds = itemIds;
+    renderListsRow();
+
     try {
-        const itemIds = [...list.itemIds, itemId];
         await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
         showToast(`Added to "${list.name}".`, "success");
     } catch (err) {
         console.error("Add to list FAILED", err);
         showErrorToast(`Couldn't add this to the list (${err.code || err.message || 'unknown error'}).`);
+        // Rolls the optimistic update back out on a genuine failure -
+        // otherwise the checkbox/card would keep showing the item as
+        // added even though the server never actually got the change.
+        list.itemIds = previousItemIds;
+        renderListsRow();
     }
 }
 
@@ -6880,12 +7173,31 @@ async function removeItemFromList(listId, itemId) {
     const list = state.lists.find(l => l.id === listId);
     if (!list) return;
 
+    const previousItemIds = list.itemIds;
+    const itemIds = list.itemIds.filter(id => id !== itemId);
+    // Updates the local copy immediately, before the write below - the
+    // Lists row and this modal's own grid both read straight from
+    // state.lists, so without this they'd keep showing the pre-removal
+    // count/items until the onSnapshot listener round-trips back with
+    // the server's confirmation, even though Firestore's local-write
+    // behavior usually makes that fast. Setting it directly here means
+    // the UI is correct the instant this function returns, not "usually
+    // fast" - genuinely not dependent on listener timing at all.
+    list.itemIds = itemIds;
+
     try {
-        const itemIds = list.itemIds.filter(id => id !== itemId);
         await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
     } catch (err) {
         console.error("Remove from list FAILED", err);
         showErrorToast(`Couldn't remove this from the list (${err.code || err.message || 'unknown error'}).`);
+        // Rolls the optimistic update back out on a genuine failure
+        // (not Firestore's own offline retry queue, which resolves on
+        // its own once connectivity returns) - otherwise the screen
+        // would keep showing the item as removed even though the
+        // server never actually got the change.
+        list.itemIds = previousItemIds;
+        renderListDetailContent();
+        renderListsRow();
     }
 }
 
@@ -7021,6 +7333,15 @@ function createListDetailCard(item, listId, isFavorites) {
 async function removeItemFromListDetail(listId, itemId) {
     await removeItemFromList(listId, itemId);
     renderListDetailContent();
+    // The Lists row on Library's home page (the card's own item count
+    // and auto-picked backdrop, if it's not showing a custom one) is a
+    // separate render pass from this modal's own grid above - without
+    // calling it directly here too, that card would keep showing its
+    // pre-removal count/backdrop until something else happened to
+    // trigger a re-render (navigating away and back, or the Firestore
+    // listener eventually catching up), rather than updating the
+    // moment the removal actually happens.
+    renderListsRow();
 }
 
 async function unfavoriteFromListDetail(itemId) {
@@ -7029,6 +7350,9 @@ async function unfavoriteFromListDetail(itemId) {
     item.isFavorite = false;
     await saveItem(item);
     renderListDetailContent();
+    // Same reasoning as removeItemFromListDetail above - Favourites'
+    // own card on the Lists row needs the same direct, immediate update.
+    renderListsRow();
 }
 
 // A list's chosen backdrop is only ever one of its own members' own
@@ -7040,37 +7364,61 @@ async function unfavoriteFromListDetail(itemId) {
 // own account document instead (see selectListBackdrop below), which
 // state's own boot-time load already spreads directly into state, so
 // no separate fetch is needed to read it back.
-function openListBackdropPicker() {
+// Every backdrop TMDB actually has for each item in the list, not just
+// the single one saved on it - reuses fetchItemImages(), the same
+// per-title alternate-image gallery the poster/backdrop picker for an
+// individual show already pulls from. Fetched in parallel (not one
+// request after another) so opening this for a list with several items
+// doesn't feel like it's loading each one in sequence. Capped at 8
+// backdrops per item - some titles have dozens of alternates on TMDB,
+// and showing every single one for every item in a larger list would
+// make the grid unmanageably long for a marginal amount of extra
+// choice.
+async function openListBackdropPicker() {
     const isFavorites = !currentListDetailId;
-    const items = (isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId)).filter(item => item.backdrop);
+    const items = isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId);
     const grid = document.getElementById("listBackdropPickerGrid");
+    const modal = document.getElementById("listBackdropPickerModal");
 
     if (items.length === 0) {
-        grid.innerHTML = emptyState("No Backdrops Available", "Add something with a backdrop image to this list first.");
+        grid.innerHTML = emptyState("No Backdrops Available", "Add something to this list first.");
     } else {
-        // The backdrop URL travels via a data attribute, not interpolated
-        // directly into the onclick string - escapeHTML() is the right
-        // tool for embedding it as an HTML attribute value (which this
-        // is), not for safely embedding it inside a JS string literal
-        // (which the previous version effectively needed, since the URL
-        // was interpolated straight into onclick="selectListBackdrop('...')").
-        // The browser handles decoding a data attribute back to its
-        // original value automatically when read via .dataset, so this
-        // sidesteps that whole class of escaping mismatch entirely
-        // rather than trying to pick the "correct" escaping for a JS
-        // string context by hand.
-        grid.innerHTML = items.map(item => `
-            <button class="poster-picker-item" data-backdrop="${escapeHTML(item.backdrop)}" onclick="selectListBackdrop(this.dataset.backdrop)" aria-label="${escapeHTML(item.title)}">
-                <img src="${tmdbThumb(item.backdrop, 'w300')}" alt="${escapeHTML(item.title)}" loading="lazy" decoding="async">
-            </button>
-        `).join("");
+        grid.innerHTML = emptyState("Loading Backdrops...", "Fetching every available image for what's in this list.");
     }
-
-    const modal = document.getElementById("listBackdropPickerModal");
     if (!modal.classList.contains("open")) {
         modal.classList.add("open");
         lockBodyScroll("listBackdropPickerModal");
     }
+    if (items.length === 0) return;
+
+    const galleries = await Promise.all(items.map(item => fetchItemImages(item.tmdbId, item.type)));
+    const options = [];
+    items.forEach((item, i) => {
+        const backdrops = galleries[i].backdrops.slice(0, 8);
+        backdrops.forEach(img => options.push({ title: item.title, thumb: img.thumb, full: img.full }));
+    });
+
+    if (options.length === 0) {
+        grid.innerHTML = emptyState("No Backdrops Available", "Nothing in this list has a backdrop image available.");
+        return;
+    }
+
+    // The backdrop URL travels via a data attribute, not interpolated
+    // directly into the onclick string - escapeHTML() is the right
+    // tool for embedding it as an HTML attribute value (which this
+    // is), not for safely embedding it inside a JS string literal
+    // (which the previous version effectively needed, since the URL
+    // was interpolated straight into onclick="selectListBackdrop('...')").
+    // The browser handles decoding a data attribute back to its
+    // original value automatically when read via .dataset, so this
+    // sidesteps that whole class of escaping mismatch entirely
+    // rather than trying to pick the "correct" escaping for a JS
+    // string context by hand.
+    grid.innerHTML = options.map(opt => `
+        <button class="poster-picker-item" data-backdrop="${escapeHTML(opt.full)}" onclick="selectListBackdrop(this.dataset.backdrop)" aria-label="${escapeHTML(opt.title)}">
+            <img src="${opt.thumb}" alt="${escapeHTML(opt.title)}" loading="lazy" decoding="async">
+        </button>
+    `).join("");
 }
 
 function closeListBackdropPicker() {
@@ -7091,7 +7439,19 @@ async function selectListBackdrop(backdropUrl) {
             state.favoritesBackdropUrl = backdropUrl;
             refreshActivePage();
         } else {
+            const list = state.lists.find(l => l.id === currentListDetailId);
             await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(currentListDetailId).update({ backdropUrl });
+            // Was missing entirely for the non-Favourites branch - the
+            // write succeeded, but nothing told the Lists row's own
+            // card to actually show the new backdrop, so it would keep
+            // showing the old one until something else happened to
+            // trigger a re-render (navigating away and back, or the
+            // Firestore listener eventually catching up). Setting the
+            // local copy directly here, same as the optimistic updates
+            // in add/removeItemFromList, means it's correct the instant
+            // this returns rather than depending on that round-trip.
+            if (list) list.backdropUrl = backdropUrl;
+            renderListsRow();
         }
         closeListBackdropPicker();
     } catch (err) {
@@ -7126,9 +7486,16 @@ function closeDeleteListModalOutside(event) {
 
 async function executeDeleteCurrentList() {
     if (!currentListDetailId) return;
-    await deleteList(currentListDetailId);
+    const succeeded = await deleteList(currentListDetailId);
     closeDeleteListModal();
-    closeListDetailModal();
+    // Was unconditional - closing the list's own detail view even when
+    // the delete genuinely failed made it look like it had succeeded,
+    // right as an error toast was telling the person otherwise. Now
+    // only closes it on a real success, leaving them on the list they
+    // tried to delete (still there, per deleteList's own rollback)
+    // rather than dropped back to Library with no clear sense of
+    // whether anything actually happened.
+    if (succeeded) closeListDetailModal();
 }
 
 /* =========================================================
@@ -7279,6 +7646,26 @@ async function openSharedEpisode(showTmdbId, epId) {
     }, 300);
 }
 
+// Backs the Word of Mouth achievement - set the first time any share
+// genuinely succeeds (the native share sheet completing, or a clipboard
+// copy landing), across any of the three share functions below (a show/
+// movie, an episode, or a list). Persisted on the account document like
+// favoritesBackdropUrl/favoritesOrder, so it's a real, permanent
+// account-wide fact once true, not something that resets per device or
+// session. Guarded so it only ever writes once - nothing else depends
+// on this being current beyond "has this ever happened", so there's no
+// reason to touch it again after the first time.
+async function markHasShared() {
+    if (state.hasSharedSomething || !auth || !auth.currentUser) return;
+    state.hasSharedSomething = true;
+    try {
+        await db.collection("users").doc(auth.currentUser.uid).update({ hasSharedSomething: true });
+        checkAchievements();
+    } catch (err) {
+        console.error("Mark hasShared FAILED", err);
+    }
+}
+
 async function shareCurrentItem() {
     if (!currentItem || !currentItem.tmdbId) return;
 
@@ -7295,6 +7682,7 @@ async function shareCurrentItem() {
     if (navigator.share) {
         try {
             await navigator.share(shareData);
+            markHasShared();
         } catch (err) {
             if (err.name !== 'AbortError') console.error("Share failed:", err);
         }
@@ -7305,6 +7693,7 @@ async function shareCurrentItem() {
         try {
             await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
             showToast("Link copied to clipboard!", "success");
+            markHasShared();
         } catch (err) {
             console.error("Clipboard write failed:", err);
             showErrorToast("Unable to share.");
@@ -7330,6 +7719,7 @@ async function shareCurrentEpisode() {
     if (navigator.share) {
         try {
             await navigator.share(shareData);
+            markHasShared();
         } catch (err) {
             if (err.name !== 'AbortError') console.error("Share failed:", err);
         }
@@ -7340,6 +7730,7 @@ async function shareCurrentEpisode() {
         try {
             await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
             showToast("Link copied to clipboard!", "success");
+            markHasShared();
         } catch (err) {
             console.error("Clipboard write failed:", err);
             showErrorToast("Unable to share.");
@@ -7401,6 +7792,7 @@ async function shareCurrentList() {
         if (navigator.share) {
             try {
                 await navigator.share(shareData);
+                markHasShared();
             } catch (err) {
                 if (err.name !== 'AbortError') console.error("Share failed:", err);
             }
@@ -7411,6 +7803,7 @@ async function shareCurrentList() {
             try {
                 await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
                 showToast("Link copied to clipboard!", "success");
+                markHasShared();
             } catch (err) {
                 console.error("Clipboard write failed:", err);
                 showErrorToast("Unable to share.");
@@ -7576,11 +7969,15 @@ function updateModalContent() {
     // Reflects favorite state whenever the modal opens for a different
     // item or after toggling it - "filled" reads as favorited without
     // needing separate on/off icon artwork, the same fill-vs-outline
-    // convention most apps already use for this.
+    // convention most apps already use for this. The label swaps too
+    // (Favorite/Unfavorite), not just the icon - the chip has room for
+    // a word, so it should say what tapping it will actually do next,
+    // not require already knowing the fill/outline convention to tell.
     const favBtn = document.getElementById("modalFavoriteBtn");
     if (favBtn) {
         favBtn.classList.toggle("favorited", !!currentItem.isFavorite);
         favBtn.querySelector("svg").setAttribute("fill", currentItem.isFavorite ? "currentColor" : "none");
+        document.getElementById("modalFavoriteBtnLabel").textContent = currentItem.isFavorite ? "Unfavorite" : "Favorite";
     }
 
     let metaHTML = "";
@@ -7943,6 +8340,77 @@ function handleCardClick(event, itemId) {
         return;
     }
     openDetails(itemId);
+}
+
+/* =========================================================
+   LIST CARD LONG-PRESS -> CHANGE BACKDROP
+   Same 600ms long-press pattern as the poster/backdrop change above
+   (same move-cancellation, same click-suppression) - holding a list
+   card jumps straight into that list's backdrop picker rather than
+   needing to open the list's own detail view first just to reach the
+   Backdrop button in there. Genuinely the same interaction people
+   already learned from posters, not a new one to discover separately.
+========================================================= */
+let listPressTimer = null;
+let isListLongPress = false;
+let listPressStartX = 0;
+let listPressStartY = 0;
+const LIST_PRESS_MOVE_THRESHOLD = 10;
+
+function startListPress(listId, isFavorites, event) {
+    isListLongPress = false;
+    const touch = event && event.touches && event.touches[0];
+    listPressStartX = touch ? touch.clientX : 0;
+    listPressStartY = touch ? touch.clientY : 0;
+    listPressTimer = setTimeout(() => {
+        isListLongPress = true;
+        if (navigator.vibrate) navigator.vibrate(50);
+        // openListBackdropPicker() reads currentListDetailId to decide
+        // which list it's working with (null means Favourites) - the
+        // same variable openListDetailModal() sets when entering a
+        // list's own detail view normally. Setting it directly here,
+        // without actually opening that modal, is what lets this
+        // shortcut skip straight to the picker. Any real navigation
+        // into a list's detail view afterward overwrites this the same
+        // way it always does, so there's nothing to reset or clean up.
+        currentListDetailId = isFavorites ? null : listId;
+        openListBackdropPicker();
+    }, 600);
+}
+
+function moveListPress(event) {
+    if (!listPressTimer) return;
+    const touch = event && event.touches && event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - listPressStartX;
+    const dy = touch.clientY - listPressStartY;
+    if (Math.hypot(dx, dy) > LIST_PRESS_MOVE_THRESHOLD) {
+        endListPress();
+    }
+}
+
+function endListPress() {
+    if (listPressTimer) {
+        clearTimeout(listPressTimer);
+        listPressTimer = null;
+    }
+}
+
+// Wraps the card's normal tap-to-open behavior so a long-press (which
+// already opened the backdrop picker above) doesn't also open the
+// list's detail view underneath it.
+function handleListCardClick(event, listId, isFavorites) {
+    if (isListLongPress) {
+        event.preventDefault();
+        event.stopPropagation();
+        isListLongPress = false;
+        return;
+    }
+    if (isFavorites) {
+        openListDetailModal(null, true);
+    } else {
+        openListDetailModal(listId);
+    }
 }
 
 // TMDB keeps a whole gallery of posters/backdrops per title (different
