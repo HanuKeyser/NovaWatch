@@ -120,7 +120,7 @@ function setTheme(theme) {
     } catch (e) { /* localStorage unavailable - theme just won't persist */ }
 
     const metaTheme = document.getElementById('metaThemeColor');
-    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#050609' : '#e8edf4');
+    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#060606' : '#ececec');
 
     syncThemeToggleUI();
 }
@@ -8062,7 +8062,7 @@ function updateModalContent() {
                 </button>
             </div>
             <div style="margin-top: 10px;">
-                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="width: 100%; ${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(52, 199, 89, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
+                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="width: 100%; ${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(163, 163, 163, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
                     ${isAdded ? 'In Library' : 'Add to Library'}
                 </button>
             </div>
@@ -8089,7 +8089,7 @@ function updateModalContent() {
                 <button class="action-button ${currentItem.isStopped ? 'primary' : 'warning'}" onclick="toggleStopWatching('${currentItem.id}')">
                     ${currentItem.isStopped ? 'Resume Show' : 'Stop Watching'}
                 </button>
-                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(52, 199, 89, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
+                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(163, 163, 163, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
                     ${isAdded ? 'In Library' : 'Add to Library'}
                 </button>
             </div>
