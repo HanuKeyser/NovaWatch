@@ -955,12 +955,12 @@ img {
     border-radius: var(--radius-lg);
     background: var(--surface-2);
     border: none;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 10px 24px rgba(120, 70, 0, 0.14);
     transition: box-shadow 0.25s ease;
 }
 
 .card:active .poster {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(120, 70, 0, 0.16);
 }
 
 .poster img {
@@ -1869,22 +1869,40 @@ img {
    page doesn't jump when content arrives, and it's obvious at a glance
    *what kind* of thing is loading rather than just "wait".
 ========================================================= */
-/* Was a shimmer sweep - a moving highlight animated across the
-   placeholder via a gradient's own background-position. A shimmer is a
-   gradient in motion by definition, so with no gradients left at all,
-   this is a pulse instead now - the same "something is actively
-   loading" signal skeleton screens are meant to give, just via opacity
-   fading in and out on a flat fill rather than a highlight sweeping
-   across one. */
+/* A real shimmer again - a warm highlight sweeping across the
+   placeholder via the gradient's own background-position, animated.
+   Removed once, when the app went fully monochrome (a shimmer is a
+   gradient in motion by definition, and there were no gradients left
+   anywhere) - reintroduced now that the brand palette has a real
+   gradient again, which is exactly the kind of premium, "something is
+   actively loading" cue a shimmer communicates better than a flat
+   opacity pulse alone. Kept as a pulse too, layered underneath - the
+   shimmer is what catches the eye, the pulse is what keeps working at
+   a glance even for someone who can't perceive the moving highlight
+   (e.g. reduced-motion preferences further down turn the sweep off but
+   leave the pulse running). */
 @keyframes skeletonPulse {
     0%, 100% { opacity: 0.55; }
     50% { opacity: 1; }
 }
 
+@keyframes skeletonShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
 .skeleton {
     background: var(--surface-2);
-    animation: skeletonPulse 1.4s ease-in-out infinite;
+    background-image: linear-gradient(100deg, transparent 30%, rgba(255, 162, 0, 0.16) 45%, rgba(255, 252, 0, 0.14) 50%, transparent 65%);
+    background-size: 250% 100%;
+    animation: skeletonPulse 1.4s ease-in-out infinite, skeletonShimmer 1.8s ease-in-out infinite;
     border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: skeletonPulse 1.4s ease-in-out infinite;
+    }
 }
 
 /* Row skeleton - mirrors the .search-card / .episode layout: a thumbnail
@@ -3286,13 +3304,13 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 24px 24px 26px;
     /* Lower fill opacity (was 0.92/0.8) - genuinely translucent now,
        matching the rest of the app's shift toward the nav bar's glass
-       language, rather than reading as a near-opaque tinted panel. Used
-       to keep its own deliberate blue tint here, as this card's one
-       departure from the neutral --surface everything else uses - that
-       departure went away with the rest of the app's color entirely
-       once everything went monochrome, so this is genuinely just
-       neutral gray/white now, the same as everywhere else. */
-    background: rgba(244, 244, 244, 0.5);
+       language, rather than reading as a near-opaque tinted panel. A
+       real warm gradient wash now, not flat neutral gray-white - this
+       card's own border/shadow had already picked up the brand orange
+       (see below) while the fill itself was left behind during the
+       monochrome era, an inconsistency worth fixing given this is the
+       single most prominent surface on the whole Home tab. */
+    background: linear-gradient(160deg, rgba(255, 162, 0, 0.14), rgba(255, 252, 0, 0.06) 55%, rgba(244, 244, 244, 0.5));
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
     border: 1px solid rgba(255, 140, 0, 0.14);
@@ -3565,19 +3583,19 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 /* Reusable on/off/neutral variants of the same pill - used anywhere a
-   status is reported as active/enabled (lighter gray), off/blocked
-   (darker gray), or simply unavailable rather than chosen (neutral) -
-   Library Display's category toggles and the notification-permission
-   button both share these rather than each hand-rolling its own
-   weight. Same sheen+gradient layering and glow shadow recipe as the
-   default pill (see .hero-pill-btn above), just a different point on
-   the same gray scale - dropping the sheen layer here would make these
-   look like a flat color chip sitting next
+   status is reported as active/enabled (green), off/blocked (red), or
+   simply unavailable rather than chosen (neutral) - Library Display's
+   category toggles and the notification-permission button both share
+   these rather than each hand-rolling its own weight. Same sheen+
+   gradient layering and glow shadow recipe as the default pill (see
+   .hero-pill-btn above), each one's glow now actually matching its own
+   fill color instead of a shared neutral gray - dropping the sheen
+   layer here would make these look like a flat color chip sitting next
    to every other genuinely-glass control in the app. */
 .hero-pill-btn.pill-on {
     min-width: 72px;
     background: var(--glass-sheen), var(--success-fill);
-    box-shadow: 0 8px 20px rgba(163, 163, 163, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(33, 181, 115, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .hero-pill-btn.pill-off {
@@ -4032,7 +4050,7 @@ html[data-theme="dark"] .large-avatar {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     padding: 36px 26px 28px;
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    box-shadow: 0 24px 48px rgba(120, 70, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.65);
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -4048,13 +4066,16 @@ html[data-theme="dark"] .large-avatar {
 /* Was 38px - the whole point of this pass was making the sign-in screen
    read as a deliberate, considered full page rather than a small,
    compact card, and a barely-there logo was a large part of why it
-   didn't. */
+   didn't. Now carries a real brand glow too - the one place in the app
+   where the actual logo mark appears at real size, so it's the natural
+   moment to let the orange/yellow identity announce itself directly
+   rather than only through surfaces and accents around it. */
 .auth-logo {
     width: 88px;
     height: 88px;
     margin: 0 auto 16px;
     border-radius: 26%;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18), var(--glow-accent);
     object-fit: contain;
 }
 
@@ -4290,8 +4311,9 @@ html[data-theme="dark"] .rewatch-icon-badge {
 }
 
 html[data-theme="dark"] .hero-card {
-    /* Same flattening as the light-mode .hero-card rule. */
-    background: rgba(15, 15, 15, 0.5);
+    /* Same warm gradient wash as the light-mode rule, tuned for a dark
+       base instead of flat neutral near-black. */
+    background: linear-gradient(160deg, rgba(255, 162, 0, 0.1), rgba(255, 252, 0, 0.04) 55%, rgba(15, 15, 15, 0.5));
     border-color: rgba(255, 140, 0, 0.18);
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
