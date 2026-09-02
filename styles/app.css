@@ -597,6 +597,31 @@ img {
     height: 20px;
 }
 
+/* Found during a full audit with zero CSS anywhere, despite being fully
+   wired up in JS (jumpToWrappedSlide/wrappedGoNext etc. already set its
+   real "3 / 7" text) - rendering as unstyled default browser text
+   inside this full-screen overlay. Bottom-center, matching where a
+   story-format slide counter conventionally sits (progress row is
+   already up top, sharing space with the close button) - small and
+   quiet enough not to compete with the slide's own content, but still
+   legible against any of this feature's "vivid gradient" backgrounds
+   via the text-shadow. pointer-events: none since it's purely
+   informational, not a control - the actual tap-to-jump navigation
+   lives on the progress segments above. */
+.wrapped-slide-counter {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+
 .wrapped-slide-panel {
     position: absolute;
     inset: 0;
