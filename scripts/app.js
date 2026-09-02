@@ -14,6 +14,14 @@ const firebaseConfig = {
 let db = null;
 let auth = null;
 let currentUser = null;
+// Firestore onSnapshot() returns an unsubscribe function - captured here so
+// a repeat sign-in within the same tab (sign out, then back in - a normal
+// flow, not an edge case) can detach the PREVIOUS account's listeners
+// before attaching new ones, rather than stacking an extra live listener
+// on every single sign-in for the rest of the tab's life. Found via a full
+// audit: neither listener was ever being unsubscribed anywhere before this.
+let libraryListenerUnsub = null;
+let listsListenerUnsub = null;
 
 try {
     if (firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY") {
@@ -483,9 +491,20 @@ function computeAchievementStats() {
                 }
             });
 
-            const seasons = [...new Set(item.episodes.map(ep => ep.season))];
+            // Same getAvailableEpisodes() filter the showsCompleted check
+            // above already uses - found during a full audit using the
+            // raw, unfiltered item.episodes here instead, which meant a
+            // season with any not-yet-aired episode could never trigger
+            // this (an achievement requiring rewatchCount > 0 on an
+            // episode that hasn't even aired once yet). Currently
+            // dormant (season_rewatch is a premium achievement, not in
+            // the active free-tier ACHIEVEMENTS list), so this had zero
+            // live effect, but would have misfired the moment premium
+            // achievements went live.
+            const availableEps = getAvailableEpisodes(item);
+            const seasons = [...new Set(availableEps.map(ep => ep.season))];
             seasons.forEach(s => {
-                const seasonEps = item.episodes.filter(ep => ep.season === s);
+                const seasonEps = availableEps.filter(ep => ep.season === s);
                 if (seasonEps.length > 0 && seasonEps.every(ep => (ep.rewatchCount || 0) > 0)) rewatchedFullSeason = true;
             });
         }
@@ -741,10 +760,22 @@ let selectedSeason = 1;
 // re-render (season switches, watched toggles, background TMDB refreshes).
 let scrollToNextEpisodeOnRender = false;
 let currentSearchType = 'tv';
+// Guards fetchForYou/performTMDBSearch against a genuine race condition
+// found during a full audit: neither had any way to tell an in-flight
+// request was stale. Typing fast enough to fire two overlapping TMDB
+// requests (the 200ms debounce only limits how OFTEN a request fires,
+// not how long any one of them takes to come back), or switching the
+// TV/Movies toggle while a request for the other type is still in
+// flight, meant whichever response happened to arrive LAST always won -
+// occasionally an older, no-longer-relevant one landing after a newer
+// one, silently showing results for a query/type you'd already moved
+// on from. Each fetch captures the counter's value at its own start;
+// before rendering, it checks that value is still current - if a newer
+// request has since started, this one's result is simply discarded.
+let discoverRequestToken = 0;
 let currentAuthMode = 'signin';
 let currentLibraryView = 'tv';
 let searchDebounceTimer = null;
-let libSearchDebounceTimers = {};
 
 /* =========================================================
    NOTIFICATIONS SYSTEM
@@ -1000,10 +1031,6 @@ function clearSearch(inputId) {
     input.value = "";
     input.parentElement.classList.remove("has-text");
     if (inputId === "onlineSearchInput") fetchForYou();
-    if (inputId === "tvLibrarySearchInput") renderTVLibrarySection();
-    if (inputId === "movieLibrarySearchInput") renderMovieLibrarySection();
-    if (inputId === "upcomingTVSearchInput") renderUpcomingTVSection();
-    if (inputId === "upcomingMovieSearchInput") renderUpcomingMovieSection();
     if (inputId === "regionSearchInput") filterRegionOptions("");
 }
 
@@ -4136,6 +4163,12 @@ if (auth) {
             hideVerifyScreen();
             hideChooseUsernameScreen();
             oneSignalLogout();
+            // A signed-out tab shouldn't have any live Firestore listeners
+            // running at all - covers plain sign-out (not just the repeat-
+            // sign-in case proceedToApp's own call handles) and means an
+            // account switch (sign out, sign in as someone else) can never
+            // catch a listener mid-detach between the two calls.
+            detachLibraryListeners();
             // A shared/public device shouldn't show whoever was signed in
             // before flashing briefly on the next person's first paint -
             // see restoreCachedIdentitySnapshot(), which is exactly what
@@ -4167,12 +4200,30 @@ if (auth) {
     });
 }
 
+// Detaches any live library/lists Firestore listeners from a previous
+// sign-in - safe to call even when nothing's attached (unsubscribing an
+// already-null ref is just a no-op check, not an error). Called both at
+// the top of proceedToApp (covers a repeat sign-in stacking a duplicate
+// listener on top of one never cleaned up) and in the signed-out branch
+// of onAuthStateChanged (a signed-out tab shouldn't have any live
+// Firestore listeners running at all).
+function detachLibraryListeners() {
+    if (libraryListenerUnsub) { libraryListenerUnsub(); libraryListenerUnsub = null; }
+    if (listsListenerUnsub) { listsListenerUnsub(); listsListenerUnsub = null; }
+}
+
 // Everything involved in actually entering the app once a user is signed
 // in AND verified (or on a provider that never needed verification) -
 // factored out so both the normal auth listener above and a successful
 // in-app verification check (checkVerificationStatus) land in the same
 // place instead of duplicating this logic.
 async function proceedToApp(user, authScreen, mainApp) {
+            // Detach any listeners left over from a previous sign-in in
+            // this same tab, before this call attaches its own below -
+            // see detachLibraryListeners' own comment for why this needed
+            // to exist at all.
+            detachLibraryListeners();
+
             // Hide Auth Screen, Show Main App
             authScreen.style.display = "none";
             mainApp.style.display = "block";
@@ -4322,8 +4373,11 @@ async function proceedToApp(user, authScreen, mainApp) {
                 // Trigger Background Updates & Notifications
                 await checkLibraryForUpdates();
 
-                // Listen for real-time changes
-                db.collection("users")
+                // Listen for real-time changes. detachLibraryListeners()
+                // (called at the top of proceedToApp and on sign-out) is
+                // what keeps this from stacking a duplicate listener on
+                // every repeat sign-in within the same tab.
+                libraryListenerUnsub = db.collection("users")
                     .doc(user.uid)
                     .collection("library")
                     .onSnapshot((snapshot) => {
@@ -4364,7 +4418,7 @@ async function proceedToApp(user, authScreen, mainApp) {
                 // and an array of ids, not a rich document that can end
                 // up a broken partial stub), so this is a plain mirror of
                 // the collection into state.lists.
-                db.collection("users")
+                listsListenerUnsub = db.collection("users")
                     .doc(user.uid)
                     .collection("lists")
                     .onSnapshot((snapshot) => {
@@ -4430,43 +4484,7 @@ function initSearchPage() {
         }, 200);
     });
 
-    const tvLibInput = document.getElementById("tvLibrarySearchInput");
-    if (tvLibInput) {
-        tvLibInput.addEventListener("input", () => {
-            debounceLibraryFilter("tvLib", () => renderTVLibrarySection());
-        });
-    }
-
-    const movieLibInput = document.getElementById("movieLibrarySearchInput");
-    if (movieLibInput) {
-        movieLibInput.addEventListener("input", () => {
-            debounceLibraryFilter("movieLib", () => renderMovieLibrarySection());
-        });
-    }
-
-    const upcomingTVInput = document.getElementById("upcomingTVSearchInput");
-    if (upcomingTVInput) {
-        upcomingTVInput.addEventListener("input", () => {
-            debounceLibraryFilter("upcomingTV", () => renderUpcomingTVSection());
-        });
-    }
-
-    const upcomingMovieInput = document.getElementById("upcomingMovieSearchInput");
-    if (upcomingMovieInput) {
-        upcomingMovieInput.addEventListener("input", () => {
-            debounceLibraryFilter("upcomingMovie", () => renderUpcomingMovieSection());
-        });
-    }
-
     fetchForYou();
-}
-
-// Rebuilding a categorized poster grid on every single keystroke can feel
-// janky with a larger library, so local (already-in-memory) filtering gets
-// the same lightweight debounce treatment as the network-bound TMDB search.
-function debounceLibraryFilter(key, renderFn) {
-    clearTimeout(libSearchDebounceTimers[key]);
-    libSearchDebounceTimers[key] = setTimeout(renderFn, 120);
 }
 
 // Picks the library items most worth seeding recommendations from: highest
@@ -4485,7 +4503,12 @@ function getForYouSeeds(type) {
         .slice(0, 5);
 }
 
-async function fetchTrending() {
+async function fetchTrending(existingToken) {
+    // Accepts an existing token from fetchForYou's own call (the no-seeds
+    // fallback) rather than minting a second one for what's really the
+    // same logical request - only mints its own when nothing was passed
+    // in, so this still works correctly as a standalone entry point too.
+    const myToken = existingToken || ++discoverRequestToken;
     const listContainer = document.getElementById("searchResultsList");
     const heading = document.getElementById("searchResultsHeading");
 
@@ -4501,6 +4524,8 @@ async function fetchTrending() {
         const response = await fetch(endpoint);
         const data = await response.json();
 
+        if (myToken !== discoverRequestToken) return;
+
         if (!response.ok) {
             console.warn(`TMDB trending request failed (${response.status}):`, data?.status_message || data);
             listContainer.innerHTML = emptyState("Couldn't Load Trending", "There was a problem reaching TMDB. Check your connection and try again.");
@@ -4509,6 +4534,7 @@ async function fetchTrending() {
 
         renderSearchResults(data.results || []);
     } catch (error) {
+        if (myToken !== discoverRequestToken) return;
         console.error("Error fetching trending media:", error);
         listContainer.innerHTML = emptyState("Unable to load trending items", "Please check your network connection.");
     }
@@ -4521,13 +4547,14 @@ async function fetchTrending() {
 // anything already in the library. Falls back to plain Trending when the
 // library has nothing of this type yet to seed from.
 async function fetchForYou() {
+    const myToken = ++discoverRequestToken;
     const listContainer = document.getElementById("searchResultsList");
     const heading = document.getElementById("searchResultsHeading");
     const mediaLabel = currentSearchType === 'movie' ? 'Movies' : 'TV Shows';
 
     const seeds = getForYouSeeds(currentSearchType);
     if (seeds.length === 0) {
-        return fetchTrending();
+        return fetchTrending(myToken);
     }
 
     if (heading) heading.textContent = `For You`;
@@ -4545,6 +4572,8 @@ async function fetchForYou() {
                     .catch(() => ({ results: [] }))
             )
         );
+
+        if (myToken !== discoverRequestToken) return;
 
         const libraryTmdbIds = new Set(state.library.map(item => item.tmdbId));
         const scored = new Map();
@@ -4575,12 +4604,14 @@ async function fetchForYou() {
 
         renderSearchResults(ranked);
     } catch (error) {
+        if (myToken !== discoverRequestToken) return;
         console.error("Error fetching For You recommendations:", error);
         listContainer.innerHTML = emptyState("Unable to Load Recommendations", "Please check your network connection.");
     }
 }
 
 async function performTMDBSearch(query) {
+    const myToken = ++discoverRequestToken;
     const listContainer = document.getElementById("searchResultsList");
     const heading = document.getElementById("searchResultsHeading");
 
@@ -4595,6 +4626,8 @@ async function performTMDBSearch(query) {
         const response = await fetch(endpoint);
         const data = await response.json();
 
+        if (myToken !== discoverRequestToken) return;
+
         if (!response.ok) {
             console.warn(`TMDB search request failed (${response.status}):`, data?.status_message || data);
             listContainer.innerHTML = emptyState("Couldn't Load Results", "There was a problem reaching TMDB. Check your connection and try again.");
@@ -4608,6 +4641,7 @@ async function performTMDBSearch(query) {
 
         renderSearchResults(data.results);
     } catch (error) {
+        if (myToken !== discoverRequestToken) return;
         console.error("Error searching TMDB:", error);
         listContainer.innerHTML = emptyState("Search Error", "Couldn't reach TMDB. Check your connection and try again.");
     }
@@ -5577,16 +5611,10 @@ function renderHomeTab() {
     renderContinueWatching();
 }
 
-function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "tvLibrarySearchInput") {
-    const container = document.getElementById(containerId);
-    const searchInput = document.getElementById(inputId);
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+function renderTVLibrarySection() {
+    const container = document.getElementById("tvLibraryCategories");
 
     let items = state.library.filter(i => i.type === 'tv' || !i.type);
-
-    if (query) {
-        items = items.filter(item => item.title.toLowerCase().includes(query));
-    }
 
     // Same "still loading, not actually empty" guard as renderContinueWatching.
     if (!items.length && !libraryLoaded) {
@@ -5595,16 +5623,7 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
     }
 
     if (!items.length) {
-        // Query-aware: if a search actually filtered everything out, say
-        // that - "your library is empty" is simply false when there ARE
-        // shows in the library and the search just didn't match any of
-        // them. This branch used to always claim the whole library was
-        // empty regardless of why the filtered list came up empty.
-        if (query) {
-            setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
-        } else {
-            setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Search", onclick: "showPage('discover', 'tv')" }));
-        }
+        setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Search", onclick: "showPage('discover', 'tv')" }));
         return;
     }
 
@@ -5640,23 +5659,24 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
     if (stopped.length > 0 && visPrefs.showStopped) categories.push({ title: "Stopped Watching", items: stopped });
 
     if (categories.length === 0) {
-        setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
+        // Not a search miss (there's no search box here) - every category
+        // that DOES have shows in it is currently hidden by Library
+        // Display settings. The old message here claimed this was a
+        // search query not matching anything, which was never true for
+        // this branch even before the search boxes were removed - this
+        // path is reached purely by visibility prefs, so the message
+        // and the way out (open Library Display) should say that.
+        setInnerHTMLIfChanged(container, emptyState("Nothing to Show", "Every category with shows in it is currently hidden in Library Display.", { label: "Library Display", onclick: "openLibraryDisplayModal()" }));
         return;
     }
 
     renderCategorizedLibrary(container, categories);
 }
 
-function renderMovieLibrarySection(containerId = "movieLibraryCategories", inputId = "movieLibrarySearchInput") {
-    const container = document.getElementById(containerId);
-    const searchInput = document.getElementById(inputId);
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+function renderMovieLibrarySection() {
+    const container = document.getElementById("movieLibraryCategories");
 
     let items = state.library.filter(i => i.type === 'movie');
-
-    if (query) {
-        items = items.filter(item => item.title.toLowerCase().includes(query));
-    }
 
     // Same "still loading, not actually empty" guard as renderContinueWatching.
     if (!items.length && !libraryLoaded) {
@@ -5665,14 +5685,7 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
     }
 
     if (!items.length) {
-        // Same query-aware fix as renderTVLibrarySection - "your library
-        // is empty" is false when the library has movies and the search
-        // just didn't match any of them.
-        if (query) {
-            setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
-        } else {
-            setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Search", onclick: "showPage('discover', 'movie')" }));
-        }
+        setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Search", onclick: "showPage('discover', 'movie')" }));
         return;
     }
 
@@ -5685,8 +5698,13 @@ function renderMovieLibrarySection(containerId = "movieLibraryCategories", input
     if (comingSoon.length > 0) categories.push({ title: "Coming Soon", items: comingSoon });
     if (watched.length > 0) categories.push({ title: "Watched", items: watched });
 
+    // Defensive only - every movie always lands in exactly one of the
+    // three buckets above (watched, or unwatched split by release), so
+    // this can't actually be reached with the current category logic.
+    // Kept in case that ever changes, rather than trusting items.length
+    // > 0 to guarantee categories.length > 0 forever.
     if (categories.length === 0) {
-        setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
+        setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty."));
         return;
     }
 
@@ -6399,7 +6417,7 @@ function renderUpcomingCategoryBlock(title, entries) {
     `;
 }
 
-function renderUpcomingBuckets(container, entries, query, emptyTitle, emptySub, emptyOnclick, matchingTitle, matchingSub) {
+function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOnclick) {
     if (!container) return;
 
     if (!libraryLoaded) {
@@ -6408,14 +6426,7 @@ function renderUpcomingBuckets(container, entries, query, emptyTitle, emptySub, 
     }
 
     if (entries.length === 0) {
-        // Same query-aware distinction as the Library empty states -
-        // "nothing upcoming at all" and "your search matched nothing"
-        // are different situations and shouldn't share one message.
-        if (query) {
-            setInnerHTMLIfChanged(container, emptyState(matchingTitle, matchingSub));
-        } else {
-            setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Search", onclick: emptyOnclick }));
-        }
+        setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Search", onclick: emptyOnclick }));
         return;
     }
 
@@ -6429,40 +6440,26 @@ function renderUpcomingBuckets(container, entries, query, emptyTitle, emptySub, 
 }
 
 function renderUpcomingTVSection() {
-    const searchInput = document.getElementById("upcomingTVSearchInput");
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
-
-    let items = getUpcomingItems().filter(entry => entry.type === 'tv');
-    if (query) items = items.filter(entry => entry.item.title.toLowerCase().includes(query));
+    const items = getUpcomingItems().filter(entry => entry.type === 'tv');
 
     renderUpcomingBuckets(
         document.getElementById("upcomingTVCategories"),
         items,
-        query,
         "Nothing Upcoming",
         "New episodes from your TV shows will show up here.",
-        "showPage('discover', 'tv')",
-        "No TV Shows Matching",
-        "No upcoming TV shows match your search query."
+        "showPage('discover', 'tv')"
     );
 }
 
 function renderUpcomingMovieSection() {
-    const searchInput = document.getElementById("upcomingMovieSearchInput");
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
-
-    let items = getUpcomingItems().filter(entry => entry.type === 'movie');
-    if (query) items = items.filter(entry => entry.item.title.toLowerCase().includes(query));
+    const items = getUpcomingItems().filter(entry => entry.type === 'movie');
 
     renderUpcomingBuckets(
         document.getElementById("upcomingMovieCategories"),
         items,
-        query,
         "Nothing Upcoming",
         "New movie releases from your library will show up here.",
-        "showPage('discover', 'movie')",
-        "No Movies Matching",
-        "No upcoming movies match your search query."
+        "showPage('discover', 'movie')"
     );
 }
 
