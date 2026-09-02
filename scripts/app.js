@@ -326,8 +326,14 @@ function closeAvatarPickerOutside(event) {
 
 async function selectAvatar(avatarId) {
     if (!state.profiles || !state.profiles[0]) return;
+    const prevAvatarId = state.profiles[0].avatarId;
     state.profiles[0].avatarId = avatarId;
-    await saveUserProfile();
+    const saved = await saveUserProfile();
+    if (!saved) {
+        state.profiles[0].avatarId = prevAvatarId;
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     updateHomeUI();
     renderAvatarPickerGrid();
     closeAvatarPicker();
@@ -1782,7 +1788,16 @@ async function submitChosenUsername() {
             state.profiles[0].avatarId = randomAvatarId();
         }
         state.username = username;
-        await saveUserProfile();
+        const saved = await saveUserProfile();
+        if (!saved) {
+            // The username claim itself already succeeded and won't be
+            // retried/undone here (see the catch block's own reasoning
+            // on that) - this is specifically about the profile doc that
+            // should reflect it failing to save, which used to show
+            // "Username saved!" regardless.
+            showChooseUsernameError("Your username was claimed, but saving your profile failed - check your connection and try again.");
+            return;
+        }
 
         // Best-effort sync of the resolved display name (not necessarily
         // the username itself - see above) into Firebase Auth's own
@@ -1830,6 +1845,12 @@ async function handleGoogleSignIn() {
 
     clearAuthMessage();
 
+    // Same double-tap guard handleSignIn already has - without it, a
+    // second tap while the OAuth popup is still opening could spawn a
+    // second popup window rather than just refocusing the first one.
+    const googleBtn = document.getElementById("googleAuthBtn");
+    if (googleBtn) googleBtn.disabled = true;
+
     try {
         const provider = new firebase.auth.GoogleAuthProvider();
         await auth.signInWithPopup(provider);
@@ -1837,6 +1858,8 @@ async function handleGoogleSignIn() {
     } catch (err) {
         console.error("Google Sign-In Error:", err);
         showAuthMessage(err.message || "Failed to sign in with Google.");
+    } finally {
+        if (googleBtn) googleBtn.disabled = false;
     }
 }
 
@@ -2178,13 +2201,20 @@ async function handleSignUp() {
         }
         state.username = username;
 
-        await saveUserProfile();
+        const saved = await saveUserProfile();
 
         // Fire-and-forget: verification email shouldn't block account
-        // creation from succeeding if sending it fails for some reason.
+        // creation from succeeding if sending it fails for some reason,
+        // and should still go out even if the profile save below failed -
+        // the account itself was created either way.
         userCredential.user.sendEmailVerification().catch((err) => {
             console.warn("Failed to send verification email:", err);
         });
+
+        if (!saved) {
+            showToast("Account created, but saving your profile failed - check your connection. You can retry from Settings.", "success");
+            return;
+        }
 
         showToast("Account created! Check your inbox to verify your email.", "success");
 
@@ -2328,27 +2358,15 @@ async function resendVerificationEmail() {
    requires a *recent* sign-in for an operation this sensitive, so if the
    session is older than a few minutes this re-prompts for credentials
    (password re-entry for email/password accounts, a fresh Google popup
-   for Google accounts) and retries once.
+   for Google accounts) and retries once - see confirmDeleteAccount
+   below, which handles both branches directly rather than through a
+   separate reauthenticateCurrentUser() helper (removed - its
+   email/password branch used a native prompt() for the password, which
+   this app deliberately avoids everywhere else; see
+   handleForgotPassword's own comment on why. Folding the logic in
+   directly is what let the email/password branch use the delete modal's
+   own inline field instead).
 ========================================================= */
-async function reauthenticateCurrentUser(user) {
-    const isGoogleAccount = user.providerData.some(p => p.providerId === 'google.com');
-    try {
-        if (isGoogleAccount) {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            await user.reauthenticateWithPopup(provider);
-        } else {
-            const password = prompt("For your security, please re-enter your password to confirm account deletion:");
-            if (!password) return false;
-            const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
-            await user.reauthenticateWithCredential(credential);
-        }
-        return true;
-    } catch (err) {
-        console.error("Reauthentication failed:", err);
-        return false;
-    }
-}
-
 // Firestore doesn't cascade-delete a subcollection when its parent
 // document is deleted, so the library subcollection has to be cleared out
 // document-by-document (batched, since a batch write tops out at 500 ops).
@@ -3106,6 +3124,14 @@ function handleDeleteAccount() {
     const modal = document.getElementById("deleteAccountModal");
     if (modal.classList.contains("open")) return;
     clearInlineMessage("deleteAccountError");
+    // Always starts hidden - only shown mid-flow if a deletion attempt
+    // actually comes back needing re-authentication (see
+    // confirmDeleteAccount). A stale value left over from a cancelled
+    // previous attempt should never carry over either.
+    const passwordRow = document.getElementById("deleteAccountPasswordRow");
+    const passwordInput = document.getElementById("deleteAccountPassword");
+    if (passwordRow) passwordRow.style.display = "none";
+    if (passwordInput) passwordInput.value = "";
     modal.classList.add("open");
     lockBodyScroll("deleteAccountModal");
 }
@@ -3124,10 +3150,8 @@ async function confirmDeleteAccount() {
 
     const user = auth.currentUser;
     const btn = document.getElementById("confirmDeleteBtn");
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Deleting...";
-    }
+    const passwordRow = document.getElementById("deleteAccountPasswordRow");
+    const passwordInput = document.getElementById("deleteAccountPassword");
     clearInlineMessage("deleteAccountError");
 
     async function attemptDelete() {
@@ -3135,28 +3159,74 @@ async function confirmDeleteAccount() {
         await user.delete();
     }
 
+    // The password row only becomes visible mid-flow, once a first
+    // attempt has already come back needing re-authentication (below) -
+    // its visibility IS the state of which step this tap represents,
+    // rather than a separate flag to keep in sync with it.
+    const isPasswordStep = passwordRow && passwordRow.style.display !== "none";
+
+    if (isPasswordStep) {
+        const password = passwordInput ? passwordInput.value : "";
+        if (!password) {
+            showInlineMessage("deleteAccountError", "Please enter your password.");
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = "Deleting..."; }
+        try {
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
+            await user.reauthenticateWithCredential(credential);
+            await attemptDelete();
+            closeDeleteAccountModal();
+            showToast("Your account has been deleted.", "success");
+        } catch (err) {
+            console.error("Account deletion failed after password re-entry:", err);
+            if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+                showInlineMessage("deleteAccountError", "Incorrect password. Please try again.");
+            } else {
+                showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
+            }
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = "Delete"; }
+        }
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = "Deleting..."; }
+
     try {
         await attemptDelete();
         closeDeleteAccountModal();
         showToast("Your account has been deleted.", "success");
     } catch (err) {
         if (err.code === "auth/requires-recent-login") {
-            const reauthed = await reauthenticateCurrentUser(user);
-            if (!reauthed) {
-                // The modal stays open here (reauthentication was
-                // cancelled, not the deletion itself failing) - needs to
-                // actually say so, since nothing else about the screen
-                // changes to indicate it.
-                showInlineMessage("deleteAccountError", "Account deletion cancelled - please try again.");
-            } else {
+            const isGoogleAccount = user.providerData.some(p => p.providerId === 'google.com');
+            if (isGoogleAccount) {
+                // A popup, not prompt() - popups work fine in an
+                // installed PWA, unlike native prompt/alert/confirm
+                // dialogs (see handleForgotPassword's own comment on
+                // why those are avoided everywhere in this app).
                 try {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    await user.reauthenticateWithPopup(provider);
                     await attemptDelete();
                     closeDeleteAccountModal();
                     showToast("Your account has been deleted.", "success");
                 } catch (err2) {
-                    console.error("Account deletion failed after reauthentication:", err2);
+                    console.error("Account deletion failed after Google reauth:", err2);
                     showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
                 }
+            } else {
+                // Email/password account - reveal the inline password
+                // field instead of the native prompt() this used to call
+                // (see reauthenticateCurrentUser's removal - it's now
+                // just the Google popup branch above, folded in here
+                // directly rather than kept as a function whose only
+                // other caller was this one). Stops here and waits for
+                // the next tap on this same button, now running the
+                // isPasswordStep branch above instead.
+                if (passwordRow) passwordRow.style.display = "";
+                if (passwordInput) passwordInput.focus();
+                showInlineMessage("deleteAccountError", "Please confirm your password to continue.");
             }
         } else {
             console.error("Account deletion failed:", err);
@@ -4875,7 +4945,22 @@ async function importMediaData(id, type, buttonElement) {
             };
 
             state.library.push(newMovie);
-            await saveItem(newMovie);
+            const savedMovie = await saveItem(newMovie);
+
+            if (!savedMovie) {
+                // Roll back the optimistic in-memory add so the app
+                // doesn't keep showing something in the library that was
+                // never actually saved - it would otherwise look present
+                // for the rest of this session and then silently vanish
+                // the moment Firestore's own data resyncs in. Found via a
+                // full audit: this add flow updated the button to
+                // "added" unconditionally, the same class of bug already
+                // fixed once for the poster/backdrop picker (see
+                // saveItem's own comment) but never applied here.
+                state.library = state.library.filter(i => i !== newMovie);
+                showErrorToast(`Couldn't save - check your connection and try again.`);
+                return;
+            }
 
             if (buttonElement) {
                 buttonElement.className = "search-add-btn added";
@@ -4967,7 +5052,18 @@ async function importMediaData(id, type, buttonElement) {
             };
 
             state.library.push(newShow);
-            await saveItem(newShow);
+            const savedShow = await saveItem(newShow);
+
+            if (!savedShow) {
+                // Same rollback as the movie add path above - and
+                // deliberately does NOT touch archivedShow/clear the
+                // archive entry below, since the restore didn't actually
+                // happen either; leaving the archived watch history in
+                // place is the correct outcome for a save that failed.
+                state.library = state.library.filter(i => i !== newShow);
+                showErrorToast(`Couldn't save - check your connection and try again.`);
+                return;
+            }
 
             // The restore is complete now that the show is back in the
             // live library - clear the archive entry so it doesn't linger
@@ -6635,15 +6731,37 @@ async function markContinueItemWatched(type, itemId, epId) {
     const item = getItem(itemId);
     if (!item) return;
 
+    let prevMovieState = null, ep = null, prevEpState = null;
+
     if (type === 'movie') {
+        prevMovieState = { watched: item.watched, lastWatchedAt: item.lastWatchedAt };
         item.watched = true;
         item.lastWatchedAt = new Date().toISOString();
     } else if (item.episodes) {
-        const ep = item.episodes.find(e => e.id === epId);
-        if (ep) setEpisodeWatched(ep, true);
+        ep = item.episodes.find(e => e.id === epId);
+        if (ep) {
+            prevEpState = { ...ep };
+            setEpisodeWatched(ep, true);
+        }
     }
 
-    await saveItem(item);
+    const saved = await saveItem(item);
+    if (!saved) {
+        // The card's already swiped away visually by the time this runs
+        // (see the 240ms setTimeout at this function's own call site) -
+        // rolling back the underlying data and refreshing is what brings
+        // it back, since there's no separate "un-swipe" animation to
+        // reverse. Silently leaving it swiped away while nothing was
+        // actually saved would make the item vanish from Continue
+        // Watching with no obvious cause and no way back short of
+        // reloading and hoping it resyncs correctly.
+        if (prevMovieState) Object.assign(item, prevMovieState);
+        if (ep && prevEpState) Object.assign(ep, prevEpState);
+        refreshActivePage();
+        showErrorToast(`Couldn't save - check your connection and try again.`);
+        return;
+    }
+
     refreshActivePage();
 
     // How many released-but-unwatched episodes remain for this show,
@@ -6871,6 +6989,8 @@ async function saveDisplayName() {
         btn.textContent = "Saving...";
     }
 
+    const prevProfilesSnapshot = state.profiles ? JSON.parse(JSON.stringify(state.profiles)) : null;
+
     try {
         if (!state.profiles || state.profiles.length === 0) {
             state.profiles = [{ id: "profile-main", name: name, initials: name.charAt(0).toUpperCase(), avatarId: randomAvatarId() }];
@@ -6883,7 +7003,17 @@ async function saveDisplayName() {
                 state.profiles[0].avatarId = randomAvatarId();
             }
         }
-        await saveUserProfile();
+        const saved = await saveUserProfile();
+        if (!saved) {
+            // saveUserProfile() never throws (see its own comment) so
+            // this needed its own explicit check - found via a full
+            // audit repeated across nearly every save in the app: this
+            // showed "Display name updated!" even when the Firestore
+            // write had actually failed.
+            state.profiles = prevProfilesSnapshot;
+            showEditDisplayNameError("Couldn't save - check your connection and try again.");
+            return;
+        }
 
         // Best-effort only - Firebase Auth's own displayName is no longer
         // what the app actually reads (see updateHomeUI), so a failure
@@ -7318,7 +7448,12 @@ async function unfavoriteFromListDetail(itemId) {
     const item = state.library.find(i => i.id === itemId);
     if (!item) return;
     item.isFavorite = false;
-    await saveItem(item);
+    const saved = await saveItem(item);
+    if (!saved) {
+        item.isFavorite = true;
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     renderListDetailContent();
     // Same reasoning as removeItemFromListDetail above - Favourites'
     // own card on the Lists row needs the same direct, immediate update.
@@ -8631,12 +8766,22 @@ async function toggleEntireSeasonWatched(seasonNumber) {
 
     // Only released episodes are ever touched - unaired ones always stay unwatched.
     const anyUnwatched = releasedEps.some(ep => !ep.watched);
+    const prevEpStates = releasedEps.map(ep => ({ ...ep }));
     releasedEps.forEach(ep => {
         setEpisodeWatched(ep, anyUnwatched);
     });
 
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        releasedEps.forEach((ep, i) => Object.assign(ep, prevEpStates[i]));
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
+    // Moved to only fire once the save actually succeeded - it used to
+    // fire unconditionally before the save even started, so a failed
+    // save still claimed the season had been marked watched.
     showToast(`Season ${seasonNumber} marked as ${anyUnwatched ? 'Watched' : 'Unwatched'}`, "success");
-    await saveItem(currentItem);
     updateModalContent();
     refreshActivePage();
 }
@@ -8663,10 +8808,17 @@ async function markAllReleasedEpisodesWatched() {
         return;
     }
 
+    const prevEpStates = toMark.map(ep => ({ ...ep }));
     toMark.forEach(ep => setEpisodeWatched(ep, true));
 
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        toMark.forEach((ep, i) => Object.assign(ep, prevEpStates[i]));
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     showToast(`Marked ${toMark.length} episode${toMark.length === 1 ? '' : 's'} watched.`, "success");
-    await saveItem(currentItem);
     updateModalContent();
     refreshActivePage();
 }
@@ -8767,8 +8919,17 @@ async function toggleCurrentEpisodeWatched() {
     if (!currentEpisode.watched && !isReleased(currentEpisode.releaseDate)) {
         return;
     }
+    // Snapshot every field setEpisodeWatched can touch, not just the ones
+    // it happens to touch today - a plain object spread restores cleanly
+    // regardless of whether that function's own field list changes later.
+    const prevEpisodeState = { ...currentEpisode };
     setEpisodeWatched(currentEpisode, !currentEpisode.watched);
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        Object.assign(currentEpisode, prevEpisodeState);
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     closeEpisodeModal();
     updateModalContent();
     refreshActivePage();
@@ -8785,10 +8946,14 @@ async function markWatchedUpToCurrentEpisode() {
     }
 
     let count = 0;
+    const touchedEps = [];
+    const prevEpStates = [];
     currentItem.episodes.forEach(ep => {
         if (ep.watched || !isReleased(ep.releaseDate)) return;
         const isUpToHere = ep.season < currentEpisode.season || (ep.season === currentEpisode.season && ep.number <= currentEpisode.number);
         if (isUpToHere) {
+            touchedEps.push(ep);
+            prevEpStates.push({ ...ep });
             setEpisodeWatched(ep, true);
             count++;
         }
@@ -8796,7 +8961,13 @@ async function markWatchedUpToCurrentEpisode() {
 
     if (count === 0) return;
 
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        touchedEps.forEach((ep, i) => Object.assign(ep, prevEpStates[i]));
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     showToast(`Marked ${count} episode${count === 1 ? '' : 's'} as watched.`, "success");
     closeEpisodeModal();
     updateModalContent();
@@ -8958,18 +9129,23 @@ async function addRewatchFromPopup() {
         return;
     }
     const now = new Date().toISOString();
+    let prevState;
 
     if (rewatchPopupMode === 'movie') {
+        prevState = { item: { rewatchCount: currentItem.rewatchCount, lastWatchedAt: currentItem.lastWatchedAt } };
         currentItem.rewatchCount = (currentItem.rewatchCount || 0) + 1;
         currentItem.lastWatchedAt = now;
     } else if (rewatchPopupMode === 'episode') {
         const episode = findEpisodeById(rewatchPopupEpId);
         if (!episode) return;
+        prevState = { eps: [episode], prevEps: [{ ...episode }] };
         episode.rewatchCount = (episode.rewatchCount || 0) + 1;
         episode.rewatchedAt = now;
         if (currentEpisode && currentEpisode.id === episode.id) refreshEpisodeModalMeta();
     } else if (rewatchPopupMode === 'season') {
-        getSeasonReleasedEpisodes(rewatchPopupSeasonNumber).forEach(ep => {
+        const eps = getSeasonReleasedEpisodes(rewatchPopupSeasonNumber);
+        prevState = { eps, prevEps: eps.map(ep => ({ ...ep })) };
+        eps.forEach(ep => {
             ep.rewatchCount = (ep.rewatchCount || 0) + 1;
             ep.rewatchedAt = now;
         });
@@ -8977,7 +9153,14 @@ async function addRewatchFromPopup() {
         return;
     }
 
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        if (prevState.item) Object.assign(currentItem, prevState.item);
+        if (prevState.eps) prevState.eps.forEach((ep, i) => Object.assign(ep, prevState.prevEps[i]));
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     renderRewatchPopup();
     updateModalContent();
     refreshActivePage();
@@ -8985,18 +9168,23 @@ async function addRewatchFromPopup() {
 
 async function removeRewatchFromPopup() {
     if (!currentItem) return;
+    let prevState;
 
     if (rewatchPopupMode === 'movie') {
         if (!currentItem.rewatchCount) return;
+        prevState = { item: { rewatchCount: currentItem.rewatchCount } };
         currentItem.rewatchCount = Math.max(0, currentItem.rewatchCount - 1);
     } else if (rewatchPopupMode === 'episode') {
         const episode = findEpisodeById(rewatchPopupEpId);
         if (!episode || !episode.rewatchCount) return;
+        prevState = { eps: [episode], prevEps: [{ ...episode }] };
         episode.rewatchCount = Math.max(0, episode.rewatchCount - 1);
         if (episode.rewatchCount === 0) episode.rewatchedAt = null;
         if (currentEpisode && currentEpisode.id === episode.id) refreshEpisodeModalMeta();
     } else if (rewatchPopupMode === 'season') {
-        getSeasonReleasedEpisodes(rewatchPopupSeasonNumber).forEach(ep => {
+        const eps = getSeasonReleasedEpisodes(rewatchPopupSeasonNumber);
+        prevState = { eps, prevEps: eps.map(ep => ({ ...ep })) };
+        eps.forEach(ep => {
             if (!ep.rewatchCount) return;
             ep.rewatchCount = Math.max(0, ep.rewatchCount - 1);
             if (ep.rewatchCount === 0) ep.rewatchedAt = null;
@@ -9005,7 +9193,14 @@ async function removeRewatchFromPopup() {
         return;
     }
 
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        if (prevState.item) Object.assign(currentItem, prevState.item);
+        if (prevState.eps) prevState.eps.forEach((ep, i) => Object.assign(ep, prevState.prevEps[i]));
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     renderRewatchPopup();
     updateModalContent();
     refreshActivePage();
@@ -9017,11 +9212,19 @@ async function removeRewatchFromPopup() {
 // already gets there in as many taps as the count requires.
 async function clearSeasonRewatchesFromPopup() {
     if (!currentItem || rewatchPopupMode !== 'season') return;
-    getSeasonReleasedEpisodes(rewatchPopupSeasonNumber).forEach(ep => {
+    const eps = getSeasonReleasedEpisodes(rewatchPopupSeasonNumber);
+    const prevEps = eps.map(ep => ({ ...ep }));
+    eps.forEach(ep => {
         ep.rewatchCount = 0;
         ep.rewatchedAt = null;
     });
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        eps.forEach((ep, i) => Object.assign(ep, prevEps[i]));
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     renderRewatchPopup();
     updateModalContent();
     refreshActivePage();
@@ -9037,10 +9240,28 @@ async function toggleMovieWatched(id) {
         showErrorToast("This movie hasn't been released yet.");
         return;
     }
+    const wasWatched = currentItem.watched;
+    const prevLastWatchedAt = currentItem.lastWatchedAt;
+    const prevRewatchCount = currentItem.rewatchCount;
     currentItem.watched = !currentItem.watched;
     currentItem.lastWatchedAt = currentItem.watched ? new Date().toISOString() : null;
     if (!currentItem.watched) currentItem.rewatchCount = 0;
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        // Same class of bug as the poster picker's own fix (see
+        // saveItem's comment) - found via a full audit repeated across
+        // nearly every watch/rewatch/favorite toggle in the app: the
+        // optimistic UI change proceeded even when the Firestore write
+        // never actually happened, so the "watched" state would silently
+        // revert the next time the library resynced, with no indication
+        // anything had gone wrong.
+        currentItem.watched = wasWatched;
+        currentItem.lastWatchedAt = prevLastWatchedAt;
+        currentItem.rewatchCount = prevRewatchCount;
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     updateModalContent();
     refreshActivePage();
 }
@@ -9053,8 +9274,15 @@ async function markNextEpisodeWatched(id) {
     }
     const nextEp = getNextUnwatchedEpisode(currentItem);
     if (nextEp) {
+        const prevEpState = { ...nextEp };
         setEpisodeWatched(nextEp, true);
-        await saveItem(currentItem);
+        const saved = await saveItem(currentItem);
+        if (!saved) {
+            Object.assign(nextEp, prevEpState);
+            updateModalContent();
+            showErrorToast("Couldn't save - check your connection and try again.");
+            return;
+        }
         updateModalContent();
         refreshActivePage();
     }
@@ -9066,8 +9294,15 @@ async function toggleStopWatching(id) {
         showErrorToast("Add this to your library first.");
         return;
     }
+    const prevIsStopped = currentItem.isStopped;
     currentItem.isStopped = !currentItem.isStopped;
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        currentItem.isStopped = prevIsStopped;
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     updateModalContent();
     refreshActivePage();
 }
@@ -9083,6 +9318,8 @@ async function toggleFavoriteCurrentItem() {
         showErrorToast("Add this to your library first.");
         return;
     }
+    const prevIsFavorite = currentItem.isFavorite;
+    const prevFavoritedAt = currentItem.favoritedAt;
     currentItem.isFavorite = !currentItem.isFavorite;
     // Records when, not just whether - the Favourites list card's own
     // auto-picked backdrop (see createListCard) needs to know which
@@ -9094,7 +9331,14 @@ async function toggleFavoriteCurrentItem() {
     // than deciding whether to erase history that might just get set
     // again a moment later.
     if (currentItem.isFavorite) currentItem.favoritedAt = new Date().toISOString();
-    await saveItem(currentItem);
+    const saved = await saveItem(currentItem);
+    if (!saved) {
+        currentItem.isFavorite = prevIsFavorite;
+        currentItem.favoritedAt = prevFavoritedAt;
+        updateModalContent();
+        showErrorToast("Couldn't save - check your connection and try again.");
+        return;
+    }
     updateModalContent();
     refreshActivePage();
 }
