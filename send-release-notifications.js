@@ -65,8 +65,6 @@ const db = admin.firestore();
 // run() and checkEngagementRemindersForUser below) - there's nothing
 // else to persist that dedup state in server-side, since there's no
 // browser/localStorage on this side.
-// instead of localStorage, since there's nothing else to persist it in
-// server-side.
 function utcDateString(date) {
     return date.toISOString().slice(0, 10);
 }
