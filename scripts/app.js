@@ -692,9 +692,8 @@ function renderLibraryDisplayModal() {
 
     container.innerHTML = LIBRARY_VISIBILITY_CATEGORIES.map(cat => {
         const isOn = !!prefs[cat.key];
-        // Same on/off pill classes as Notification Types and the
-        // notification-permission button - see
-        // .hero-pill-btn.pill-on/.pill-off in app.css.
+        // Same on/off pill classes as the notification-permission
+        // button - see .hero-pill-btn.pill-on/.pill-off in app.css.
         return `
             <div class="analytics-card settings-card" style="padding: 14px;">
                 <div class="settings-row" style="padding: 0;">
@@ -841,7 +840,7 @@ async function checkNotificationPermissionState() {
     const btn = document.getElementById("notificationBtn");
     if (!btn) return;
 
-    // Same on/off pill classes as Notification Types and Library
+    // Same on/off pill classes as Library
     // Display - see .hero-pill-btn.pill-on/.pill-off/.pill-neutral in
     // app.css. "Unsupported" is neither on nor off (the device simply
     // can't), so it gets the neutral variant instead of the "off" one -
