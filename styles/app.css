@@ -2434,6 +2434,27 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 22px;
 }
 
+/* Applied specifically to modals prone to genuinely short/variable
+   content (Add to List, Reorder Lists, the various pickers) - display:
+   flex with min-height: 100% and justify-content: center means short
+   content centers vertically within the modal instead of staying
+   pinned to the top with a large, empty, unexplained void filling the
+   rest of the screen below it, which read as broken rather than like a
+   deliberately full-screen surface. Deliberately a separate modifier
+   rather than added to .modal-content itself - that base class is
+   shared by content-heavy modals too (Details, Settings, NovaWrapped),
+   where flexbox has no reason to touch anything given their content
+   already exceeds the viewport either way, but changing shared,
+   foundational CSS for every modal at once to fix a problem that only
+   actually exists in a handful of them is more risk than the fix is
+   worth. */
+.modal-content-centered {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100%;
+}
+
 /* Extra top clearance for a compact modal's content, when it goes
    straight from the floating .modal-header-nav close button into
    .modal-content with nothing in between (no .modal-backdrop-header
