@@ -1619,15 +1619,43 @@ img {
    releases, so it's the one place worth being upfront that those dates
    are TMDB's, not NovaWatch's own. Deliberately not repeated on every
    individual show/episode's own countdown - one clear note here covers
-   the whole tab without turning every card into a disclaimer. Same
-   small-muted-caption language as .watch-on-attribution, centered since
-   this sits under a centered toggle rather than trailing a left-aligned
-   block of content. */
+   the whole tab without turning every card into a disclaimer.
+   A real quiet chip now (same --surface-2/border/radius recipe as
+   .category-count) rather than bare centered text - sitting right under
+   the toggle's own glass pill, plain text read as an unfinished
+   afterthought next to it rather than a deliberate second element.
+   width: fit-content + margin: 0 auto centers it as a hugging chip, not
+   a full-width bar; align-items: flex-start (not center) so the icon
+   sits at the top of the first line rather than vertically splitting
+   the gap if the text wraps to two lines on a narrow phone, which this
+   sentence is long enough to do. border-radius: var(--radius-sm), not
+   a full 999px pill - a true pill only reads cleanly on a single line,
+   and looks like a stretched, oddly-cut rectangle once wrapped text
+   makes it two lines tall; a soft rounded-rect handles either line
+   count gracefully. */
 .data-source-note {
-    margin: 8px 0 16px;
-    font-size: 11px;
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    width: fit-content;
+    margin: 10px auto 18px;
+    padding: 8px 14px 8px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--glass-border-subtle);
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+    line-height: 1.4;
     color: var(--text-muted);
-    text-align: center;
+}
+
+.data-source-note svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    /* Optically aligns the icon with the text's cap-height on the first
+       line rather than its own box's top edge. */
+    margin-top: 1px;
+    opacity: 0.75;
 }
 
 .library-subview {
