@@ -4401,7 +4401,7 @@ function setSearchType(type) {
     // a drag release (drag already repositions it directly in
     // finishDrag) - a tap never touches the indicator otherwise, since
     // this function is the only thing that runs for it.
-    updateSegmentedIndicator(document.querySelector("#discoverPage .segmented-toggle"), document.getElementById("searchTypeIndicator"));
+    updateSegmentedIndicator(document.getElementById("searchTypeToggle"), document.getElementById("searchTypeIndicator"));
 
     const searchInput = document.getElementById("onlineSearchInput");
     const query = searchInput ? searchInput.value.trim() : "";
@@ -5169,7 +5169,7 @@ function showPage(page, subType = null, focusSearch = false) {
             // fixes it without needing to run the rest of
             // setSearchType()'s own work (re-fetching search results)
             // just to reposition one element.
-            updateSegmentedIndicator(document.querySelector("#discoverPage .segmented-toggle"), document.getElementById("searchTypeIndicator"), false);
+            updateSegmentedIndicator(document.getElementById("searchTypeToggle"), document.getElementById("searchTypeIndicator"), false);
         }
 
         // Only auto-focus when the person actually tapped their way to
@@ -5463,6 +5463,7 @@ function initSegmentedDragToSwitch(containerEl, indicatorEl, leftBtn, rightBtn, 
             dragging = true;
             containerEl.setPointerCapture(pointerId);
             indicatorEl.style.transition = "none";
+            indicatorEl.classList.add("dragging");
             dragWidth = indicatorEl.getBoundingClientRect().width;
         }
 
@@ -5478,6 +5479,7 @@ function initSegmentedDragToSwitch(containerEl, indicatorEl, leftBtn, rightBtn, 
 
         if (dragging) {
             indicatorEl.style.transition = "";
+            indicatorEl.classList.remove("dragging");
 
             const rect = containerEl.getBoundingClientRect();
             const withinBounds = e.clientX >= rect.left && e.clientX <= rect.right
@@ -5518,7 +5520,7 @@ function initSegmentedDragToSwitch(containerEl, indicatorEl, leftBtn, rightBtn, 
 }
 
 function initTVMovieToggleDragging() {
-    const searchContainer = document.querySelector("#discoverPage .segmented-toggle");
+    const searchContainer = document.getElementById("searchTypeToggle");
     const searchIndicator = document.getElementById("searchTypeIndicator");
     updateSegmentedIndicator(searchContainer, searchIndicator, false);
     initSegmentedDragToSwitch(
@@ -5529,7 +5531,7 @@ function initTVMovieToggleDragging() {
     );
 
     const upcomingTV = document.getElementById("upcomingTabTV");
-    const upcomingContainer = upcomingTV ? upcomingTV.parentElement : null;
+    const upcomingContainer = document.getElementById("upcomingTypeToggle");
     const upcomingIndicator = document.getElementById("upcomingTypeIndicator");
     updateSegmentedIndicator(upcomingContainer, upcomingIndicator, false);
     initSegmentedDragToSwitch(
@@ -6575,8 +6577,7 @@ function setUpcomingView(view) {
     document.getElementById("upcomingTabTV").classList.toggle("active", view === 'tv');
     document.getElementById("upcomingTabMovies").classList.toggle("active", view === 'movies');
     // Same reasoning as setSearchType's own indicator update above.
-    const upcomingTV = document.getElementById("upcomingTabTV");
-    updateSegmentedIndicator(upcomingTV ? upcomingTV.parentElement : null, document.getElementById("upcomingTypeIndicator"));
+    updateSegmentedIndicator(document.getElementById("upcomingTypeToggle"), document.getElementById("upcomingTypeIndicator"));
 
     document.getElementById("upcomingViewTV").style.display = view === 'tv' ? 'block' : 'none';
     document.getElementById("upcomingViewMovies").style.display = view === 'movies' ? 'block' : 'none';
