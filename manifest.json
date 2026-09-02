@@ -7,13 +7,17 @@
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "fullscreen",
+    "minimal-ui"
+  ],
   "handle_links": "preferred",
   "launch_handler": {
     "client_mode": "navigate-existing"
   },
-  "background_color": "#e8edf4",
-  "theme_color": "#e8edf4",
+  "background_color": "#ececec",
+  "theme_color": "#ececec",
   "shortcuts": [
     {
       "name": "Search",
