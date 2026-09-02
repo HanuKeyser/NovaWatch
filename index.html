@@ -698,12 +698,16 @@
      Opened from either "View All" button on the redesigned Library
      page - the same segmented TV/Movies view that used to be the whole
      Library tab directly, just relocated into a modal now that the
-     tab itself shows the Lists row + 9-item previews instead. Every
-     element id in here is unchanged from before (libraryTabTV,
-     libraryViewTV, tvLibrarySearchInput, tvLibraryCategories, etc.) -
-     setLibraryView()/renderTVLibrarySection()/renderMovieLibrarySection()
-     in app.js all still target these exact ids and needed no changes
-     at all, just a new home for the elements they already expected.
+     tab itself shows the Lists row + 9-item previews instead. Just the
+     two category containers (libraryViewTV/tvLibraryCategories,
+     libraryViewMovies/movieLibraryCategories) - no TV/Movies toggle of
+     its own (each "View All" already disambiguates which one you want
+     before this ever opens - see setLibraryView()'s own guard for
+     when libraryTabTV/libraryTabMovies don't exist) and no search box
+     (removed deliberately - a full audit found renderTVLibrarySection()/
+     renderMovieLibrarySection() carrying dead references to search
+     input ids that were never actually here; that dead code was
+     cleaned up rather than the inputs being added back).
 ================================================     -->
 <div id="fullLibraryModal" class="modal" onclick="closeFullLibraryModalOutside(event)">
     <div class="modal-sheet">
