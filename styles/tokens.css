@@ -56,15 +56,18 @@
     /* =====================================================
        LIQUID GLASS "CHROME" SYSTEM
        The floating-control tier - the bottom nav bar, and everything
-       meant to share its exact language (the search bar, the active
-       Discover toggle, toasts). Lower fill opacity than --surface above
-       (genuinely see-through, not just tinted), heavier blur+saturation
-       to compensate and stay legible at that opacity, and no border at
-       all - an elevation shadow instead of a ring is what reads as
-       "floating" rather than "outlined". These tokens are kept in exact
-       sync with .bottom-nav's own actual values in app.css, since that
-       bar is the reference implementation this whole tier is built to
-       match, not the other way around. */
+       meant to share its exact language (the search bar, toasts). Lower
+       fill opacity than --surface above (genuinely see-through, not
+       just tinted), heavier blur+saturation to compensate and stay
+       legible at that opacity, and no border at all - an elevation
+       shadow instead of a ring is what reads as "floating" rather than
+       "outlined". These tokens are kept in exact sync with
+       .bottom-nav's own actual values in app.css, since that bar is the
+       reference implementation this whole tier is built to match, not
+       the other way around. The Search/Upcoming TV Shows-Movies toggle
+       briefly moved onto this tier too, then back off it again (see
+       .segmented-toggle-sliding in app.css) - it's back on the plain
+       --surface tier below, same as every other toggle in the app. */
     --glass-chrome-fill: rgba(255, 255, 255, 0.26);
     --glass-chrome-blur: blur(72px) saturate(300%);
     --glass-chrome-border: rgba(255, 255, 255, 0.5);
