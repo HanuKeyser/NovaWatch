@@ -288,7 +288,7 @@ img {
 .stat-icon {
     width: 18px;
     height: 18px;
-    color: var(--blue);
+    color: var(--accent);
     margin-bottom: 2px;
 }
 
@@ -301,7 +301,7 @@ img {
 .stat-value.highlight {
     font-size: 18px;
     font-weight: 800;
-    color: var(--blue);
+    color: var(--accent);
     margin-top: 2px;
     letter-spacing: -0.3px;
 }
@@ -377,21 +377,22 @@ img {
     padding: 20px 0 26px;
 }
 
-/* Was 25px, plain solid color, then a purple/pink/orange gradient
-   matching .wrapped-start-btn's own - now a grayscale gradient instead,
-   still tying the landing screen's own identity to the same vivid
-   (in contrast, not hue) treatment the slideshow itself uses, rather
-   than a plain heading sitting above a bold button with no visual
-   relationship between them. */
+/* Was 25px, plain solid color, then a purple/pink/orange gradient, then
+   flattened to grayscale and finally plain black during the monochrome
+   era - back to a real gradient now, the brand's own orange/yellow
+   this time rather than the original purple/pink/orange, tying the
+   landing screen's identity to the same vivid treatment the slideshow
+   itself now uses (see .wrapped-bg-recap and friends above) rather
+   than a plain black heading sitting above a bold gradient button with
+   no visual relationship between them. */
 .wrapped-hero-title {
     font-size: 34px;
     font-weight: 800;
     letter-spacing: -1px;
-    /* Was a gradient clipped to the text shape (background-clip: text) -
-       now just a plain solid color, the much simpler way to get solid
-       text color once there's no gradient left to clip in the first
-       place. */
-    color: #000000;
+    background: var(--accent-gradient);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
 }
 
 .wrapped-hero-sub {
@@ -448,12 +449,18 @@ img {
     padding: 16px 20px;
     margin-top: 8px;
     border-radius: var(--radius-2xl);
-    background: var(--glass-sheen), #1f1f1f;
-    color: white;
+    /* Was a flat #1f1f1f from the monochrome era - the brand gradient
+       now, matching the hero title just above it (see its own comment)
+       so the two read as one considered identity rather than a plain
+       heading over an unrelated dark button. Text pairs with
+       --on-accent-text, not white, for the same contrast reason every
+       other gradient-filled surface in the app does. */
+    background: var(--glass-sheen), var(--accent-fill);
+    color: var(--on-accent-text);
     font-size: 15px;
     font-weight: 800;
     letter-spacing: -0.2px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: var(--glow-accent), inset 0 1px 0 rgba(255,255,255,0.4);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -702,57 +709,89 @@ img {
     text-transform: uppercase;
 }
 
-/* One deliberately distinct flat color per slide, not a gradient at
-   all anymore - was 8 different hues (indigo, blue-purple-pink,
-   orange-red, green-teal, pink-purple, cyan-blue, purple-violet), then
-   8 different grayscale gradients, now 8 different flat shades along
-   the same gray scale instead. Each still verified against white text
-   at 9.5:1 contrast or better, well past the 4.5:1 minimum, so
-   dropping the gradient never put legibility at any real risk. */
+/* Each slide gets a genuinely distinct warm gradient now, not a flat
+   shade - was 8 hues, then 8 grayscale gradients, then 8 flat grays
+   during the monochrome era; now 8 gradients built from the brand
+   orange/yellow instead, since a flat gray slideshow was exactly the
+   kind of "black and colourless" feel the whole rebrand moved away
+   from. Each still dark enough at its base for white slide text to
+   clear real contrast (verified 4.5:1+ against white, most well past
+   it) - "vibrant" here means a warm gradient wash and glow over a dark
+   base, the same layered-glow language the rest of the app uses now,
+   not a literal bright-orange background white text would fail against.
+   Deliberately building in intensity across the sequence - intro starts
+   moodiest, recap (the shareable finale card) ends on the most vivid
+   treatment, giving the whole slideshow a sense of building toward
+   something rather than 8 interchangeable panels. */
 .wrapped-bg-intro {
-    background: #0a0a0a;
+    background:
+        radial-gradient(ellipse 700px 500px at 50% -10%, rgba(255, 162, 0, 0.16), transparent 60%),
+        #0a0704;
 }
 
 .wrapped-bg-time {
-    background: #262626;
+    background:
+        radial-gradient(ellipse 800px 600px at 15% 0%, rgba(255, 162, 0, 0.24), transparent 55%),
+        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(255, 252, 0, 0.08), transparent 55%),
+        #14100a;
 }
 
 .wrapped-bg-movies {
-    background: #3d3d3d;
+    background:
+        linear-gradient(160deg, rgba(255, 90, 0, 0.28) 0%, transparent 45%),
+        radial-gradient(ellipse 700px 600px at 100% 0%, rgba(255, 162, 0, 0.14), transparent 55%),
+        #1a0e05;
 }
 
 .wrapped-bg-tv {
-    background: #1a1a1a;
+    background:
+        linear-gradient(200deg, rgba(255, 200, 0, 0.24) 0%, transparent 45%),
+        radial-gradient(ellipse 700px 600px at 0% 100%, rgba(255, 162, 0, 0.14), transparent 55%),
+        #14110a;
 }
 
 .wrapped-bg-spotlight {
-    background: #333333;
+    background:
+        radial-gradient(ellipse 900px 700px at 50% 100%, rgba(255, 162, 0, 0.22), transparent 60%),
+        #171008;
 }
 
 .wrapped-bg-month {
-    background: #454545;
+    background:
+        linear-gradient(135deg, rgba(255, 252, 0, 0.12) 0%, rgba(255, 162, 0, 0.22) 55%, transparent 85%),
+        #150e05;
 }
 
 .wrapped-bg-rewatch {
-    background: #202020;
+    background:
+        radial-gradient(ellipse 750px 550px at 85% 15%, rgba(255, 100, 0, 0.26), transparent 55%),
+        radial-gradient(ellipse 600px 500px at 10% 90%, rgba(255, 200, 0, 0.1), transparent 55%),
+        #170c05;
 }
 
+/* The finale - also the shareable recap card, so this is the one slide
+   most likely to be screenshotted and seen outside the app entirely.
+   Gets the full brand gradient treatment directly, not just a wash -
+   the moment the whole sequence has been building toward. */
 .wrapped-bg-recap {
-    background: #050505;
+    background:
+        linear-gradient(135deg, rgba(255, 162, 0, 0.4) 0%, rgba(255, 252, 0, 0.22) 50%, transparent 85%),
+        radial-gradient(ellipse 800px 600px at 100% 100%, rgba(255, 162, 0, 0.2), transparent 60%),
+        #100a04;
 }
 
 /* The top-show spotlight slide layers the actual poster in, blurred and
    dimmed, behind a dark scrim rather than instead of it - reads as
    "this show, celebrated" rather than a plain photo, and still works
-   fine (just falls back to the flat dark background above) for the
-   rare case a show has no poster cached. Was a top-to-bottom gradient
-   scrim (lighter at top, darker at bottom, where text most often
-   sits) - now one flat, uniform dark overlay across the whole image
-   instead, picked dark enough on its own to keep white text legible
-   everywhere on the slide, not just toward the bottom. */
+   fine (just falls back to the gradient background above) for the
+   rare case a show has no poster cached. A warm-tinted scrim now
+   (a hint of the brand orange in the dark, not neutral black) so a
+   poster-backed slide still carries the same identity as every other
+   slide in the sequence, picked dark enough on its own to keep white
+   text legible everywhere on the slide, not just toward one edge. */
 .wrapped-slide-panel.has-poster {
     background-image:
-        linear-gradient(rgba(20, 20, 20, 0.72), rgba(20, 20, 20, 0.72)),
+        linear-gradient(rgba(20, 12, 5, 0.74), rgba(20, 12, 5, 0.74)),
         var(--wrapped-poster-url);
     background-size: cover;
     background-position: center;
@@ -869,7 +908,7 @@ img {
     align-items: center;
     gap: 14px;
     padding-bottom: 14px;
-    border-bottom: 1px solid rgba(61, 61, 61, 0.12);
+    border-bottom: 1px solid rgba(255, 140, 0, 0.12);
 }
 
 .analytics-icon-badge {
@@ -877,18 +916,18 @@ img {
     height: 44px;
     border-radius: var(--radius-sm);
     background: var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
     flex-shrink: 0;
 }
 
 .analytics-card .stat-value.highlight {
     font-size: 15px;
     font-weight: 800;
-    color: var(--blue);
+    color: var(--accent);
     margin-top: 2px;
     letter-spacing: -0.2px;
     white-space: nowrap;
@@ -965,8 +1004,8 @@ img {
     align-items: center;
     justify-content: center;
     text-align: center;
-    background: rgba(61, 61, 61, 0.1);
-    color: var(--blue);
+    background: rgba(255, 140, 0, 0.1);
+    color: var(--accent);
 }
 
 .poster-placeholder .icon {
@@ -1017,7 +1056,7 @@ img {
     background: none;
     border: none;
     padding: 4px 2px;
-    color: var(--blue);
+    color: var(--accent);
     font-size: 13px;
     font-weight: 700;
     letter-spacing: -0.1px;
@@ -1292,7 +1331,7 @@ img {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(61, 61, 61, 0.15);
+    background: rgba(255, 140, 0, 0.15);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -1354,10 +1393,10 @@ img {
     padding: 0 22px;
     border-radius: 999px;
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     font-size: 13px;
     font-weight: 700;
-    box-shadow: 0 8px 20px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s ease;
 }
 
@@ -1417,8 +1456,8 @@ img {
        built to avoid in the first place. Border-color and box-shadow
        alone are enough to read as "focused" without touching the layer
        backdrop-filter operates on at all. */
-    border-color: var(--blue);
-    box-shadow: 0 0 0 4px rgba(61, 61, 61, 0.15), var(--glass-shadow-sm);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(255, 140, 0, 0.15), var(--glass-shadow-sm);
 }
 
 .search-box input {
@@ -1460,7 +1499,7 @@ img {
     transform: translateY(-50%);
     background: transparent;
     border: none;
-    color: var(--blue);
+    color: var(--accent);
     cursor: pointer;
     display: none;
     align-items: center;
@@ -1473,7 +1512,7 @@ img {
 }
 
 .search-clear-btn:hover {
-    color: var(--blue-dark);
+    color: var(--accent-dark);
     background: var(--surface-2);
 }
 
@@ -1527,8 +1566,8 @@ img {
    elsewhere (Discover's TV Shows/Movies toggle). */
 #authScreen .search-type-btn.active {
     background: var(--glass-sheen), var(--accent-fill-flat);
-    color: white;
-    box-shadow: 0 4px 12px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    color: var(--on-accent-text);
+    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .search-type-toggle.three-way {
@@ -1619,7 +1658,7 @@ img {
        a border regardless of what it's built from) - just the elevation
        shadow plus a soft top highlight, the same "floating, not
        outlined" language .nav-indicator uses. */
-    box-shadow: 0 8px 18px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 18px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
     z-index: 0;
 }
 
@@ -1648,8 +1687,8 @@ img {
     /* Sheen layered over the color fill so the active pill reads as
        tinted glass rather than a flat colored chip. */
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
-    box-shadow: 0 8px 18px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    color: var(--on-accent-text);
+    box-shadow: 0 8px 18px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 /* Short, page-level disclaimer for the Upcoming tab specifically - the
@@ -1791,11 +1830,11 @@ img {
     height: 34px;
     border-radius: 50%;
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     flex-shrink: 0;
     transition: transform 0.15s ease;
 }
@@ -2098,7 +2137,7 @@ img {
     margin-top: 2px;
     font-size: 11px;
     font-weight: 700;
-    color: var(--blue);
+    color: var(--accent);
     letter-spacing: -0.1px;
     white-space: nowrap;
     overflow: hidden;
@@ -2106,7 +2145,7 @@ img {
 }
 
 html[data-theme="dark"] .upcoming-card-caption {
-    color: var(--blue-light);
+    color: var(--accent-light);
 }
 
 /* =========================================================
@@ -2149,19 +2188,22 @@ html[data-theme="dark"] .upcoming-card-caption {
        testing it, not assumed - the nav bar rendered with no background
        at all). Visually still completely flat either way. */
     background:
-        linear-gradient(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.12)),
+        linear-gradient(135deg, rgba(255, 162, 0, 0.10), rgba(255, 252, 0, 0.06)),
         var(--glass-sheen),
-        rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(72px) saturate(300%);
-    -webkit-backdrop-filter: blur(72px) saturate(300%);
+        rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(80px) saturate(320%);
+    -webkit-backdrop-filter: blur(80px) saturate(320%);
     /* No border, and no full-perimeter inset ring in the shadow either
        (a uniform "inset 0 0 0 1px" reads as a border no matter what it's
-       implemented with) - just an elevation shadow plus a soft, diffuse
+       implemented with) - just an elevation shadow, a soft warm glow
+       underneath (the brand color announcing itself even on the app's
+       most persistent, always-on-screen element), and a diffuse
        under-glow for a lensed/domed feel. */
     border-radius: 999px;
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.05),
         0 30px 60px rgba(0, 0, 0, 0.16),
+        0 12px 32px rgba(255, 162, 0, 0.14),
         inset 0 -14px 22px -16px rgba(255, 255, 255, 0.5);
 }
 
@@ -2188,18 +2230,17 @@ html[data-theme="dark"] .upcoming-card-caption {
        inset, unlike a fixed radius which would look wrong once the outer
        shape stopped being a rounded-rect. */
     border-radius: 999px;
-    /* Fully transparent fill - no white tint at all, just the blur/
-       refraction below and the shadow for definition. A hair of alpha
-       (not literal 0) because some WebKit versions silently disable
-       backdrop-filter entirely on a truly zero-alpha background - this
-       keeps the glass distortion reliably active while still reading as
-       fully see-through. */
-    background: rgba(255, 255, 255, 0.04);
+    /* Warm gradient tint at low opacity - genuinely translucent, not a
+       flat color chip, with the blur/refraction and glow below doing
+       most of the "glass" work. This is the app's own active-selection
+       indicator, so it's exactly the kind of "selected/active element"
+       the brand's orange/yellow glow treatment is meant for. */
+    background: linear-gradient(135deg, rgba(255, 162, 0, 0.22), rgba(255, 252, 0, 0.14));
     backdrop-filter: blur(20px) saturate(200%);
     -webkit-backdrop-filter: blur(20px) saturate(200%);
     /* No full-perimeter ring here either - a soft top highlight and a
-       soft bottom shadow, not a hard-edged outline. */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07), inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.06);
+       warm accent glow underneath, not a hard-edged outline. */
+    box-shadow: 0 4px 16px rgba(255, 162, 0, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -6px 10px -6px rgba(180, 100, 0, 0.15);
     /* Spring/bounce easing (slight overshoot) rather than a plain ease-out
        - reads as a premium, native-feeling snap into place for BOTH a
        normal tap and a drag-release settle, rather than a mechanical
@@ -2215,7 +2256,7 @@ html[data-theme="dark"] .upcoming-card-caption {
    floating slightly above the bar while it's being "held", rather than
    staying visually identical to its normal resting state. */
 .nav-indicator.dragging {
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -6px 10px -6px rgba(180, 100, 0, 0.2);
 }
 
 .nav-button {
@@ -2229,7 +2270,7 @@ html[data-theme="dark"] .upcoming-card-caption {
     background: transparent;
     /* Was --text-muted (a soft gray) - switched to --text so an
        unselected tab reads as a clean black (light mode) / white (dark
-       mode), with --blue still reserved for the active tab below to
+       mode), with --accent still reserved for the active tab below to
        keep that contrast meaningful. */
     color: var(--text);
     font-size: 10.5px;
@@ -2254,16 +2295,16 @@ html[data-theme="dark"] .upcoming-card-caption {
 }
 
 .nav-button.active {
-    color: var(--blue);
+    color: var(--accent);
 }
 
 .nav-button.active .icon {
     stroke-width: 1.9;
     transform: translateY(-1px) scale(1.08);
-    /* A soft gray glow behind the active icon rather than just a color
-       swap - the same "lit from within" quality the rest of the app's
-       primary buttons already use, just without any hue behind it now. */
-    filter: drop-shadow(0 3px 8px rgba(61, 61, 61, 0.45));
+    /* A warm orange glow behind the active icon rather than just a
+       color swap - the same "lit from within" quality the rest of the
+       app's primary buttons and the nav indicator itself now share. */
+    filter: drop-shadow(0 3px 8px rgba(255, 140, 0, 0.45));
 }
 
 /* =========================================================
@@ -2480,7 +2521,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     justify-content: center;
     border-radius: 50%;
     background: var(--glass-sheen), var(--surface);
-    color: var(--blue);
+    color: var(--accent);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
@@ -2501,10 +2542,10 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 0 18px;
     border-radius: 999px;
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     font-size: 13.5px;
     font-weight: 700;
-    box-shadow: 0 8px 18px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 18px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
     transition: transform 0.15s ease;
 }
 
@@ -2610,12 +2651,12 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8px 20px rgba(31, 31, 31, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 20px rgba(220, 38, 30, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .rewatch-icon-badge {
     background: var(--glass-sheen), var(--accent-fill);
-    box-shadow: 0 8px 20px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .appearance-icon-tile {
@@ -2666,7 +2707,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 .confirm-btn.danger {
     background: var(--glass-sheen), var(--danger-fill);
     color: white;
-    box-shadow: 0 6px 16px rgba(31, 31, 31, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(220, 38, 30, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .confirm-btn.danger:active {
@@ -2679,8 +2720,8 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    confirm-btn variant that wasn't a real class. */
 .confirm-btn.primary {
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    color: var(--on-accent-text);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .confirm-btn.primary:active {
@@ -2778,14 +2819,15 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     flex-shrink: 0;
 }
 
-/* #modalFavoriteBtn specifically - a filled heart once favorited, in
-   the same dark, heavy gray the danger token uses (no color left to
-   call it "red" anymore, but still the same "marked" convention every
-   other use of that token follows). Icon fill is toggled between none/
-   currentColor in updateModalContent(), same as it always was. */
+/* #modalFavoriteBtn specifically - a filled heart once favorited, using
+   the real --danger red now (was a dark, heavy gray during the
+   monochrome era - no color to call "red" back then, just weight).
+   Border is a translucent step of the same red rather than the old
+   hardcoded gray literal, so the two actually match now instead of a
+   colorful icon sitting inside a leftover gray ring. */
 .modal-action-chip.favorited {
     color: var(--danger);
-    border-color: rgba(31, 31, 31, 0.3);
+    border-color: rgba(212, 46, 36, 0.35);
 }
 
 /* #listDetailDeleteBtn specifically - a destructive action gets a
@@ -2794,8 +2836,8 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    right up until the confirmation dialog appears. */
 .modal-action-chip.danger {
     color: var(--danger);
-    border-color: rgba(31, 31, 31, 0.3);
-    background: rgba(31, 31, 31, 0.08);
+    border-color: rgba(220, 38, 30, 0.3);
+    background: rgba(220, 38, 30, 0.08);
 }
 
 /* Holds whichever of the two secondary info lines actually applies
@@ -2819,7 +2861,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    color: var(--blue);
+    color: var(--accent);
 }
 
 /* The content-rating badge (PG-13, TV-MA, etc.) inside .modal-meta -
@@ -2922,16 +2964,16 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 
 .cinema-chip .watch-provider-logo.cinema-icon {
     background: var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     display: flex;
     align-items: center;
     justify-content: center;
     border: none;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3);
 }
 
 .cinema-chip .watch-provider-name {
-    color: var(--blue);
+    color: var(--accent);
     font-weight: 750;
     white-space: normal;
 }
@@ -3002,20 +3044,20 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 
 .action-button.primary {
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     border: none;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
-/* Same filled-glass treatment as the other action buttons (sheen +
-   the flat --flat-blue tone + white text + inset highlight - named for
-   what it originally was, now a gray like everything else). Sign In,
-   Join, and Sign Out all share this exact same look. */
+/* Same filled-glass treatment as the primary action button, at the
+   flat (non-gradient) accent tone instead - Sign In, Join, and Sign
+   Out all share this exact same look, deliberately a step quieter
+   than the full gradient treatment primary actions get. */
 .action-button.trailer {
     background: var(--glass-sheen), var(--accent-fill-flat);
-    color: white;
+    color: var(--on-accent-text);
     border: none;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.warning {
@@ -3029,7 +3071,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     background: var(--glass-sheen), var(--danger-fill);
     color: white;
     border: none;
-    box-shadow: 0 6px 16px rgba(31, 31, 31, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(220, 38, 30, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .season-selector-wrapper {
@@ -3136,8 +3178,8 @@ html[data-theme="dark"] .modal-header-nav .close-button {
        shadow at all - just a subtle inset top highlight for a touch of
        glass dimension, nothing that reads as a glow or a ring. */
     background: var(--glass-sheen), var(--accent-fill);
-    border-color: var(--blue);
-    color: white;
+    border-color: var(--accent);
+    color: var(--on-accent-text);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
@@ -3159,7 +3201,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .episode-up-next {
-    background: rgba(61, 61, 61, 0.06);
+    background: rgba(255, 140, 0, 0.06);
 }
 
 /* A not-yet-released episode - dimmed so it visually reads as "not here
@@ -3225,10 +3267,10 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .rewatch-count-tap {
-    color: var(--blue-light);
+    color: var(--accent-light);
     font-weight: 700;
     text-decoration: underline;
-    text-decoration-color: rgba(61, 61, 61, 0.4);
+    text-decoration-color: rgba(255, 140, 0, 0.4);
     text-underline-offset: 2px;
     transition: opacity 0.15s ease;
 }
@@ -3253,9 +3295,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     background: rgba(244, 244, 244, 0.5);
     backdrop-filter: var(--glass-chrome-blur);
     -webkit-backdrop-filter: var(--glass-chrome-blur);
-    border: 1px solid rgba(61, 61, 61, 0.14);
+    border: 1px solid rgba(255, 140, 0, 0.14);
     border-radius: var(--radius-2xl);
-    box-shadow: 0 20px 48px rgba(61, 61, 61, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    box-shadow: 0 20px 48px rgba(255, 140, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .hero-top {
@@ -3318,8 +3360,8 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     justify-content: center;
     border-radius: 50%;
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
-    box-shadow: 0 8px 20px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    color: var(--on-accent-text);
+    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -3506,11 +3548,11 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 0 18px;
     border-radius: 999px;
     background: var(--glass-sheen), var(--accent-fill);
-    color: white;
+    color: var(--on-accent-text);
     font-size: 13px;
     font-weight: 700;
     text-align: center;
-    box-shadow: 0 8px 20px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     /* Was missing entirely - :active below changes transform with
        nothing to animate it, so the press feedback snapped instead of
        the same smooth scale-down every other pressable pill in the app
@@ -3541,7 +3583,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 .hero-pill-btn.pill-off {
     min-width: 72px;
     background: var(--glass-sheen), var(--danger-fill);
-    box-shadow: 0 8px 20px rgba(31, 31, 31, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(220, 38, 30, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .hero-pill-btn.pill-neutral {
@@ -3655,9 +3697,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: var(--on-accent-text);
     border: 2px solid #ececec;
-    box-shadow: 0 3px 8px rgba(61, 61, 61, 0.3);
+    box-shadow: 0 3px 8px rgba(255, 140, 0, 0.3);
 }
 
 html[data-theme="dark"] .avatar-edit-badge {
@@ -3714,7 +3756,7 @@ html[data-theme="dark"] .large-avatar {
     position: absolute;
     inset: -3px;
     border-radius: calc(var(--radius-lg) + 3px);
-    border: 3px solid var(--blue);
+    border: 3px solid var(--accent);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -3755,7 +3797,7 @@ html[data-theme="dark"] .large-avatar {
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--blue);
+    color: var(--accent);
 }
 
 .home-name {
@@ -3818,7 +3860,7 @@ html[data-theme="dark"] .large-avatar {
     width: 17px;
     height: 17px;
     margin-top: 1px;
-    accent-color: var(--blue);
+    accent-color: var(--accent);
 }
 
 .auth-terms-row label {
@@ -3828,7 +3870,7 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-terms-row a {
-    color: var(--blue);
+    color: var(--accent);
     font-weight: 700;
     text-decoration: none;
 }
@@ -3885,9 +3927,9 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-input:focus {
-    border-color: var(--blue);
+    border-color: var(--accent);
     background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(61, 61, 61, 0.15);
+    box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
 }
 
 .auth-actions {
@@ -3903,8 +3945,8 @@ html[data-theme="dark"] .large-avatar {
     font-size: 13px;
     font-weight: 700;
     background: var(--glass-sheen), var(--accent-fill-flat);
-    color: white;
-    box-shadow: 0 6px 16px rgba(61, 61, 61, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    color: var(--on-accent-text);
+    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s ease;
 }
 
@@ -3923,7 +3965,7 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-forgot-link {
     background: transparent;
-    color: var(--blue);
+    color: var(--accent);
     font-size: 12px;
     font-weight: 600;
     text-decoration: none;
@@ -4129,7 +4171,7 @@ html[data-theme="dark"] .large-avatar {
     justify-content: center;
     background: var(--danger-fill);
     color: white;
-    box-shadow: 0 3px 8px rgba(31, 31, 31, 0.4);
+    box-shadow: 0 3px 8px rgba(220, 38, 30, 0.4);
 }
 
 .error-toast-icon .icon {
@@ -4202,7 +4244,7 @@ html[data-theme="dark"] .large-avatar {
        above - this had no dark-mode override at all, so it stayed the
        light-mode red in dark mode. */
     border: 1px solid var(--danger) !important;
-    box-shadow: 0 0 0 2px rgba(31, 31, 31, 0.12);
+    box-shadow: 0 0 0 2px rgba(220, 38, 30, 0.12);
 }
 /* =========================================================
    DARK MODE
@@ -4244,13 +4286,13 @@ html[data-theme="dark"] .confirm-card {
 }
 
 html[data-theme="dark"] .rewatch-icon-badge {
-    box-shadow: 0 8px 20px rgba(61, 61, 61, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 html[data-theme="dark"] .hero-card {
     /* Same flattening as the light-mode .hero-card rule. */
     background: rgba(15, 15, 15, 0.5);
-    border-color: rgba(61, 61, 61, 0.18);
+    border-color: rgba(255, 140, 0, 0.18);
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
@@ -4259,7 +4301,7 @@ html[data-theme="dark"] .search-type-btn.active {
 }
 
 html[data-theme="dark"] #authScreen .search-type-btn.active {
-    box-shadow: 0 4px 12px rgba(61, 61, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 html[data-theme="dark"] .appearance-icon-tile {
