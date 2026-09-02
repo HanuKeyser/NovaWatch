@@ -5270,6 +5270,23 @@ function showPage(page, subType = null, focusSearch = false) {
         } else {
             const query = document.getElementById("onlineSearchInput").value.trim();
             if (!query) fetchForYou();
+            // setSearchType() (which also repositions the toggle's own
+            // sliding indicator) only runs above when a subType was
+            // explicitly passed - the common case, just tapping the
+            // Search nav button with no subtype, skipped it entirely.
+            // The indicator was positioned once already, back on
+            // DOMContentLoaded, but #discoverPage was still display:
+            // none at that exact moment (only one page is ever visible
+            // at a time), so its own getBoundingClientRect() measured a
+            // zero-width container - the indicator has been sitting at
+            // that same zero width ever since, on every single visit to
+            // this page, until someone happened to tap a toggle button
+            // directly and trigger a real setSearchType() call. Re-
+            // measuring here, every time the page is actually shown,
+            // fixes it without needing to run the rest of
+            // setSearchType()'s own work (re-fetching search results)
+            // just to reposition one element.
+            updateSegmentedIndicator(document.querySelector("#discoverPage .segmented-toggle"), document.getElementById("searchTypeIndicator"), false);
         }
 
         // Only auto-focus when the person actually tapped their way to
