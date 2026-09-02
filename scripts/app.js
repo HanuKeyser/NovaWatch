@@ -5417,129 +5417,26 @@ function updateSegmentedIndicator(containerEl, indicatorEl, animate = true) {
     }
 }
 
-// Genuinely the same gesture as the bottom nav bar's own
-// initNavBarDragToSwitch above, not a simplified approximation of it -
-// generalized to work for any two-button toggle with a sliding
-// indicator behind it, so the TV Shows/Movies toggles (Search,
-// Upcoming) behave identically to the nav bar rather than a lookalike
-// with different underlying mechanics. See initNavBarDragToSwitch's own
-// comments for the full reasoning behind each piece (continuous 1:1
-// tracking during the drag with hit-testing deferred entirely to
-// release, nearest-button snapping rather than strict pixel-precision
-// hit-testing, the click-suppression timer, why released-outside snaps
-// back instead of committing) - none of that is repeated here since
-// it's identical, not adapted.
-function initSegmentedDragToSwitch(containerEl, indicatorEl, leftBtn, rightBtn, switchFn, leftValue, rightValue) {
-    if (!containerEl || !indicatorEl || !leftBtn || !rightBtn) return;
-
-    const DRAG_THRESHOLD = 22;
-    let startX = 0, startY = 0, dragging = false, pointerId = null, dragWidth = 0;
-    let suppressNextClick = false, suppressClickTimer = null;
-
-    containerEl.addEventListener("click", (e) => {
-        if (suppressNextClick) {
-            e.preventDefault();
-            e.stopPropagation();
-            suppressNextClick = false;
-            clearTimeout(suppressClickTimer);
-        }
-    }, true);
-
-    containerEl.addEventListener("pointerdown", (e) => {
-        if (e.pointerType === "mouse" && e.button !== 0) return;
-        startX = e.clientX;
-        startY = e.clientY;
-        dragging = false;
-        pointerId = e.pointerId;
-    });
-
-    containerEl.addEventListener("pointermove", (e) => {
-        if (e.pointerId !== pointerId) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-
-        if (!dragging) {
-            if (Math.abs(dx) < DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
-            dragging = true;
-            containerEl.setPointerCapture(pointerId);
-            indicatorEl.style.transition = "none";
-            indicatorEl.classList.add("dragging");
-            dragWidth = indicatorEl.getBoundingClientRect().width;
-        }
-
-        const rect = containerEl.getBoundingClientRect();
-        const rawX = e.clientX - rect.left - (dragWidth / 2);
-        const clampedX = Math.max(0, Math.min(rawX, rect.width - dragWidth));
-        indicatorEl.style.width = `${dragWidth}px`;
-        indicatorEl.style.transform = `translateX(${clampedX}px)`;
-    });
-
-    function finishDrag(e) {
-        if (pointerId === null || e.pointerId !== pointerId) return;
-
-        if (dragging) {
-            indicatorEl.style.transition = "";
-            indicatorEl.classList.remove("dragging");
-
-            const rect = containerEl.getBoundingClientRect();
-            const withinBounds = e.clientX >= rect.left && e.clientX <= rect.right
-                && e.clientY >= rect.top && e.clientY <= rect.bottom;
-
-            let releaseButton = null;
-            if (withinBounds) {
-                let closestDist = Infinity;
-                [leftBtn, rightBtn].forEach((btn) => {
-                    const r = btn.getBoundingClientRect();
-                    const dist = Math.abs(e.clientX - (r.left + r.width / 2));
-                    if (dist < closestDist) {
-                        closestDist = dist;
-                        releaseButton = btn;
-                    }
-                });
-            }
-
-            if (releaseButton) {
-                e.preventDefault();
-                suppressNextClick = true;
-                clearTimeout(suppressClickTimer);
-                suppressClickTimer = setTimeout(() => { suppressNextClick = false; }, 400);
-                switchFn(releaseButton === leftBtn ? leftValue : rightValue);
-                positionSegmentedIndicatorAt(containerEl, indicatorEl, releaseButton);
-            } else {
-                const activeBtn = containerEl.querySelector(".segmented-btn.active");
-                positionSegmentedIndicatorAt(containerEl, indicatorEl, activeBtn);
-            }
-        }
-
-        dragging = false;
-        pointerId = null;
-    }
-
-    containerEl.addEventListener("pointerup", finishDrag);
-    containerEl.addEventListener("pointercancel", finishDrag);
-}
-
-function initTVMovieToggleDragging() {
+// Positions the sliding indicator correctly on first load (each toggle's
+// page starts display:none, so an initial measurement here would read a
+// zero-width container - see the fix in showPage()/setUpcomingView()
+// that re-measures once the page is actually visible) and keeps it
+// aligned on resize. No drag-to-switch gesture on these two toggles -
+// removed per explicit request; tapping a button (via each button's own
+// onclick) is what switches between TV Shows and Movies, and
+// setSearchType()/setUpcomingView() already reposition the pill
+// themselves on every tap. The bottom nav bar's own drag gesture
+// (initNavBarDragToSwitch above) is untouched - this was never shared
+// code with it, just a matching gesture built the same way, so removing
+// this doesn't affect the nav bar at all.
+function initTVMovieToggleIndicators() {
     const searchContainer = document.getElementById("searchTypeToggle");
     const searchIndicator = document.getElementById("searchTypeIndicator");
     updateSegmentedIndicator(searchContainer, searchIndicator, false);
-    initSegmentedDragToSwitch(
-        searchContainer, searchIndicator,
-        document.getElementById("searchTypeTV"),
-        document.getElementById("searchTypeMovie"),
-        setSearchType, "tv", "movie"
-    );
 
-    const upcomingTV = document.getElementById("upcomingTabTV");
     const upcomingContainer = document.getElementById("upcomingTypeToggle");
     const upcomingIndicator = document.getElementById("upcomingTypeIndicator");
     updateSegmentedIndicator(upcomingContainer, upcomingIndicator, false);
-    initSegmentedDragToSwitch(
-        upcomingContainer, upcomingIndicator,
-        upcomingTV,
-        document.getElementById("upcomingTabMovies"),
-        setUpcomingView, "tv", "movies"
-    );
 
     window.addEventListener("resize", () => {
         updateSegmentedIndicator(searchContainer, searchIndicator, false);
@@ -5547,7 +5444,8 @@ function initTVMovieToggleDragging() {
     });
 }
 
-document.addEventListener("DOMContentLoaded", initTVMovieToggleDragging);
+document.addEventListener("DOMContentLoaded", initTVMovieToggleIndicators);
+
 
 // Switches between the TV Shows / Movies sub-views inside the Library
 // tab, toggling the segmented control and showing/hiding each sub-view's
