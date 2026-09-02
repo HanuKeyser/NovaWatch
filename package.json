@@ -1,14 +1,16 @@
 {
   "name": "novawatch-release-notifications",
+  "version": "1.0.0",
   "private": true,
-  "description": "Server-side scheduled job for send-release-notifications.js - not part of the client app itself (index.html doesn't load anything from here).",
+  "description": "Scheduled server-side job that sends NovaWatch release and engagement push notifications via OneSignal - see send-release-notifications.js.",
+  "main": "send-release-notifications.js",
   "scripts": {
-    "send-notifications": "node send-release-notifications.js"
+    "start": "node send-release-notifications.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }
