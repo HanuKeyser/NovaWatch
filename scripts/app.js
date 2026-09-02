@@ -1301,127 +1301,56 @@ function tmdbDateToISO(dateStr) {
 /* =========================================================
    TV EPISODE RELEASE TIMING
    Real per-episode release instants, timezone-correct for every viewer.
-   TV episode timing was fully removed at one point (a long saga: real
+   TV episode timing was fully removed once before (a long saga: real
    TVmaze-sourced airtimes -> repeated validation tightening as new edge
    cases kept surfacing -> pure TMDB-date+convention math -> a manual
    correction feature -> two abandoned admin-correction systems -> full
-   removal). Brought back deliberately differently this time: rather
-   than trying to force one computed formula to cover every show, this
-   splits by what TVmaze itself says it actually knows -
+   removal). It was then brought back with a TVmaze network/webChannel
+   split (real broadcast-anchored time for shows TVmaze lists under a
+   real `network`, streaming-default otherwise) - and TVmaze was removed
+   again from here after that split turned out not to actually solve the
+   problem it was meant to: TVmaze has no reliable per-episode time for
+   the increasingly common case of a show that simulcasts on a broadcast/
+   cable network AND a streaming platform but that TVmaze itself only
+   ever tags under `webChannel` (confirmed directly against a real show:
+   "The Shards" airs on FX *and* streams on Hulu the same evening, but
+   TVmaze lists it as webChannel-only, with no time-of-day on any of its
+   episodes) - so those shows silently got the exact same
+   midnight-Pacific default as a genuine streaming-only show anyway,
+   while adding a second external API, a caching field (`tvmazeId`), and
+   a whole extra failure surface for no actual accuracy gain. TMDB alone,
+   applying the same streaming convention movies already use, is
+   EXACTLY as accurate for every show TVmaze's webChannel-only case
+   already degraded to - so removing TVmaze costs nothing real and
+   drops a real source of fragility.
 
-     - A show TVmaze lists under a real `network` (broadcast/cable) has
-       a genuinely reliable, network-announced local airtime - used
-       as-is (see buildBroadcastTimingMap).
-     - Everything else (a TVmaze `webChannel` entry, or no TVmaze match
-       at all) falls back to the same midnight-Pacific streaming
-       convention movies already use. TVmaze itself does NOT store a
-       trustworthy per-episode time for global streaming shows (their
-       own API returns a fixed noon-UTC placeholder for those) - so
-       there's nothing worth reading from TVmaze for that case, and
-       midnight Pacific is the latest time in the range real streaming
-       platforms actually use (official Netflix/Disney+ policy; most
-       others release earlier in the evening PT). That means this can
-       under-promise (show "not released yet" for a few extra hours on
-       an early-release platform) but never over-promise (claim
-       something's out before it verifiably is, anywhere).
+   Every TV episode now gets the same treatment as a movie: TMDB's own
+   air_date, anchored to the streaming/midnight-Pacific convention
+   (getPacificMidnightUTC/tmdbDateToISO above). Netflix/Disney+'s own
+   stated policy is "12:01 AM Pacific Time" - the latest time in the
+   range real streaming platforms actually use (most release earlier in
+   the evening PT) - so this can under-promise (show "not released yet"
+   for a few extra hours on an early-release platform) but never
+   over-promise (claim something's out before it verifiably is,
+   anywhere) EXCEPT for a show with a real evening broadcast/cable
+   airtime, where it can show up to a day early for viewers meaningfully
+   east of Pacific - a known, accepted limitation (see the note on
+   "The Shards"/FX+Hulu above) rather than something local logic can fix
+   without a data source that actually has a trustworthy per-episode
+   time for that case, which nothing available to this app currently
+   does.
 
    Only the calendar DATE this produces is meant to be trusted per
    viewer timezone - not treated as a promise of the exact hour.
 ========================================================= */
-const TVMAZE_API_BASE = "https://api.tvmaze.com";
 
-// Resolves a show's TVmaze record (with its full embedded episode list),
-// caching the result on the item itself (`tvmazeId`) so a show only ever
-// gets searched for once. `undefined` = never attempted, `null` =
-// attempted and not found (or TVmaze unreachable) - both simply mean
-// this show stays on the streaming-midnight-Pacific default, same as
-// every TV show did before this feature existed. Never a hard failure -
-// a network error or a show TVmaze doesn't have is a normal outcome
-// here, not something to surface to the user.
-async function resolveTVmazeShow(item, showData, imdbId) {
-    if (item.tvmazeId === null) return null;
-
-    if (typeof item.tvmazeId === 'number') {
-        try {
-            const res = await fetch(`${TVMAZE_API_BASE}/shows/${item.tvmazeId}?embed=episodes`);
-            if (!res.ok) return null;
-            return await res.json();
-        } catch (e) {
-            return null;
-        }
-    }
-
-    try {
-        let tvmazeShow = null;
-        if (imdbId) {
-            const res = await fetch(`${TVMAZE_API_BASE}/lookup/shows?imdb=${imdbId}`);
-            if (res.ok) tvmazeShow = await res.json();
-        }
-        // Fallback is a best-effort name search - only reachable when
-        // there's no IMDB id to do an exact lookup with. A loose name
-        // match occasionally being wrong just means that one show keeps
-        // the streaming-default date instead of a real broadcast one -
-        // never worse than the "no TV timing at all" baseline this is
-        // replacing.
-        if (!tvmazeShow) {
-            const res = await fetch(`${TVMAZE_API_BASE}/singlesearch/shows?q=${encodeURIComponent(showData.name || item.title)}`);
-            if (res.ok) tvmazeShow = await res.json();
-        }
-        if (!tvmazeShow || !tvmazeShow.id) {
-            item.tvmazeId = null;
-            return null;
-        }
-        item.tvmazeId = tvmazeShow.id;
-        const epRes = await fetch(`${TVMAZE_API_BASE}/shows/${tvmazeShow.id}?embed=episodes`);
-        if (!epRes.ok) return null;
-        return await epRes.json();
-    } catch (e) {
-        item.tvmazeId = null;
-        return null;
-    }
-}
-
-// A `season+episode -> real anchor instant` lookup, populated only when
-// TVmaze has this show under a real broadcast/cable `network` (not a
-// streaming `webChannel` - see the block comment above for why that
-// half is deliberately never trusted for per-episode time). Empty map
-// for any show that doesn't qualify, which getEpisodeReleaseDate below
-// treats the same as "TVmaze doesn't have this show" - falls straight
-// through to the streaming default.
-function buildBroadcastTimingMap(tvmazeShow) {
-    const map = new Map();
-    if (!tvmazeShow || !tvmazeShow.network) return map;
-    const episodes = tvmazeShow._embedded && tvmazeShow._embedded.episodes;
-    if (!episodes) return map;
-    const timeZone = tvmazeShow.network.country && tvmazeShow.network.country.timezone;
-    if (!timeZone) return map;
-
-    episodes.forEach(ep => {
-        if (!ep.airdate) return;
-        const timeStr = ep.airtime || (tvmazeShow.schedule && tvmazeShow.schedule.time) || '20:00';
-        const parts = timeStr.split(':').map(Number);
-        const hour = Number.isFinite(parts[0]) ? parts[0] : 20;
-        const minute = Number.isFinite(parts[1]) ? parts[1] : 0;
-        // -5 (US Eastern standard time) as the fallback offset if the
-        // browser's Intl support falls through - matches getPacificMidnightUTC's
-        // pattern of a safe fixed guess for the rare non-DST-aware path.
-        const anchor = getTimezoneAnchorUTC(ep.airdate, timeZone, hour, minute, -5);
-        map.set(`s${ep.season}e${ep.number}`, new Date(anchor).toISOString());
-    });
-    return map;
-}
-
-// The one place a TV episode's release date gets anchored. Real
-// broadcast time when the show qualifies for one (see
-// buildBroadcastTimingMap), otherwise the same streaming convention
-// movies use, applied to TMDB's own per-episode air_date.
-function getEpisodeReleaseDate(tmdbEp, seasonNumber, broadcastTimingMap) {
-    const key = `s${seasonNumber}e${tmdbEp.episode_number}`;
-    if (broadcastTimingMap && broadcastTimingMap.has(key)) {
-        return { releaseDate: broadcastTimingMap.get(key), timingSource: 'broadcast' };
-    }
-    if (!tmdbEp.air_date) return { releaseDate: null, timingSource: null };
-    return { releaseDate: tmdbDateToISO(tmdbEp.air_date), timingSource: 'streaming' };
+// The one place a TV episode's release date gets anchored - the same
+// streaming convention movies use, applied to TMDB's own per-episode
+// air_date. No broadcast/network special-casing (see the block comment
+// above for why that was removed).
+function getEpisodeReleaseDate(tmdbEp) {
+    if (!tmdbEp.air_date) return null;
+    return tmdbDateToISO(tmdbEp.air_date);
 }
 
 // A season's episode fetch, retried once before giving up on it - a
@@ -1442,12 +1371,9 @@ async function fetchTMDBSeason(tmdbId, seasonNumber) {
 }
 
 // Builds one standardized episode object from a single TMDB episode.
-// `broadcastTimingMap` is optional (omit/pass null for contexts that
-// deliberately skip TVmaze - see the preview-fetch call site) - every
-// episode still gets a streaming-default releaseDate either way, as
-// long as TMDB itself has an air_date for it.
-function buildEpisodeFields(seasonNumber, ep, broadcastTimingMap) {
-    const timing = getEpisodeReleaseDate(ep, seasonNumber, broadcastTimingMap);
+// Every episode gets a streaming-default releaseDate as long as TMDB
+// itself has an air_date for it (see getEpisodeReleaseDate above).
+function buildEpisodeFields(seasonNumber, ep) {
     return {
         id: `s${seasonNumber}e${ep.episode_number}`,
         season: seasonNumber,
@@ -1456,8 +1382,7 @@ function buildEpisodeFields(seasonNumber, ep, broadcastTimingMap) {
         overview: ep.overview || '',
         still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
         runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
-        releaseDate: timing.releaseDate,
-        timingSource: timing.timingSource,
+        releaseDate: getEpisodeReleaseDate(ep),
         watched: false,
         watchedAt: null
     };
@@ -1475,13 +1400,13 @@ function buildEpisodeFields(seasonNumber, ep, broadcastTimingMap) {
 // episodes, completely untouched, instead of being silently dropped (a
 // real, confirmed bug this once caused: a single transient season
 // failure wiping that season's watched history on the very next sync).
-function buildEpisodesFromSeasons(validSeasons, seasonsData, existingEpisodes = null, broadcastTimingMap = null) {
+function buildEpisodesFromSeasons(validSeasons, seasonsData, existingEpisodes = null) {
     const episodes = [];
     validSeasons.forEach((season, i) => {
         const seasonData = seasonsData[i];
         if (seasonData && seasonData.episodes) {
             seasonData.episodes.forEach(ep => {
-                episodes.push(buildEpisodeFields(seasonData.season_number, ep, broadcastTimingMap));
+                episodes.push(buildEpisodeFields(seasonData.season_number, ep));
             });
         } else if (existingEpisodes && existingEpisodes.length > 0) {
             episodes.push(...existingEpisodes.filter(ep => ep.season === season.season_number));
@@ -3439,28 +3364,11 @@ async function refreshItemFromTMDBInternal(item) {
                     }
                 } else {
                     // TV Shows: refresh show-level metadata AND the full episode/season list.
-                    // external_ids appended so resolveTVmazeShow() below has an
-                    // IMDB id for an exact TVmaze lookup, without a second round-trip.
-                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
+                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
                     const showData = await res.json();
                     if (!showData || !showData.seasons) return { changed: false, failed: false };
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
                     const seasonsData = await Promise.all(validSeasons.map(season => fetchTMDBSeason(item.tmdbId, season.season_number)));
-
-                    // Real per-episode timing (see the TV EPISODE RELEASE TIMING
-                    // block near tmdbDateToISO) - resolved every sync so a show
-                    // that only just got picked up by a network TVmaze tracks
-                    // (or one whose schedule changed) picks that up here, not
-                    // just at add time. resolveTVmazeShow() mutates item.tvmazeId
-                    // as a caching side effect - captured before/after so that
-                    // first-time resolution gets saved even on a sync where
-                    // nothing else about the show happened to change (otherwise
-                    // it'd never persist and every sync would re-search TVmaze
-                    // from scratch, forever).
-                    const prevTvmazeId = item.tvmazeId;
-                    const tvmazeShow = await resolveTVmazeShow(item, showData, showData.external_ids && showData.external_ids.imdb_id);
-                    const broadcastTimingMap = buildBroadcastTimingMap(tvmazeShow);
-                    const tvmazeIdChanged = item.tvmazeId !== prevTvmazeId;
 
                     // BUG FIX (shared logic - see buildEpisodesFromSeasons()):
                     // a season whose fetch still failed even after
@@ -3473,11 +3381,11 @@ async function refreshItemFromTMDBInternal(item) {
                     // transient failure for one season out of several used to be
                     // enough to permanently wipe that season's episodes - watched
                     // history included - with no error shown anywhere.
-                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, item.episodes, broadcastTimingMap);
+                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, item.episodes);
 
                     // Merge against the existing episode list: keep each episode's
                     // watched flag (and the date it was watched on - see
-                    // setEpisodeWatched), but pick up any TMDB/TVmaze edit (renamed
+                    // setEpisodeWatched), but pick up any TMDB edit (renamed
                     // episode, fixed synopsis/still/air date/runtime/release timing).
                     // This runs on every periodic background sync, so skipping the
                     // watchedAt carryover here would quietly erase every
@@ -3549,7 +3457,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.numberOfEpisodes !== newEpisodeCount
                     );
 
-                    if (episodesChanged || metadataChanged || tvmazeIdChanged) {
+                    if (episodesChanged || metadataChanged) {
                         if (newEpisodes.length > 0) item.episodes = newEpisodes;
                         item.title = newTitle;
                         item.year = newYear;
@@ -3561,7 +3469,6 @@ async function refreshItemFromTMDBInternal(item) {
                         item.rating = newRating;
                         item.numberOfSeasons = newSeasonCount;
                         item.numberOfEpisodes = newEpisodeCount;
-                        // item.tvmazeId was already set in place by resolveTVmazeShow().
 
                         await saveItem(item);
                         changed = true;
@@ -4936,9 +4843,7 @@ async function importMediaData(id, type, buttonElement) {
 
         } else {
             const availabilityPromise = fetchWatchAvailability(id, 'tv');
-            // external_ids appended for the TVmaze lookup below (an exact
-            // IMDB-id match beats the name-search fallback).
-            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
+            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}`);
             const showData = await showRes.json();
 
             if (!showRes.ok || !showData || !showData.id || !showData.name) {
@@ -4965,27 +4870,11 @@ async function importMediaData(id, type, buttonElement) {
             }
 
             let episodes = [];
-            // Stays undefined (not null) unless a TVmaze resolution is
-            // actually attempted below - matches resolveTVmazeShow()'s own
-            // undefined/null distinction, so a show added with no seasons
-            // yet still gets a real attempt on its first background sync
-            // rather than being permanently treated as "already tried".
-            let tvmazeId;
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
                 const seasonsData = await Promise.all(validSeasons.map(season => fetchTMDBSeason(id, season.season_number)));
-
-                // Real per-episode timing, resolved once up front so the show
-                // enters the library with accurate dates immediately instead
-                // of waiting for the first background sync (see the TV
-                // EPISODE RELEASE TIMING block near tmdbDateToISO).
-                const timingContext = { title: showData.name };
-                const tvmazeShow = await resolveTVmazeShow(timingContext, showData, showData.external_ids && showData.external_ids.imdb_id);
-                tvmazeId = timingContext.tvmazeId;
-                const broadcastTimingMap = buildBroadcastTimingMap(tvmazeShow);
-
-                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData, null, broadcastTimingMap);
+                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData);
             }
 
             // Carry watched flags (and the date each was watched on - see
@@ -5032,12 +4921,6 @@ async function importMediaData(id, type, buttonElement) {
                 watchLink: availability.link,
                 contentRating: availability.contentRating
             };
-            // Only set when a TVmaze resolution was actually attempted above -
-            // an omitted key (rather than an explicit `undefined` value) is
-            // what keeps this field out of the Firestore write entirely,
-            // consistent with resolveTVmazeShow()'s own undefined/null
-            // distinction (see its comment).
-            if (typeof tvmazeId !== 'undefined') newShow.tvmazeId = tvmazeId;
 
             state.library.push(newShow);
             await saveItem(newShow);
