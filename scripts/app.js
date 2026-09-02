@@ -2372,6 +2372,17 @@ async function deleteAllUserData(uid) {
 
     await deleteCollection("library");
     await deleteCollection("archivedShows");
+    // Found via a full audit tracing data across the whole app, not just
+    // this file: both of these were being left behind forever on account
+    // deletion. "lists" is a real gap in this file alone (it exists,
+    // just wasn't in this function's list). "_internal" is worse - it's
+    // never written by app.js at all, only by the separate server-side
+    // send-release-notifications.js (lastStreakReminder,
+    // lastContinueWatchingReminder, notifiedReleases) - genuinely
+    // invisible to anyone auditing only the client code, which is
+    // presumably how it got missed here in the first place.
+    await deleteCollection("lists");
+    await deleteCollection("_internal");
 
     // Free up the reserved username so someone else can claim it -
     // otherwise a deleted account would permanently squat on the name.
