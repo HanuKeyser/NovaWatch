@@ -1,5 +1,7 @@
 # NovaWatch — v1.0.0
 
+Launched October 1, 2026.
+
 What's included, top to bottom.
 
 ## Tracking & Library
@@ -62,7 +64,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
 - Dark mode throughout, applied before first paint so there's no flash between themes on load.
-- An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap. A separate banner at the top of the screen announces achievement unlocks, since those have no other visible sign anywhere on screen. Both toasts scale their width to match the nav bar on wider screens, so they stay one consistent family of floating controls instead of the nav growing while they stayed fixed.
+- An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap. A separate banner at the top of the screen announces achievement unlocks, season/show completions, and collection nudges, since none of those have any other visible sign anywhere on screen. Tapping one takes you straight to what it's about — Achievements for an unlock, the actual show or movie for the other two — instead of every notification acting the same regardless of what it said. Both toasts scale their width to match the nav bar on wider screens, so they stay one consistent family of floating controls instead of the nav growing while they stayed fixed.
 - A movie or show's hero photo now stays proportioned properly on wide screens instead of getting cropped tighter and tighter the wider the window gets.
 - Home's Viewing Analytics tiles lay out as one row of four on wider screens instead of staying a cramped square, and an empty state (like "You're All Caught Up") stays a comfortable size and centered instead of stretching into a very wide, mostly-empty panel.
 - The offline banner pushes the page's own content down while visible, rather than floating on top of it.
