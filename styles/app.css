@@ -4011,6 +4011,21 @@ html[data-theme="dark"] .state-card {
     .continue-group-title {
         grid-column: 1 / -1;
     }
+
+    /* Same reasoning as .continue-group just above - Discover's search
+       results and For You recommendations (#searchResultsList) are
+       built from the same "fixed-width poster + a text block that
+       fills whatever's left" row (.search-card), so they'd stretch the
+       exact same way without this. Unlike .continue-card-wrap, a
+       .search-card has no margin of its own for vertical spacing
+       between rows (adjacent cards just relied on normal block flow
+       stacking), so a small row gap is added here alongside the column
+       gap, rather than relying on a margin that doesn't exist. */
+    .search-results-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px 12px;
+    }
 }
 
 /* =========================================================
@@ -4074,6 +4089,10 @@ html[data-theme="dark"] .state-card {
        stretched-row problem the 1280px block's two-column step exists
        to avoid, just with one extra column instead of none. */
     .continue-group {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .search-results-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
