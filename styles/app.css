@@ -2813,6 +2813,11 @@ html[data-theme="dark"] .modal-sheet-compact {
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.4);
+    /* No visual effect on its own (nothing here changes this at rest) -
+       exists purely so the fine-pointer hover lift a few hundred lines
+       down (.settings-row:hover .settings-row-icon) animates smoothly
+       instead of snapping straight to its new transform. */
+    transition: transform 0.2s ease;
 }
 
 .settings-row-icon .icon {
@@ -3769,5 +3774,251 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/* =========================================================
+   LARGE SCREENS (laptop/desktop widths, and tablet landscape)
+   A second, further step past the tablet block above - this app is
+   still mobile-first (phones get the primary, most-tuned experience,
+   nothing below 768px is touched by either block), but "mobile-first"
+   shouldn't mean "unconsidered" once someone opens novawatch.site on
+   an actual laptop or a tablet turned sideways, which does happen.
+   1280px sits comfortably above the tablet block's own 1024px cap, so
+   the two never compete - portrait tablets stay on the 768px block's
+   sizing, this one only ever fires for something meaningfully wider
+   (a laptop window, a desktop monitor, or a large tablet in
+   landscape, e.g. a 12.9" iPad Pro at ~1366px).
+
+   Still the same centered mobile-first column, not a from-scratch
+   desktop redesign - going further (a true multi-pane desktop layout)
+   would be a real architecture change, not a responsive tweak, and
+   isn't what this block is for. What it does do: gives the column a
+   bit more breathing room than the tablet cap, lets the poster grids
+   use a 5th column now that there's room for it without any single
+   poster getting uncomfortably small, and turns on real :hover
+   feedback (see the pointer-fine block below) so a mouse/trackpad
+   user gets the same "this is interactive" cues a finger gets for
+   free from :active. */
+@media (min-width: 1280px) {
+    .app {
+        max-width: 1140px;
+    }
+
+    .bottom-nav {
+        max-width: 680px;
+    }
+
+    .library-grid,
+    .poster-picker-grid,
+    .skeleton-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+/* =========================================================
+   LARGE DESKTOP MONITORS
+   The 1280px block above deliberately stopped at "a laptop window" -
+   correct for that, but it meant a real desktop monitor (1440p, a 27"+
+   display, an ultrawide) got frozen at exactly the same 1140px column
+   forever past that point, with an ever-growing gap of visible mesh
+   background doing nothing on either side as the window kept getting
+   wider - the more room the person actually had, the less of it the
+   app was using. Two more steps here, each still the same centered
+   single column (not a sidebar/multi-pane rebuild - see the 1280px
+   block's own comment for why that's a real architecture change, not a
+   responsive tweak), just proportionally wider and showing genuinely
+   more content per screen, the way an actual desktop app would.
+
+   1600px is a common real laptop/desktop viewport width (a 1680x1050
+   or scaled 1920x1080 display, most external monitors); 2000px covers
+   4K and ultrawide monitors specifically. Capped at 1480px even past
+   that - a poster grid or a line of body text stretched edge-to-edge
+   on a 34" ultrawide reads as sparse and is genuinely harder to scan,
+   not better, so growing the column indefinitely with screen width
+   would work against readability past a certain point rather than for
+   it. The mesh background (see tokens.css's --bg-mesh) already carries
+   real color/light of its own rather than being flat, so the margin
+   on either side past this cap reads as deliberate framing, not empty
+   space left over by a layout that ran out of ideas. */
+@media (min-width: 1600px) {
+    .app {
+        max-width: 1320px;
+    }
+
+    .bottom-nav {
+        max-width: 760px;
+    }
+
+    .library-grid,
+    .poster-picker-grid,
+    .skeleton-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 2000px) {
+    .app {
+        max-width: 1480px;
+    }
+
+    .bottom-nav {
+        max-width: 820px;
+    }
+
+    .library-grid,
+    .poster-picker-grid,
+    .skeleton-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+}
+
+/* =========================================================
+   COMPACT PHONES
+   The smallest end of the phone spectrum this app can reasonably still
+   be opened on - an iPhone SE (375px), and narrower still, older/
+   budget Android phones (360px) and a folding phone's own cover
+   screen (as narrow as ~280px on a Galaxy Z Fold). Everything below
+   768px is otherwise untouched (same principle as the tablet block
+   above, just at the opposite end) - this only steps in below 360px,
+   where the base 3-column poster grid starts genuinely working
+   against itself: each poster gets so little width that the title/
+   year underneath wraps awkwardly and the poster image itself reads
+   as a thumbnail rather than something worth tapping. Dropping to 2
+   columns here means each poster stays a comfortable, legible size -
+   trading grid density for readability, which is the right trade at
+   this width specifically. */
+@media (max-width: 359px) {
+    .page,
+    .settings-page-content {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .library-grid,
+    .poster-picker-grid,
+    .skeleton-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* =========================================================
+   SHORT / LANDSCAPE VIEWPORTS
+   Targets available height, not width or orientation directly - a
+   phone rotated to landscape is the main real-world case (an iPhone
+   in landscape is ~375-430px tall), but this also protects anything
+   else that ends up with limited vertical room the same way (a
+   browser window resized short, a phone in a car mount, split-screen
+   multitasking). 500px comfortably covers landscape on every current
+   phone while staying safely below portrait height on all of them
+   (even the shortest common phone, an iPhone SE, is 667px tall in
+   portrait), so this never fires by mistake for a phone held normally.
+
+   The bottom nav (70px tall + 18px clearance = 88px of fixed vertical
+   real estate) and a 240px-tall modal backdrop image are both sized
+   for portrait's much larger vertical budget - left alone, either one
+   alone can eat a third or more of a short landscape viewport before
+   any actual content shows. Shrinking both here, plus trimming the
+   page's own top/bottom padding and the auth card's internal spacing,
+   claws back real room without changing anything about how any of
+   this looks in the portrait orientation these values were tuned for. */
+@media (max-height: 500px) {
+    body {
+        padding-bottom: 58px;
+    }
+
+    .bottom-nav {
+        height: 54px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .nav-button .icon {
+        width: 19px;
+        height: 19px;
+    }
+
+    .page,
+    .settings-page-content {
+        padding-top: calc(16px + env(safe-area-inset-top, 0px));
+        padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* !important is the only way to win against the inline height set
+       directly on #episodeModalBackdrop in index.html (see there) -
+       an inline style always outranks an external stylesheet's own
+       specificity regardless of media query, so there's no clean way
+       around it here short of moving that sizing into a class instead,
+       which is a bigger change than this responsive pass is for. */
+    .modal-backdrop-header {
+        height: 130px !important;
+    }
+
+    #authScreen,
+    #verifyScreen,
+    #chooseUsernameScreen {
+        padding-top: calc(12px + env(safe-area-inset-top, 0px));
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .auth-overlay-card {
+        padding: 14px 20px;
+        gap: 6px;
+    }
+
+    .auth-logo {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+/* =========================================================
+   FINE-POINTER HOVER FEEDBACK
+   Scoped to (hover: hover) and (pointer: fine) specifically, not a
+   plain min-width breakpoint - a wide viewport doesn't imply a mouse
+   (a tablet in landscape is still touch-only), and a mouse doesn't
+   imply a wide viewport (a small browser window on a laptop is still
+   a mouse). Matching the actual input capability, whatever the screen
+   size, is what actually avoids the classic "sticky hover" bug on
+   touch devices, where a tap would trigger a :hover state that then
+   has nothing to un-trigger it until a second, unrelated tap
+   elsewhere - these rules simply never apply on a device that can't
+   truly hover in the first place, so that failure mode can't happen
+   here regardless of screen size.
+
+   Every :active state in the app already gives touch its own "this is
+   interactive" feedback (a scale-down on tap); this is that same idea
+   for a mouse/trackpad, since :active alone (which only fires on the
+   actual mouse-down, not on approach) is a much weaker cue for a
+   pointer that can hover before ever clicking anything. Kept
+   deliberately subtle - a lift/glow, not a color or layout change -
+   so nothing here fights the glass language's own existing motion. */
+@media (hover: hover) and (pointer: fine) {
+    .card:hover {
+        transform: translateY(-3px);
+    }
+
+    .card:hover .poster {
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+    }
+
+    .nav-button:hover:not(.active) {
+        color: var(--text-secondary);
+    }
+
+    .nav-button:hover:not(.active) .icon {
+        transform: translateY(-1px);
+    }
+
+    .empty-state-cta:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px rgba(0, 102, 204, 0.28);
+    }
+
+    .season-button:hover:not(.active) {
+        border-color: var(--glass-border);
+    }
+
+    .settings-row:hover .settings-row-icon {
+        transform: translateY(-1px) scale(1.05);
     }
 }
