@@ -3662,6 +3662,24 @@ html[data-theme="dark"] .large-avatar {
     transform: translateX(-50%) translateY(0) scale(1);
 }
 
+/* Not every toast has somewhere to go (defensively, showMilestoneToast
+   could be called with no onTap) - this chevron only appears when
+   .tappable is set (see advanceAchievementToastQueue), so it's clear at
+   a glance whether tapping this one will navigate somewhere or just
+   dismiss it, rather than the cursor:pointer above silently meaning two
+   different things depending on which toast happens to be showing. */
+.achievement-toast-chevron {
+    display: none;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+}
+
+.achievement-toast.tappable .achievement-toast-chevron {
+    display: block;
+}
+
 /* Same orange-gradient + sheen treatment as an unlocked row's own icon
    badge in the Achievements list (see renderAchievementsList) - the
    toast and the list entry it corresponds to read as the same "this one
@@ -4051,16 +4069,15 @@ html[data-theme="dark"] .state-card {
    Still the same centered mobile-first column, not a from-scratch
    desktop redesign - going further (a true multi-pane desktop layout)
    would be a real architecture change, not a responsive tweak, and
-   isn't what this block is for. What it does do: gives the column a
-   bit more breathing room than the tablet cap, lets the poster grids
-   use a 5th column now that there's room for it without any single
-   poster getting uncomfortably small, and turns on real :hover
-   feedback (see the pointer-fine block below) so a mouse/trackpad
-   user gets the same "this is interactive" cues a finger gets for
-   free from :active. */
+   isn't what this block is for. What it does do: gives the column
+   real breathing room, lets the poster grids use a 5th column now
+   that there's room for it without any single poster getting
+   uncomfortably small, and turns on real :hover feedback (see the
+   pointer-fine block below) so a mouse/trackpad user gets the same
+   "this is interactive" cues a finger gets for free from :active. */
 @media (min-width: 1280px) {
     .app {
-        max-width: 1140px;
+        max-width: 1300px;
     }
 
     .bottom-nav {
@@ -4093,31 +4110,40 @@ html[data-theme="dark"] .state-card {
 /* =========================================================
    LARGE DESKTOP MONITORS
    The 1280px block above deliberately stopped at "a laptop window" -
-   correct for that, but it meant a real desktop monitor (1440p, a 27"+
-   display, an ultrawide) got frozen at exactly the same 1140px column
-   forever past that point, with an ever-growing gap of visible mesh
-   background doing nothing on either side as the window kept getting
-   wider - the more room the person actually had, the less of it the
-   app was using. Two more steps here, each still the same centered
-   single column (not a sidebar/multi-pane rebuild - see the 1280px
-   block's own comment for why that's a real architecture change, not a
-   responsive tweak), just proportionally wider and showing genuinely
-   more content per screen, the way an actual desktop app would.
+   correct for that, but it meant a real desktop monitor got frozen at
+   exactly the same column forever past that point, with an ever-
+   growing gap of visible mesh background doing nothing on either side
+   as the window kept getting wider - the more room the person
+   actually had, the less of it the app was using. Two more steps
+   here, each still the same centered single column (not a sidebar/
+   multi-pane rebuild - see the 1280px block's own comment for why
+   that's a real architecture change, not a responsive tweak), just
+   proportionally wider and showing genuinely more content per screen,
+   the way an actual desktop app would.
 
    1600px is a common real laptop/desktop viewport width (a 1680x1050
-   or scaled 1920x1080 display, most external monitors); 2000px covers
-   4K and ultrawide monitors specifically. Capped at 1480px even past
-   that - a poster grid or a line of body text stretched edge-to-edge
-   on a 34" ultrawide reads as sparse and is genuinely harder to scan,
-   not better, so growing the column indefinitely with screen width
-   would work against readability past a certain point rather than for
-   it. The mesh background (see tokens.css's --bg-mesh) already carries
-   real color/light of its own rather than being flat, so the margin
-   on either side past this cap reads as deliberate framing, not empty
-   space left over by a layout that ran out of ideas. */
+   or scaled 1920x1080 display, most external monitors) - 1920px
+   specifically is one of the single most common resolutions in
+   existence, so this tier carries real weight. 2000px covers 4K and
+   ultrawide monitors. The column widths themselves went through a
+   second pass here: originally capped much more conservatively out of
+   concern that a poster grid or a line of body text stretched too
+   wide reads as sparse and is harder to scan - a real concern, but one
+   that no longer needs `.app` itself to stay narrow to solve, now
+   that `.modal-content` and `.empty-state` each cap their own reading
+   width independently regardless of how wide `.app` is (see both
+   below/above). With that already handled, keeping `.app` itself
+   conservative just left an increasingly large, genuinely empty
+   margin on either side at completely ordinary laptop widths - at
+   1920px specifically, the previous 1320px cap here left 300px of
+   true dead space on each side, which is what this widening actually
+   fixes. The mesh background (tokens.css's --bg-mesh) still carries
+   real color/light of its own past whatever margin remains, so a
+   smaller margin still reads as deliberate framing, not a layout that
+   ran out of ideas - there just isn't nearly as much of it now. */
 @media (min-width: 1600px) {
     .app {
-        max-width: 1320px;
+        max-width: 1640px;
     }
 
     .bottom-nav {
@@ -4138,11 +4164,20 @@ html[data-theme="dark"] .state-card {
     .achievement-toast {
         max-width: 760px;
     }
+
+    /* Moved down from the 2000px block below - at this tier's own
+       wider 1640px column, two columns would already be back to
+       ~800px each, the same stretched-row problem the 768px block's
+       own two-column step exists to avoid in the first place. */
+    .continue-group,
+    .search-results-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
 }
 
 @media (min-width: 2000px) {
     .app {
-        max-width: 1480px;
+        max-width: 1800px;
     }
 
     .bottom-nav {
@@ -4162,18 +4197,6 @@ html[data-theme="dark"] .state-card {
     .error-toast,
     .achievement-toast {
         max-width: 820px;
-    }
-
-    /* A third Continue Watching column - two would otherwise widen to
-       ~730px each at this tier's 1480px column, right back to the same
-       stretched-row problem the 1280px block's two-column step exists
-       to avoid, just with one extra column instead of none. */
-    .continue-group {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .search-results-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
