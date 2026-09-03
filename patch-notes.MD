@@ -74,7 +74,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
 - Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
 - Fixed a real bug where tapping a search box and then switching tabs without typing anything could leave a large empty scrollable gap under a page's content, on any device - worse on whichever tab had the least content. Fixed a second, bigger contributor to the same symptom too - a CSS layout default that let a short page's content area silently reserve extra invisible space below itself.
-- Wide desktop and monitor screens now use even more of the available width, with the side margins staying small and consistent no matter how large the display is instead of gradually growing on bigger monitors.
+- The main app now uses the full width of the screen at every size, the same way a full-screen page like Settings already did, instead of staying a centered column with margins on tablets and larger screens.
 - Refreshed blue accent color throughout the app.
 
 ## Platform
