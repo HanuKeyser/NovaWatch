@@ -1424,6 +1424,76 @@ img {
 }
 
 /* =========================================================
+   DORMANT SHOW NUDGE — one small dismissible card, shown above the
+   normal Continue Watching rows when getDormantShowToNudge() finds a
+   show that's genuinely gone quiet. Same glass-card surface as
+   .continue-card (so it reads as part of the same section, not a
+   separate alert), with its own icon and two plain-text actions
+   instead of a swipe gesture, since a one-off nudge like this isn't
+   something to teach a new interaction for.
+========================================================= */
+.dormant-nudge-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.46);
+    backdrop-filter: blur(44px) saturate(240%);
+    -webkit-backdrop-filter: blur(44px) saturate(240%);
+    border-radius: var(--radius-2xl);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.dormant-nudge-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-2);
+    color: var(--text-muted);
+}
+
+.dormant-nudge-icon .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.dormant-nudge-text {
+    flex: 1;
+    min-width: 160px;
+}
+
+.dormant-nudge-title {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.1px;
+}
+
+.dormant-nudge-sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.dormant-nudge-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.dormant-nudge-actions .confirm-btn {
+    padding: 9px 14px;
+    font-size: 12.5px;
+}
+
+/* =========================================================
    CONTINUE WATCHING (HOME) — swipeable "up next" rows, styled
    to match the Discover/search result list cards, but surfacing
    the next episode's own info instead of the show's synopsis.
@@ -3920,6 +3990,27 @@ html[data-theme="dark"] .state-card {
     .skeleton-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
     }
+
+    /* Continue Watching's cards are swipeable list ROWS (a fixed 80px
+       poster + a text block that fills whatever's left) - built for a
+       single narrow column, so simply letting that column keep growing
+       wider (as the .app block above does) just stretches each card's
+       own text further, not showing any more actual content. Two
+       columns here instead means the extra width goes toward showing
+       more shows at once, the way it actually should. .continue-card-
+       wrap's own existing margin-bottom still spaces rows vertically -
+       only column-gap is added here, not a full grid gap, so nothing
+       doubles up. The group title spans both columns as a single
+       heading above them, not squeezed into just the first one. */
+    .continue-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 12px;
+    }
+
+    .continue-group-title {
+        grid-column: 1 / -1;
+    }
 }
 
 /* =========================================================
@@ -3976,6 +4067,14 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    /* A third Continue Watching column - two would otherwise widen to
+       ~730px each at this tier's 1480px column, right back to the same
+       stretched-row problem the 1280px block's two-column step exists
+       to avoid, just with one extra column instead of none. */
+    .continue-group {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
