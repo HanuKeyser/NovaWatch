@@ -241,10 +241,24 @@ img {
 /* =========================================================
    STATS (Frosted Glass Cards)
 ========================================================= */
+/* align-content: start on every grid in this file (not just this one) -
+   CSS grid's default (align-content: normal, which resolves to stretch
+   for auto-sized tracks) stretches row tracks to fill any extra height
+   the container happens to have, rather than sizing rows to their
+   actual content and leaving genuine extra space below them the way
+   flexbox/block layout both do by default. Invisible on a grid item
+   with no background of its own (nothing to see stretch), but the
+   container - and so the page - stays exactly as tall as if it had,
+   which is a large, genuinely empty scrollable gap under otherwise
+   normal-looking content on any page whose grid has less content than
+   its surrounding container has room for (a short search-results list,
+   a small library, a lightly-populated Continue Watching). Real bug,
+   not a hypothetical - traced directly to a user report. */
 .stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+    align-content: start;
 }
 
 /* Home's Viewing Analytics has a 4th tile (Rewatches) that NovaWrapped's
@@ -651,6 +665,7 @@ img {
     gap: 16px;
     width: 100%;
     margin-top: 8px;
+    align-content: start;
 }
 
 .wrapped-recap-stat {
@@ -756,7 +771,15 @@ img {
     align-items: center;
     gap: 14px;
     padding-bottom: 14px;
-    border-bottom: 1px solid rgba(0, 102, 204, 0.12);
+    /* rgba(0, 106, 255, ...) here and everywhere else it appears in this
+       file is --blue (#006aff) as a raw RGB triplet, not a separate
+       color of its own - CSS custom properties can't be used inside an
+       rgba() alpha channel, so every blue-tinted shadow/glow in the app
+       has always had to hardcode the actual RGB values rather than
+       referencing var(--blue) directly. Kept in sync by hand with
+       tokens.css's own --blue whenever that changes, this update
+       included. */
+    border-bottom: 1px solid rgba(0, 106, 255, 0.12);
 }
 
 .analytics-icon-badge {
@@ -768,7 +791,7 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
     flex-shrink: 0;
 }
 
@@ -881,6 +904,7 @@ img {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 20px 12px;
+    align-content: start;
 }
 
 .library-grid .card {
@@ -909,6 +933,7 @@ img {
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     padding-bottom: 8px;
+    align-content: start;
 }
 
 .poster-picker-grid.backdrop-mode {
@@ -1018,7 +1043,7 @@ img {
     color: white;
     font-size: 13px;
     font-weight: 700;
-    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s ease;
 }
 
@@ -1086,7 +1111,7 @@ img {
        alone are enough to read as "focused" without touching the layer
        backdrop-filter operates on at all. */
     border-color: var(--blue);
-    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15), var(--glass-shadow-sm);
+    box-shadow: 0 0 0 4px rgba(0, 106, 255, 0.15), var(--glass-shadow-sm);
 }
 
 .search-box input {
@@ -1162,6 +1187,7 @@ img {
     border: 1px solid var(--glass-border);
     margin-bottom: 16px;
     box-shadow: var(--glass-shadow-sm);
+    align-content: start;
 }
 
 .search-type-btn {
@@ -1213,6 +1239,7 @@ img {
     border-radius: 999px;
     border: 1px solid var(--glass-border-subtle);
     margin-bottom: 16px;
+    align-content: start;
 }
 
 .segmented-toggle.three-way {
@@ -1241,7 +1268,7 @@ img {
        tinted glass rather than a flat colored chip. */
     background: var(--glass-sheen), var(--blue);
     color: white;
-    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 18px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .library-subview {
@@ -1343,7 +1370,7 @@ img {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     flex-shrink: 0;
     transition: transform 0.15s ease;
 }
@@ -1426,6 +1453,7 @@ img {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+    align-content: start;
 }
 
 .skeleton-grid-item {
@@ -1895,7 +1923,7 @@ html[data-theme="dark"] .upcoming-card-caption {
     /* Soft colored glow behind the active icon rather than just a color
        swap - the same "lit from within" quality the rest of the app's
        primary blue buttons already use. */
-    filter: drop-shadow(0 3px 8px rgba(0, 102, 204, 0.45));
+    filter: drop-shadow(0 3px 8px rgba(0, 106, 255, 0.45));
 }
 
 /* =========================================================
@@ -2107,7 +2135,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     color: white;
     font-size: 13.5px;
     font-weight: 700;
-    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 18px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
     transition: transform 0.15s ease;
 }
 
@@ -2198,7 +2226,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .rewatch-icon-badge {
     background: var(--glass-sheen), var(--blue-gradient);
-    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .appearance-icon-tile {
@@ -2263,7 +2291,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 .confirm-btn.primary {
     background: var(--glass-sheen), var(--blue-gradient);
     color: white;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .confirm-btn.primary:active {
@@ -2414,7 +2442,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     align-items: center;
     justify-content: center;
     border: none;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3);
+    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3);
 }
 
 .cinema-chip .watch-provider-name {
@@ -2447,12 +2475,14 @@ html[data-theme="dark"] .modal-sheet-compact {
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
     width: 100%;
+    align-content: start;
 }
 
 .modal-actions.movie-actions-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+    align-content: start;
 }
 
 .modal-actions.movie-actions-grid .action-button {
@@ -2491,7 +2521,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: var(--glass-sheen), var(--blue-gradient);
     color: white;
     border: none;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 /* Same filled-glass treatment as the other action buttons (sheen +
@@ -2645,7 +2675,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 .episode-up-next {
-    background: rgba(0, 102, 204, 0.06);
+    background: rgba(0, 106, 255, 0.06);
 }
 
 /* A not-yet-released episode - dimmed so it visually reads as "not here
@@ -2738,9 +2768,9 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: linear-gradient(150deg, rgba(255,255,255,0.55) 0%, rgba(224,238,255,0.42) 100%);
     backdrop-filter: blur(64px) saturate(260%);
     -webkit-backdrop-filter: blur(64px) saturate(260%);
-    border: 1px solid rgba(0, 102, 204, 0.14);
+    border: 1px solid rgba(0, 106, 255, 0.14);
     border-radius: var(--radius-2xl);
-    box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    box-shadow: 0 20px 48px rgba(0, 106, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .hero-top {
@@ -2804,7 +2834,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     border-radius: 50%;
     background: var(--glass-sheen), var(--blue-gradient);
     color: white;
-    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -3000,7 +3030,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     font-size: 13px;
     font-weight: 700;
     text-align: center;
-    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     /* Was missing entirely - :active below changes transform with
        nothing to animate it, so the press feedback snapped instead of
        the same smooth scale-down every other pressable pill in the app
@@ -3146,7 +3176,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     justify-content: center;
     color: white;
     border: 2px solid #e8edf4;
-    box-shadow: 0 3px 8px rgba(0, 102, 204, 0.3);
+    box-shadow: 0 3px 8px rgba(0, 106, 255, 0.3);
 }
 
 html[data-theme="dark"] .avatar-edit-badge {
@@ -3176,6 +3206,7 @@ html[data-theme="dark"] .large-avatar {
     grid-template-columns: repeat(4, 1fr);
     gap: 14px;
     margin-top: 20px;
+    align-content: start;
 }
 
 .avatar-picker-option {
@@ -3375,7 +3406,7 @@ html[data-theme="dark"] .large-avatar {
 .auth-input:focus {
     border-color: var(--blue);
     background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+    box-shadow: 0 0 0 3px rgba(0, 106, 255, 0.15);
 }
 
 .auth-actions {
@@ -3997,6 +4028,15 @@ html[data-theme="dark"] .state-card {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         column-gap: 12px;
+        /* Without this, grid's own default row-track sizing (align-
+           content: normal, which resolves to stretch) fills any extra
+           height .page/.app happen to have with invisible empty row
+           space rather than leaving the grid exactly as tall as its
+           real content - a large, genuinely scrollable empty gap under
+           otherwise normal-looking cards, worse the shorter the actual
+           content is relative to the viewport. Real bug this was
+           reported against directly, not a defensive guess. */
+        align-content: start;
     }
 
     .continue-group-title {
@@ -4016,6 +4056,7 @@ html[data-theme="dark"] .state-card {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px 12px;
+        align-content: start;
     }
 
     /* .modal is its own fixed, full-viewport overlay (inset: 0) -
@@ -4177,7 +4218,14 @@ html[data-theme="dark"] .state-card {
 
 @media (min-width: 2000px) {
     .app {
-        max-width: 1800px;
+        /* No hard ceiling past this point, unlike every block below -
+           a fixed cap here means the margin only ever grows the wider
+           the monitor gets past it, which is the exact complaint this
+           replaces. calc(100vw - 80px) instead keeps a small, constant
+           40px margin on each side no matter how wide the display
+           actually is - a 34" ultrawide gets exactly as little wasted
+           space as a 1920px laptop does, not progressively more. */
+        max-width: calc(100vw - 80px);
     }
 
     .bottom-nav {
@@ -4338,7 +4386,7 @@ html[data-theme="dark"] .state-card {
 
     .empty-state-cta:hover {
         transform: translateY(-2px);
-        box-shadow: 0 12px 28px rgba(0, 102, 204, 0.28);
+        box-shadow: 0 12px 28px rgba(0, 106, 255, 0.28);
     }
 
     .season-button:hover:not(.active) {
