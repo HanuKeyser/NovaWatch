@@ -1028,23 +1028,33 @@ function hideErrorToast() {
 }
 
 /* =========================================================
-   ACHIEVEMENT TOAST
-   Queued rather than a single slot like showErrorToast above - an
-   achievement unlock isn't a failure to interrupt someone with
-   immediately, and more than one can genuinely unlock from a single
+   MILESTONE TOAST
+   Shared by two genuinely different moments that both deserve a real
+   notification rather than silence (see showToast's own comment for why
+   almost everything else stays silent): unlocking an achievement, and
+   finishing a season or a whole show (announceEpisodeMilestone below).
+   Neither has any other visible sign anywhere on screen the way most
+   actions already do. Queued rather than a single slot like
+   showErrorToast - more than one can genuinely fire from a single
    action (catching up a big chunk of watch history in one go can clear
-   several thresholds at once - see runAchievementsCheck). Showing them
-   one at a time, each for its own full duration, means every one is
-   actually readable instead of racing each other or overwriting one
-   before it's been seen.
+   several achievement thresholds and finish a season at the same time),
+   and showing them one at a time, each for its own full duration, means
+   every one is actually readable instead of racing or overwriting
+   another before it's been seen.
 ========================================================= */
 let achievementToastQueue = [];
 let achievementToastTimer = null;
 let achievementToastShowing = false;
 
-function showAchievementToast(achievement) {
-    achievementToastQueue.push(achievement);
+function showMilestoneToast(icon, label, title) {
+    achievementToastQueue.push({ icon, label, title });
     if (!achievementToastShowing) advanceAchievementToastQueue();
+}
+
+// Thin wrapper kept around specifically for runAchievementsCheck's own
+// callers - an unlocked ACHIEVEMENTS entry already has icon/title on it.
+function showAchievementToast(achievement) {
+    showMilestoneToast(achievement.icon, "Achievement Unlocked", achievement.title);
 }
 
 function advanceAchievementToastQueue() {
@@ -1062,11 +1072,13 @@ function advanceAchievementToastQueue() {
     achievementToastShowing = true;
 
     const iconSvg = toast.querySelector(".achievement-toast-icon .icon");
-    // ach.icon is one of the hardcoded ICON_* constants defined with
-    // ACHIEVEMENTS - trusted static markup this app wrote itself, not
-    // user input, same basis every other raw-SVG injection in the app
+    // next.icon is always one of this app's own hardcoded ICON_* markup
+    // constants - trusted static content it wrote itself, not user
+    // input, same basis every other raw-SVG injection in the app
     // (renderAchievementsList itself included) already relies on.
     if (iconSvg) iconSvg.innerHTML = next.icon;
+    const labelEl = document.getElementById("achievementToastLabel");
+    if (labelEl) labelEl.textContent = next.label;
     const titleEl = document.getElementById("achievementToastTitle");
     if (titleEl) titleEl.textContent = next.title;
 
@@ -1086,6 +1098,127 @@ function hideAchievementToast() {
     if (toast) toast.classList.remove("show");
     clearTimeout(achievementToastTimer);
     setTimeout(advanceAchievementToastQueue, 350);
+}
+
+// Called right after an episode-watched action succeeds - checks whether
+// that action just finished a season or the whole show, and announces
+// whichever is true (never both - being fully caught up/finished already
+// implies the season is done too, so that's the more meaningful one to
+// say). Only ever called from a "marking watched" path, never
+// un-watching, and only once per action, so by construction this only
+// fires the moment a milestone actually becomes newly true - no separate
+// "was this already true before?" check needed.
+function announceEpisodeMilestone(show, seasonNumber) {
+    if (isTVUpToDate(show)) {
+        showMilestoneToast(ICON_CHECK, "All Caught Up", show.title);
+        return;
+    }
+    if (isTVFinished(show)) {
+        showMilestoneToast(ICON_CHECK, "Series Finished", show.title);
+        return;
+    }
+    const seasonEps = getAvailableEpisodes(show).filter(ep => ep.season === seasonNumber);
+    if (seasonEps.length > 0 && seasonEps.every(ep => ep.watched)) {
+        showMilestoneToast(ICON_CHECK, "Season Complete", `Season ${seasonNumber} \u00b7 ${show.title}`);
+    }
+}
+
+// Called right after a movie is marked watched - if it's part of a
+// collection (TMDB's belongs_to_collection, stored as collectionName -
+// see importMediaData) and another movie from that same collection is
+// already sitting unwatched in the library, nudges toward it. Picked by
+// earliest releaseDate among the unwatched candidates when there's more
+// than one - the best ordering signal already stored, since TMDB's own
+// part-numbering for a collection isn't fetched here. Silent if the
+// movie isn't part of a collection, or nothing else from it is in the
+// library yet (only ever suggests what's already there - never a
+// prompt to go add something new).
+function announceCollectionContinuation(movie) {
+    if (!movie.collectionName) return;
+    const candidates = state.library.filter(item =>
+        item.type === 'movie' &&
+        item.id !== movie.id &&
+        item.collectionName === movie.collectionName &&
+        !item.watched
+    );
+    if (candidates.length === 0) return;
+    candidates.sort((a, b) => new Date(a.releaseDate || 0) - new Date(b.releaseDate || 0));
+    showMilestoneToast(ICON_FILM, `Up Next in ${movie.collectionName}`, candidates[0].title);
+}
+
+/* =========================================================
+   DORMANT SHOW NUDGE
+   A TV show that's been sitting in the library, still incomplete, with
+   zero activity in a long time - easy to lose track of entirely once
+   it's not fresh in Continue Watching's "just aired" ordering anymore.
+   Surfaced as one small dismissible card at the top of Continue
+   Watching (see renderContinueWatching), not a toast - this isn't tied
+   to an action that just happened the way a milestone is, so it needs
+   its own quiet moment rather than piggybacking on one.
+========================================================= */
+const DORMANT_SHOW_THRESHOLD_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+
+// The most recent moment this show was actually touched - the latest
+// watchedAt among its episodes, or when it was added if nothing's been
+// watched yet at all (added-but-never-started is exactly as dormant as
+// started-then-abandoned, just with no watch to date from). null only
+// if even addedAt is somehow missing.
+function getLastShowActivity(show) {
+    let latest = null;
+    if (show.episodes) {
+        show.episodes.forEach(ep => {
+            if (!ep.watchedAt) return;
+            const d = new Date(ep.watchedAt);
+            if (!latest || d > latest) latest = d;
+        });
+    }
+    if (!latest && show.addedAt) latest = new Date(show.addedAt);
+    return latest;
+}
+
+// Dismissing "Still Watching" for a show only silences it for the rest
+// of this session (a plain in-memory Set, nothing persisted) - it's a
+// soft, low-stakes nudge, not a notification that demands a permanent
+// decision, so it's fine for it to quietly resurface on a later visit
+// if the show is still genuinely untouched by then.
+const dormantNudgeDismissedThisSession = new Set();
+
+// Picks at most one show to nudge about - the single most dormant one,
+// not every qualifying show at once, so this never turns into a wall of
+// "are you still watching" cards. Excludes anything already stopped
+// (already dealt with) and anything fully watched (isTVUpToDate or
+// isTVFinished - nothing left to be dormant about).
+function getDormantShowToNudge() {
+    const candidates = state.library.filter(show =>
+        show.type !== 'movie' &&
+        !show.isStopped &&
+        !isTVUpToDate(show) &&
+        !isTVFinished(show) &&
+        !dormantNudgeDismissedThisSession.has(show.id)
+    );
+
+    let mostDormant = null;
+    let oldestActivity = null;
+    candidates.forEach(show => {
+        const activity = getLastShowActivity(show);
+        if (!activity) return;
+        if (Date.now() - activity.getTime() < DORMANT_SHOW_THRESHOLD_MS) return;
+        if (!oldestActivity || activity < oldestActivity) {
+            oldestActivity = activity;
+            mostDormant = show;
+        }
+    });
+    return mostDormant;
+}
+
+function dismissDormantNudge(id) {
+    dormantNudgeDismissedThisSession.add(id);
+    renderContinueWatching();
+}
+
+async function stopFromDormantNudge(id) {
+    dormantNudgeDismissedThisSession.add(id);
+    await markShowStoppedById(id);
 }
 
 function clearSearch(inputId) {
@@ -5881,6 +6014,27 @@ function renderContinueWatching(containerId = "continueWatchingList") {
 
     let html = "";
 
+    const dormantShow = getDormantShowToNudge();
+    if (dormantShow) {
+        const daysDormant = Math.floor((Date.now() - getLastShowActivity(dormantShow).getTime()) / (24 * 60 * 60 * 1000));
+        const monthsDormant = Math.max(1, Math.round(daysDormant / 30));
+        html += `
+            <div class="dormant-nudge-card">
+                <div class="dormant-nudge-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="dormant-nudge-text">
+                    <div class="dormant-nudge-title">Still watching ${escapeHTML(dormantShow.title)}?</div>
+                    <div class="dormant-nudge-sub">No activity in about ${monthsDormant} month${monthsDormant === 1 ? '' : 's'}</div>
+                </div>
+                <div class="dormant-nudge-actions">
+                    <button class="confirm-btn cancel" onclick="dismissDormantNudge('${dormantShow.id}')">Still Watching</button>
+                    <button class="confirm-btn danger" onclick="stopFromDormantNudge('${dormantShow.id}')">Stop Watching</button>
+                </div>
+            </div>
+        `;
+    }
+
     if (tvItems.length > 0) {
         html += `
             <div class="continue-group">
@@ -6279,6 +6433,12 @@ async function markContinueItemWatched(type, itemId, epId) {
         return;
     }
     refreshActivePage();
+
+    if (type !== 'movie' && item.episodes) {
+        const ep = item.episodes.find(e => e.id === epId);
+        if (ep) announceEpisodeMilestone(item, ep.season);
+    }
+    if (type === 'movie') announceCollectionContinuation(item);
 
     // How many released-but-unwatched episodes remain for this show,
     // right after marking one watched - a quick, useful "how much is
@@ -7479,6 +7639,7 @@ async function toggleEntireSeasonWatched(seasonNumber) {
         return;
     }
     showToast(`Season ${seasonNumber} marked as ${anyUnwatched ? 'Watched' : 'Unwatched'}`, "success");
+    if (anyUnwatched) announceEpisodeMilestone(currentItem, seasonNumber);
     updateModalContent();
     refreshActivePage();
 }
@@ -7523,6 +7684,8 @@ async function markAllReleasedEpisodesWatched() {
         return;
     }
     showToast(`Marked ${toMark.length} episode${toMark.length === 1 ? '' : 's'} watched.`, "success");
+    const lastMarkedSeason = toMark.reduce((max, ep) => Math.max(max, ep.season), 1);
+    announceEpisodeMilestone(currentItem, lastMarkedSeason);
     updateModalContent();
     refreshActivePage();
 }
@@ -7676,6 +7839,7 @@ async function commitCurrentEpisodeWatchedToggle(alsoMarkEarlier) {
     if (alsoMarkEarlier) {
         showToast(`Marked ${targets.length} episodes watched.`, "success");
     }
+    if (markingWatched) announceEpisodeMilestone(currentItem, currentEpisode.season);
     closeEpisodeModal();
     updateModalContent();
     refreshActivePage();
@@ -7756,6 +7920,7 @@ async function markWatchedUpToCurrentEpisode() {
         return;
     }
     showToast(`Marked ${count} episode${count === 1 ? '' : 's'} as watched.`, "success");
+    announceEpisodeMilestone(currentItem, currentEpisode.season);
     closeEpisodeModal();
     updateModalContent();
     refreshActivePage();
@@ -8034,6 +8199,7 @@ async function toggleMovieWatched(id) {
     const prevWatched = currentItem.watched;
     const prevLastWatchedAt = currentItem.lastWatchedAt;
     const prevRewatchCount = currentItem.rewatchCount;
+    const markingWatched = !currentItem.watched;
     currentItem.watched = !currentItem.watched;
     currentItem.lastWatchedAt = currentItem.watched ? new Date().toISOString() : null;
     if (!currentItem.watched) currentItem.rewatchCount = 0;
@@ -8047,6 +8213,7 @@ async function toggleMovieWatched(id) {
     }
     updateModalContent();
     refreshActivePage();
+    if (markingWatched) announceCollectionContinuation(currentItem);
 }
 
 async function markNextEpisodeWatched(id) {
@@ -8073,6 +8240,7 @@ async function markNextEpisodeWatched(id) {
         }
         updateModalContent();
         refreshActivePage();
+        announceEpisodeMilestone(currentItem, nextEp.season);
     }
 }
 
