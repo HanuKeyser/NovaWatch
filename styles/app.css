@@ -3937,18 +3937,67 @@ html[data-theme="dark"] .state-card {
 
     /* The two real poster grids (Library/Upcoming's category blocks,
        and the custom-poster picker) - not every 3-column grid in the
-       app. .stats (Home's stat tiles), the segmented/three-way toggles,
-       and modal action-button rows all stay exactly as they are - their
-       column count is tied to a fixed number of items, not to how much
-       space happens to be available, so widening them would just
-       stretch buttons and tiles unnecessarily rather than showing more
-       content. .skeleton-grid is included purely so the loading
-       placeholder matches .poster-picker-grid's real column count
-       instead of misaligning for a moment while it loads. */
+       app. The segmented/three-way toggles and modal action-button
+       rows stay exactly as they are - their column count is tied to a
+       fixed number of items, not to how much space happens to be
+       available, so widening them would just stretch buttons
+       unnecessarily rather than showing more content. .skeleton-grid
+       is included purely so the loading placeholder matches
+       .poster-picker-grid's real column count instead of misaligning
+       for a moment while it loads. */
     .library-grid,
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    /* Home's Viewing Analytics tiles (#dashboardStats) stay a cramped
+       2x2 square forever otherwise - four tiles genuinely fit as one
+       comfortable row once there's room for it, and each tile still
+       ends up at least as wide here as the mobile 2-column version
+       ever was, so this isn't a squeeze. NovaWrapped's own 3-tile
+       recap grid is a separate class (.wrapped-recap-grid), not
+       affected by this. */
+    #dashboardStats.stats {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Continue Watching's cards are swipeable list ROWS (a fixed 80px
+       poster + a text block that fills whatever's left) - built for a
+       single narrow column, so simply letting that column keep growing
+       wider (as the .app block above does) just stretches each card's
+       own text further, not showing any more actual content. Two
+       columns here instead means the extra width goes toward showing
+       more shows at once, the way it actually should - true from
+       tablet width up, not just laptop/desktop, since an iPad in
+       portrait already has plenty of room for this. .continue-card-
+       wrap's own existing margin-bottom still spaces rows vertically -
+       only column-gap is added here, not a full grid gap, so nothing
+       doubles up. The group title spans both columns as a single
+       heading above them, not squeezed into just the first one. */
+    .continue-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 12px;
+    }
+
+    .continue-group-title {
+        grid-column: 1 / -1;
+    }
+
+    /* Same reasoning as .continue-group just above - Discover's search
+       results and For You recommendations (#searchResultsList) are
+       built from the same "fixed-width poster + a text block that
+       fills whatever's left" row (.search-card), so they'd stretch the
+       exact same way without this. Unlike .continue-card-wrap, a
+       .search-card has no margin of its own for vertical spacing
+       between rows (adjacent cards just relied on normal block flow
+       stacking), so a small row gap is added here alongside the column
+       gap, rather than relying on a margin that doesn't exist. */
+    .search-results-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px 12px;
     }
 
     /* .modal is its own fixed, full-viewport overlay (inset: 0) -
@@ -4022,53 +4071,6 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
-    }
-
-    /* Home's Viewing Analytics tiles (#dashboardStats) stay a cramped
-       2x2 square forever otherwise - four tiles genuinely fit as one
-       comfortable row once there's room for it, rather than leaving two
-       rows of stat tiles looking squeezed next to everything else on
-       the page that's already using the wider column properly by this
-       point. NovaWrapped's own 3-tile recap grid is a separate class
-       (.wrapped-recap-grid), not affected by this. */
-    #dashboardStats.stats {
-        grid-template-columns: repeat(4, 1fr);
-    }
-
-    /* Continue Watching's cards are swipeable list ROWS (a fixed 80px
-       poster + a text block that fills whatever's left) - built for a
-       single narrow column, so simply letting that column keep growing
-       wider (as the .app block above does) just stretches each card's
-       own text further, not showing any more actual content. Two
-       columns here instead means the extra width goes toward showing
-       more shows at once, the way it actually should. .continue-card-
-       wrap's own existing margin-bottom still spaces rows vertically -
-       only column-gap is added here, not a full grid gap, so nothing
-       doubles up. The group title spans both columns as a single
-       heading above them, not squeezed into just the first one. */
-    .continue-group {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        column-gap: 12px;
-    }
-
-    .continue-group-title {
-        grid-column: 1 / -1;
-    }
-
-    /* Same reasoning as .continue-group just above - Discover's search
-       results and For You recommendations (#searchResultsList) are
-       built from the same "fixed-width poster + a text block that
-       fills whatever's left" row (.search-card), so they'd stretch the
-       exact same way without this. Unlike .continue-card-wrap, a
-       .search-card has no margin of its own for vertical spacing
-       between rows (adjacent cards just relied on normal block flow
-       stacking), so a small row gap is added here alongside the column
-       gap, rather than relying on a margin that doesn't exist. */
-    .search-results-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 4px 12px;
     }
 
     .modal-backdrop-header {
