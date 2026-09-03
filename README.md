@@ -71,6 +71,8 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Opening a TV show's details** — lands on the season containing the next released-but-unwatched episode (`getCurrentSeasonForShow`) and auto-scrolls the episode list straight to that row, rather than opening at the top of Season 1 and leaving the person to hunt for where they left off. A caught-up show lands on the season of its most recently watched episode instead. A show with nothing released and unwatched yet (nothing to scroll to) simply opens at the top, same as it always did.
 
+**Marking a later episode watched** — if opening an episode directly (say S2E6) and marking it watched would leave earlier released episodes in the same show still unwatched (`getEarlierUnwatchedEpisodes`), a themed confirm dialog offers to mark those watched too in the same action, rather than silently leaving a gap. Only fires when marking watched, never when un-watching one - removing a single episode's watched status is always exactly what it looks like, nothing to ask about. Declining, or tapping outside the dialog, marks just the one episode that was actually tapped.
+
 **Discover → For You** — TMDB `/recommendations` seeded from your library, ranked by cross-seed hit count then TMDB score. Falls back to plain Trending when the library's empty for that content type.
 
 **Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it). Marking an episode watched this way also shows how many episodes are left in that show, if any.
@@ -161,9 +163,15 @@ Eight breakpoints in `app.css`, each targeting a real device/situation rather th
 
 The existing PWA install setup (`manifest.json`, the `apple-mobile-web-app-*` meta tags, `viewport-fit=cover`) already works identically on iPadOS's own "Add to Home Screen" - nothing further was needed there specifically for tablets to install and launch standalone the same way they do on iPhone.
 
+`.modal-content` (the shared wrapper for every full-screen modal's actual content - show/episode details, Settings, Achievements, Library Display, the region picker) gets its own `max-width: 720px` cap starting at the 768px tablet block, held fixed through every wider block above it rather than growing further with them. `.modal` itself is a separate fixed, full-viewport overlay (`inset: 0`) with no width cap of its own, so without this, a synopsis paragraph or a row of settings could stretch to the full width of whatever block currently applies - genuinely harder to read at 100+ characters per line, not easier, and a settings row that wide just leaves its icon and label bunched on the left with empty space trailing off to the right. `.modal-backdrop-header` (the hero image above it) is left full-bleed on purpose - a wide photo is a normal, good-looking pattern at any size, unlike a paragraph or a list.
+
 ## Error toast
 
 The one place a floating toast still exists in the app, deliberately narrow in scope: errors only. Success/confirmation messages stay silent, since they usually already come with a visible state change of their own (a screen transition, a button flipping to its done state) - a genuine failure with zero feedback is the actual problem silent toasts create, not a cosmetic one. Positioned above the floating nav bar (not at the bottom edge, not at the top - the offline banner already owns that space), using the same chrome-tier glass recipe as the nav bar and search bars. Auto-dismisses after 4.5 seconds, or on tap. A new error replaces whatever's currently showing rather than queueing - errors are rare enough now (roughly 40 real failure paths across the whole app, not everything that used to pass through the old toast system) that a queue isn't needed.
+
+## Achievement toast
+
+The one deliberate exception to "success messages stay silent" above - unlocking an achievement is computed entirely in the background (`runAchievementsCheck`, debounced off `refreshActivePage`) and has no other visible sign anywhere on screen the way marking an episode watched or saving a display name already does, so silence here would mean it never gets noticed at all. A separate top-anchored banner (`showAchievementToast`/`#achievementToast`), not the bottom-anchored error toast's own slot, so an unlock and an unrelated failure happening close together are never mistaken for each other. Queued rather than single-slot - a big catch-up action can clear more than one threshold at once, and each one gets its own full 4-second showing rather than racing or overwriting another before it's been read. Shows the achievement's own icon and title, matching the same icon set and orange-gradient badge treatment used in the Achievements list itself.
 
 ## Add to Home Screen prompt
 
