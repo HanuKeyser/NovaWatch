@@ -130,11 +130,18 @@ img {
    explicitly reveals the right one. */
 .app {
     display: none;
+    /* No max-width/margin: 0 auto centering here (there used to be, at
+       every screen size) - .app is the primary content surface, the
+       exact same relationship to the viewport .modal already has
+       (position: fixed; inset: 0, also no width cap of its own).
+       .page's own padding (see below) provides the same breathing room
+       from the true edge that .modal-content's own padding already
+       gives an edge-to-edge modal - the two now work identically,
+       rather than modals going full-bleed while the pages underneath
+       them stayed a centered column for no real technical reason. */
     width: 100%;
-    max-width: 600px;
     min-height: 100vh;
     min-height: 100dvh;
-    margin: 0 auto;
 }
 
 /* =========================================================
@@ -3957,20 +3964,10 @@ html[data-theme="dark"] .state-card {
    way they do on iPhone.
 ========================================================= */
 @media (min-width: 768px) {
-    .app {
-        /* Was 900px - iPad Air/Mini portrait widths (~820px/~744px) sit
-           comfortably under that, so they filled edge to edge already.
-           iPad Pro portrait (1024px for 12.9", 834px for 11") exceeded
-           it, leaving visible empty space down both sides - this covers
-           the largest common tablet portrait width too. Landscape on
-           the biggest tablets can still show some space by design
-           (going all the way to landscape width, ~1366px on a 12.9"
-           iPad Pro, starts reading as a stretched desktop layout rather
-           than a tablet one - out of scope, same as laptop/desktop
-           widths generally). */
-        max-width: 1024px;
-    }
-
+    /* .app itself no longer caps width at any tier (see its base rule) -
+       this block still exists for everything else that genuinely does
+       need to change at tablet width and up (nav bar, grid columns,
+       modal sizing). */
     .bottom-nav {
         max-width: 620px;
     }
@@ -4059,20 +4056,22 @@ html[data-theme="dark"] .state-card {
         align-content: start;
     }
 
-    /* .modal is its own fixed, full-viewport overlay (inset: 0) -
-       completely separate from .app's own max-width scaling above, and
-       still full-bleed edge to edge here without this. That's the right
-       call for .modal-content's own text/rows (a paragraph or a
-       settings row shouldn't stretch just because the monitor does -
-       see the max-width rule for it below), but the backdrop hero image
-       needed its own fix here too: at a fixed 240px tall regardless of
-       width, a full-bleed image goes from a reasonable ~2.5:1 crop on a
-       phone to a much more extreme one as the box gets wider with
-       nothing to compensate - past a certain width, `background-size:
-       cover` was cropping away most of a poster's actual subject (a
-       face, in practice) just to fill an increasingly short, wide strip.
-       Scaling the height up alongside each wider block keeps the crop
-       roughly the same reasonable ratio instead of degrading further. */
+    /* .modal is its own fixed, full-viewport overlay (inset: 0),
+       completely independent of .app - always full-bleed edge to edge,
+       same as .app itself now is too (see .app's own base rule). That's
+       the right call for both's actual hero imagery, but .modal-
+       content's text/rows still needs its own cap regardless (a
+       paragraph or a settings row shouldn't stretch just because the
+       monitor does - see the max-width rule for it below), and the
+       backdrop hero image needed its own fix here too: at a fixed
+       240px tall regardless of width, a full-bleed image goes from a
+       reasonable ~2.5:1 crop on a phone to a much more extreme one as
+       the box gets wider with nothing to compensate - past a certain
+       width, `background-size: cover` was cropping away most of a
+       poster's actual subject (a face, in practice) just to fill an
+       increasingly short, wide strip. Scaling the height up alongside
+       each wider block keeps the crop roughly the same reasonable
+       ratio instead of degrading further. */
     .modal-backdrop-header {
         height: 280px;
     }
@@ -4117,10 +4116,6 @@ html[data-theme="dark"] .state-card {
    pointer-fine block below) so a mouse/trackpad user gets the same
    "this is interactive" cues a finger gets for free from :active. */
 @media (min-width: 1280px) {
-    .app {
-        max-width: 1300px;
-    }
-
     .bottom-nav {
         max-width: 680px;
     }
@@ -4150,43 +4145,17 @@ html[data-theme="dark"] .state-card {
 
 /* =========================================================
    LARGE DESKTOP MONITORS
-   The 1280px block above deliberately stopped at "a laptop window" -
-   correct for that, but it meant a real desktop monitor got frozen at
-   exactly the same column forever past that point, with an ever-
-   growing gap of visible mesh background doing nothing on either side
-   as the window kept getting wider - the more room the person
-   actually had, the less of it the app was using. Two more steps
-   here, each still the same centered single column (not a sidebar/
-   multi-pane rebuild - see the 1280px block's own comment for why
-   that's a real architecture change, not a responsive tweak), just
-   proportionally wider and showing genuinely more content per screen,
-   the way an actual desktop app would.
-
-   1600px is a common real laptop/desktop viewport width (a 1680x1050
-   or scaled 1920x1080 display, most external monitors) - 1920px
-   specifically is one of the single most common resolutions in
-   existence, so this tier carries real weight. 2000px covers 4K and
-   ultrawide monitors. The column widths themselves went through a
-   second pass here: originally capped much more conservatively out of
-   concern that a poster grid or a line of body text stretched too
-   wide reads as sparse and is harder to scan - a real concern, but one
-   that no longer needs `.app` itself to stay narrow to solve, now
-   that `.modal-content` and `.empty-state` each cap their own reading
-   width independently regardless of how wide `.app` is (see both
-   below/above). With that already handled, keeping `.app` itself
-   conservative just left an increasingly large, genuinely empty
-   margin on either side at completely ordinary laptop widths - at
-   1920px specifically, the previous 1320px cap here left 300px of
-   true dead space on each side, which is what this widening actually
-   fixes. The mesh background (tokens.css's --bg-mesh) still carries
-   real color/light of its own past whatever margin remains, so a
-   smaller margin still reads as deliberate framing, not a layout that
-   ran out of ideas - there just isn't nearly as much of it now. */
+   .app itself has no width cap at any tier now (see its base rule) -
+   what's left here is everything that still genuinely benefits from
+   knowing how much room is actually available at these larger sizes:
+   more poster-grid columns, a wider nav bar/toasts to stay
+   proportionate with a wider page, and a taller hero image so its crop
+   ratio doesn't get more extreme just because the page got wider (see
+   .modal-backdrop-header below). 1600px is a common real laptop/
+   external-monitor viewport width (1920px specifically is one of the
+   single most common resolutions in existence, so this tier carries
+   real weight); 2000px covers 4K and ultrawide monitors. */
 @media (min-width: 1600px) {
-    .app {
-        max-width: 1640px;
-    }
-
     .bottom-nav {
         max-width: 760px;
     }
@@ -4217,17 +4186,6 @@ html[data-theme="dark"] .state-card {
 }
 
 @media (min-width: 2000px) {
-    .app {
-        /* No hard ceiling past this point, unlike every block below -
-           a fixed cap here means the margin only ever grows the wider
-           the monitor gets past it, which is the exact complaint this
-           replaces. calc(100vw - 80px) instead keeps a small, constant
-           40px margin on each side no matter how wide the display
-           actually is - a 34" ultrawide gets exactly as little wasted
-           space as a 1920px laptop does, not progressively more. */
-        max-width: calc(100vw - 80px);
-    }
-
     .bottom-nav {
         max-width: 820px;
     }
