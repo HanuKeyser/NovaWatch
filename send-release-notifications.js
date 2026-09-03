@@ -105,7 +105,11 @@ function hasReleased(releaseDateIso) {
 // timezone, split into the same three categories the push notification
 // always covers (there's no per-category selection anymore - a single
 // account-level on/off is all that exists now, so every category goes
-// out together whenever an account is subscribed).
+// out together whenever an account is subscribed). Raw season/number
+// kept on each TV entry (not just a pre-formatted subtitle string) so
+// buildReleaseLabels below can group multiple episodes of the same show
+// releasing the same day into one line, rather than repeating the show
+// name and "release" once per episode.
 function getTodaysReleasesForUser(libraryItems, timeZone) {
     const results = [];
 
@@ -115,8 +119,7 @@ function getTodaysReleasesForUser(libraryItems, timeZone) {
                 results.push({
                     category: 'movieReleases',
                     releaseId: `movie:${item.id}`,
-                    title: item.title,
-                    subtitle: 'Movie Release'
+                    title: item.title
                 });
             }
         } else if (Array.isArray(item.episodes)) {
@@ -127,13 +130,71 @@ function getTodaysReleasesForUser(libraryItems, timeZone) {
                     category: isPremiere ? 'showPremieres' : 'newEpisodes',
                     releaseId: `tv:${item.id}:${ep.id}`,
                     title: item.title,
-                    subtitle: `Season ${ep.season} Episode ${ep.number} release`
+                    season: ep.season,
+                    number: ep.number
                 });
             });
         }
     });
 
     return results;
+}
+
+// A run of consecutive episode numbers reads better as a range
+// ("Episodes 3-4") than a comma list once there's more than one - the
+// common real case for this is a double- or triple-episode drop on the
+// same day, which is always consecutive. A genuinely scattered set
+// (e.g. episodes 3 and 7 both happening to release the same day, from a
+// mid-season schedule change) is never misrepresented as a range it
+// isn't - it falls back to a plain comma list instead.
+function formatEpisodeNumbers(numbers) {
+    const sorted = [...numbers].sort((a, b) => a - b);
+    if (sorted.length === 1) return `Episode ${sorted[0]}`;
+    const isConsecutiveRun = sorted.every((n, i) => i === 0 || n === sorted[i - 1] + 1);
+    return isConsecutiveRun
+        ? `Episodes ${sorted[0]}-${sorted[sorted.length - 1]}`
+        : `Episodes ${sorted.join(', ')}`;
+}
+
+// Turns a flat list of today's releases (one entry per episode, even
+// when several belong to the same show and season) into the actual
+// display lines for the notification body - grouping same-show/same-
+// season episodes into one line instead of one per episode, which
+// otherwise reads as "Adults - Season 2 Episode 3 release; Adults -
+// Season 2 Episode 4 release" (the literal case a double-episode drop
+// produced before this existed) rather than "Adults - Season 2 Episodes
+// 3-4". Movies and premieres are never grouped with anything else -
+// there's only ever one movie release per title per day, and a
+// premiere is its own distinct, one-line category regardless of how
+// it's ordered here. Premieres lead, then regular episodes, then
+// movies - a premiere is the most likely thing someone would want to
+// notice first in a list, and movies are the least time-sensitive
+// (nothing else about a movie changes if it's watched a day or two
+// later, unlike an episode that keeps sliding further behind).
+function buildReleaseLabels(releases) {
+    const premiereLabels = [];
+    const movieLabels = [];
+    const episodesByShowSeason = new Map(); // "title\u0000season" -> { title, season, numbers: [] }
+
+    releases.forEach(r => {
+        if (r.category === 'movieReleases') {
+            movieLabels.push(`${r.title} - Movie`);
+        } else if (r.category === 'showPremieres') {
+            premiereLabels.push(`${r.title} - Series Premiere`);
+        } else {
+            const key = `${r.title}\u0000${r.season}`;
+            if (!episodesByShowSeason.has(key)) {
+                episodesByShowSeason.set(key, { title: r.title, season: r.season, numbers: [] });
+            }
+            episodesByShowSeason.get(key).numbers.push(r.number);
+        }
+    });
+
+    const episodeLabels = [...episodesByShowSeason.values()].map(({ title, season, numbers }) =>
+        `${title} - Season ${season} ${formatEpisodeNumbers(numbers)}`
+    );
+
+    return [...premiereLabels, ...episodeLabels, ...movieLabels];
 }
 
 // TMDB titles/descriptions often use "smart" typographic punctuation
@@ -458,7 +519,7 @@ async function run() {
         // that one slot in the first place, so there's nothing for APNs
         // to discard.
         const title = newReleases.length === 1 ? 'New Release' : `${newReleases.length} New Releases Today`;
-        const labels = newReleases.map(r => `${r.title} - ${r.subtitle}`);
+        const labels = buildReleaseLabels(newReleases);
         const MAX_NAMED = 3;
         const body = labels.length <= MAX_NAMED
             ? labels.join('; ')
