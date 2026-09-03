@@ -980,6 +980,16 @@ img {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius);
     box-shadow: var(--glass-shadow-sm);
+    /* grid-column: 1/-1 above means this spans however many columns its
+       parent grid currently has - harmless on a phone (already narrower
+       than this cap), but on any of the wider screen tiers it would
+       otherwise stretch across 2-3 whole poster/card columns' worth of
+       width, leaving one small centered icon and a line of text looking
+       lost in the middle of a very wide, mostly-empty panel. Capped and
+       centered instead, the same "adapt without just stretching"
+       principle applied everywhere else at these widths. */
+    max-width: 480px;
+    margin: 0 auto;
 }
 
 .empty-state svg {
@@ -4012,6 +4022,17 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    /* Home's Viewing Analytics tiles (#dashboardStats) stay a cramped
+       2x2 square forever otherwise - four tiles genuinely fit as one
+       comfortable row once there's room for it, rather than leaving two
+       rows of stat tiles looking squeezed next to everything else on
+       the page that's already using the wider column properly by this
+       point. NovaWrapped's own 3-tile recap grid is a separate class
+       (.wrapped-recap-grid), not affected by this. */
+    #dashboardStats.stats {
+        grid-template-columns: repeat(4, 1fr);
     }
 
     /* Continue Watching's cards are swipeable list ROWS (a fixed 80px
