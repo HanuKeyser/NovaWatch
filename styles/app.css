@@ -3539,6 +3539,92 @@ html[data-theme="dark"] .large-avatar {
     height: 13px;
 }
 
+/* =========================================================
+   ACHIEVEMENT TOAST
+   Same fixed-overlay/glass-chrome recipe as .error-toast above, just
+   anchored to the top instead of sitting just above the nav bar - a
+   deliberately different slot so the two never compete for the same
+   space if an achievement happens to unlock in the same action as an
+   unrelated failure (both are real, if unlikely, at once - e.g. a
+   catch-up save that unlocks something but then fails partway through
+   a later step). Slides down from the top rather than up from the
+   bottom for the same reason: visually distinct motion, not just a
+   different resting position, so the two are never mistaken for each
+   other out of the corner of an eye.
+========================================================= */
+.achievement-toast {
+    position: fixed;
+    left: 50%;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    transform: translateX(-50%) translateY(-14px) scale(0.94);
+    z-index: 500;
+    opacity: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: calc(100% - 36px);
+    max-width: 420px;
+    padding: 10px 18px 10px 10px;
+    border-radius: var(--radius-2xl);
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    backdrop-filter: var(--glass-chrome-blur);
+    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    box-shadow: var(--glass-chrome-shadow);
+    color: var(--text);
+    cursor: pointer;
+    transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.achievement-toast.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* Same orange-gradient + sheen treatment as an unlocked row's own icon
+   badge in the Achievements list (see renderAchievementsList) - the
+   toast and the list entry it corresponds to read as the same "this one
+   is unlocked" visual language, not two unrelated designs. */
+.achievement-toast-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--glass-sheen), var(--orange-gradient);
+    color: white;
+    box-shadow: 0 3px 10px rgba(249, 115, 22, 0.4);
+}
+
+.achievement-toast-icon .icon {
+    width: 20px;
+    height: 20px;
+}
+
+.achievement-toast-text {
+    min-width: 0;
+}
+
+.achievement-toast-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+}
+
+.achievement-toast-title {
+    font-size: 14.5px;
+    font-weight: 800;
+    letter-spacing: -0.1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .auth-field {
     width: 100%;
 }
@@ -3774,6 +3860,26 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    /* .modal is its own fixed, full-viewport overlay (inset: 0) -
+       completely separate from .app's own max-width scaling above, and
+       still full-bleed edge to edge here without this. That's fine for
+       the backdrop hero image (a full-width photo is a normal, good-
+       looking pattern at any size), but .modal-content holds the actual
+       reading content underneath it - a synopsis paragraph, or rows of
+       settings/achievements/episodes - and none of that benefits from
+       stretching to match the viewport the way a poster grid does. A
+       paragraph at 100+ characters per line is genuinely harder to
+       read, not easier, and a settings row stretched that wide just
+       leaves its icon and label bunched on the left with empty space
+       trailing off to the right. Capped at a fixed comfortable-reading
+       width here and left exactly there through every wider block below
+       - unlike the poster grids, this shouldn't keep growing just
+       because the monitor does. */
+    .modal-content {
+        max-width: 720px;
+        margin: 0 auto;
     }
 }
 
