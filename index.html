@@ -538,6 +538,31 @@
 </div>
 
 <!-- =====================================================
+     MARK PREVIOUS EPISODES?
+     Shown by toggleCurrentEpisodeWatched() in app.js when marking an
+     episode watched would otherwise leave earlier released episodes in
+     the same show sitting unwatched (e.g. opening S2E6 directly and
+     marking it watched while S2E1-E5 are still unwatched) - offers to
+     catch those up in the same action instead of leaving a silent gap.
+================================================     -->
+<div id="markPreviousEpisodesModal" class="confirm-overlay" onclick="closeMarkPreviousEpisodesModalOutside(event)">
+    <div class="confirm-card">
+        <div class="confirm-icon-badge">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+        </div>
+        <div class="confirm-title">Mark Earlier Episodes Too?</div>
+        <p id="markPreviousEpisodesMessage" class="confirm-message"></p>
+        <div class="confirm-actions">
+            <button class="confirm-btn cancel" onclick="declineMarkPreviousEpisodes()">Just This One</button>
+            <button class="confirm-btn primary" onclick="confirmMarkPreviousEpisodes()">Mark Them Too</button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
      REWATCH COUNT POPUP
      A compact centered popup (same pattern as Delete Account) for
      adding/removing a rewatch - either for a single episode (tapped from
@@ -1003,6 +1028,24 @@
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     </div>
     <span id="errorToastMessage"></span>
+</div>
+
+<!-- =====================================================
+     ACHIEVEMENT UNLOCKED
+     Shown by showAchievementToast() in app.js, queued from
+     runAchievementsCheck() whenever ACHIEVEMENTS gains a newly-unlocked
+     entry. A top banner (not another bottom one - see .error-toast just
+     above, which already owns that slot) so the two never fight for the
+     same space if both ever needed to show close together.
+================================================     -->
+<div id="achievementToast" class="achievement-toast" onclick="hideAchievementToast()">
+    <div class="achievement-toast-icon">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </div>
+    <div class="achievement-toast-text">
+        <div class="achievement-toast-label">Achievement Unlocked</div>
+        <div id="achievementToastTitle" class="achievement-toast-title"></div>
+    </div>
 </div>
 
 <!-- =====================================================
