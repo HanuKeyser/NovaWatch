@@ -10,6 +10,7 @@ What's included, top to bottom.
 - Finished, Unwatched, and Stopped Watching can each be shown or hidden independently in Settings.
 - Continue Watching on Home surfaces the next unwatched episode for every in-progress show, plus any unwatched movies, with swipe actions to mark watched or stop watching.
 - Opening a show's details lands on and scrolls straight to the episode you actually need to watch next, rather than the top of Season 1.
+- Marking a later episode watched while earlier ones in the same show are still unwatched now asks if you want to catch those up too, instead of silently leaving a gap in your watch history.
 - Discover → For You, recommendations seeded from your library.
 - Deep links for sharing a show, movie, or a specific episode.
 - Unique usernames alongside a freely editable display name.
@@ -34,7 +35,7 @@ What's included, top to bottom.
 - Total watch time, including rewatch passes.
 - Current watch streak, shown as a badge — lit while a streak is active, muted when it isn't. Distinct from the all-time-record streak achievement, which never resets.
 - Counts of watched movies, shows, episodes, and rewatches.
-- 22 achievements, all unlockable by everyone, spanning watching milestones (movies, shows, episodes), streaks, rewatching, library size, timing, and speed. Each one has its own distinct icon so they're easy to tell apart at a glance, from a "Night Owl" moon badge for watching between midnight and 4 AM to a stopwatch for finishing a show within 48 hours of adding it. The unlocked count in Settings updates live as you watch, with no need to open the Achievements list first to see it refresh.
+- 22 achievements, all unlockable by everyone, spanning watching milestones (movies, shows, episodes), streaks, rewatching, library size, timing, and speed. Each one has its own distinct icon so they're easy to tell apart at a glance, from a "Night Owl" moon badge for watching between midnight and 4 AM to a stopwatch for finishing a show within 48 hours of adding it. The unlocked count in Settings updates live as you watch, with no need to open the Achievements list first to see it refresh. Unlocking one now shows a real notification banner with its icon and title, since it's the one kind of update that has no other visible sign anywhere on screen.
 
 ## NovaWrapped
 
@@ -59,10 +60,10 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Full-bleed layout on an installed device: the background extends behind the Dynamic Island, notch, status bar, and home indicator on every device, while actual content stays clear of all of them automatically.
 - Text selection and iOS's long-press copy callout are disabled app-wide by default, so it reads as an installed app rather than a page of selectable text — real input fields are unaffected.
 - Dark mode throughout, applied before first paint so there's no flash between themes on load.
-- An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap.
+- An error toast — errors only, not general confirmations — floats above the nav bar using the same glass language, auto-dismissing after a few seconds or on tap. A separate banner at the top of the screen announces achievement unlocks, since those have no other visible sign anywhere on screen.
 - The offline banner pushes the page's own content down while visible, rather than floating on top of it.
 - A one-time Add to Home Screen prompt, shown once the app is open and only for someone not already using the installed version — permanently suppressed the moment it can tell the app is actually running standalone.
-- Optimized for every screen it's actually opened on, not just a typical phone: a widened, tablet-appropriate layout at 768px and up, a further step up for laptop/desktop-width windows and landscape tablets at 1280px+, and two more steps beyond that for real external monitors and 4K/ultrawide displays so the layout keeps making good use of the space instead of stopping short, tightened spacing and a 2-column library grid on the smallest/narrowest phones, shrunk nav bar and modal imagery when a phone is rotated to landscape, and real hover feedback for anyone using a mouse or trackpad. Phones held normally see none of this - it's the same experience they've always had.
+- Optimized for every screen it's actually opened on, not just a typical phone: a widened, tablet-appropriate layout at 768px and up, a further step up for laptop/desktop-width windows and landscape tablets at 1280px+, and two more steps beyond that for real external monitors and 4K/ultrawide displays so the layout keeps making good use of the space instead of stopping short, tightened spacing and a 2-column library grid on the smallest/narrowest phones, shrunk nav bar and modal imagery when a phone is rotated to landscape, and real hover feedback for anyone using a mouse or trackpad. Phones held normally see none of this - it's the same experience they've always had. On any of those wider screens, a movie/show/settings screen's own text and rows stay capped at a comfortable reading width rather than stretching edge to edge with it — only the poster grids and hero images are meant to use the full extra space.
 - Achievements and Library Display are full-screen, matching every other settings screen, rather than a centered popup card.
 - Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
 - Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
