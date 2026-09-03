@@ -5359,6 +5359,25 @@ function sortMoviesByWatchedDate(movies) {
 function showPage(page, subType = null, focusSearch = false) {
     window.scrollTo(0, 0);
 
+    // Defensive fix for a real bug: switching tabs while a search input is
+    // still focused could leave body.keyboard-scroll-safety's 60vh bottom
+    // padding stuck on forever (see its own comment in app.css) - a short
+    // page (few results, a small library) then shows a huge empty gap of
+    // real scrollable space below its actual content, on every device,
+    // worse on whichever tab happens to have the least content. The
+    // browser doesn't always reliably fire an input's blur event just
+    // because its container gets hidden via display:none a moment later
+    // (rather than removed from the DOM outright), so waiting on that
+    // alone isn't enough. Blurring the focused search input directly here
+    // fires blur immediately and reliably, and removing the class
+    // unconditionally right after is a second guarantee that holds even
+    // if something else focused it without going through the tracked
+    // search inputs' own focus handler in the first place.
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+        document.activeElement.blur();
+    }
+    document.body.classList.remove("keyboard-scroll-safety");
+
     document.querySelectorAll(".page").forEach(element => element.classList.remove("active"));
 
     const target = document.getElementById(`${page}Page`);
