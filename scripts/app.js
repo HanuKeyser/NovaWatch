@@ -1029,32 +1029,44 @@ function hideErrorToast() {
 
 /* =========================================================
    MILESTONE TOAST
-   Shared by two genuinely different moments that both deserve a real
+   Shared by three genuinely different moments that all deserve a real
    notification rather than silence (see showToast's own comment for why
-   almost everything else stays silent): unlocking an achievement, and
-   finishing a season or a whole show (announceEpisodeMilestone below).
-   Neither has any other visible sign anywhere on screen the way most
-   actions already do. Queued rather than a single slot like
+   almost everything else stays silent): unlocking an achievement,
+   finishing a season or a whole show (announceEpisodeMilestone below),
+   and a collection-continuation nudge (announceCollectionContinuation).
+   None of the three has any other visible sign anywhere on screen the
+   way most actions already do. Queued rather than a single slot like
    showErrorToast - more than one can genuinely fire from a single
    action (catching up a big chunk of watch history in one go can clear
    several achievement thresholds and finish a season at the same time),
    and showing them one at a time, each for its own full duration, means
    every one is actually readable instead of racing or overwriting
    another before it's been seen.
+
+   Each one is tappable, but NOT all to the same place - an achievement
+   unlock opens Achievements, but a season/show milestone or a
+   collection nudge opens the actual show/movie it's about instead.
+   Routing every tap to Achievements regardless of what the toast was
+   actually about would be confusing (tapping "Up Next in X" should
+   open that movie, not a list of badges that has nothing to do with
+   it) - the whole point of a non-achievement toast is that it's about
+   a specific piece of content, so tapping it should go to that content.
 ========================================================= */
 let achievementToastQueue = [];
 let achievementToastTimer = null;
 let achievementToastShowing = false;
+let currentMilestoneToastAction = null;
 
-function showMilestoneToast(icon, label, title) {
-    achievementToastQueue.push({ icon, label, title });
+function showMilestoneToast(icon, label, title, onTap) {
+    achievementToastQueue.push({ icon, label, title, onTap });
     if (!achievementToastShowing) advanceAchievementToastQueue();
 }
 
 // Thin wrapper kept around specifically for runAchievementsCheck's own
 // callers - an unlocked ACHIEVEMENTS entry already has icon/title on it.
+// Tapping opens Achievements, the one place that badge actually lives.
 function showAchievementToast(achievement) {
-    showMilestoneToast(achievement.icon, "Achievement Unlocked", achievement.title);
+    showMilestoneToast(achievement.icon, "Achievement Unlocked", achievement.title, () => openAchievementsModal());
 }
 
 function advanceAchievementToastQueue() {
@@ -1062,14 +1074,18 @@ function advanceAchievementToastQueue() {
     if (!toast) {
         achievementToastQueue = [];
         achievementToastShowing = false;
+        currentMilestoneToastAction = null;
         return;
     }
     const next = achievementToastQueue.shift();
     if (!next) {
         achievementToastShowing = false;
+        currentMilestoneToastAction = null;
         return;
     }
     achievementToastShowing = true;
+    currentMilestoneToastAction = next.onTap || null;
+    toast.classList.toggle("tappable", !!next.onTap);
 
     const iconSvg = toast.querySelector(".achievement-toast-icon .icon");
     // next.icon is always one of this app's own hardcoded ICON_* markup
@@ -1100,6 +1116,17 @@ function hideAchievementToast() {
     setTimeout(advanceAchievementToastQueue, 350);
 }
 
+// A tap on the toast itself - navigates to wherever this specific
+// milestone is about (see the block comment above for why that's not
+// the same place for every toast), then dismisses it the same way a
+// plain tap-to-dismiss would. A toast with no destination (there
+// currently isn't one, but defensively) just dismisses.
+function handleMilestoneToastTap() {
+    const action = currentMilestoneToastAction;
+    hideAchievementToast();
+    if (action) action();
+}
+
 // Called right after an episode-watched action succeeds - checks whether
 // that action just finished a season or the whole show, and announces
 // whichever is true (never both - being fully caught up/finished already
@@ -1109,17 +1136,18 @@ function hideAchievementToast() {
 // fires the moment a milestone actually becomes newly true - no separate
 // "was this already true before?" check needed.
 function announceEpisodeMilestone(show, seasonNumber) {
+    const goToShow = () => openDetails(show.id);
     if (isTVUpToDate(show)) {
-        showMilestoneToast(ICON_CHECK, "All Caught Up", show.title);
+        showMilestoneToast(ICON_CHECK, "All Caught Up", show.title, goToShow);
         return;
     }
     if (isTVFinished(show)) {
-        showMilestoneToast(ICON_CHECK, "Series Finished", show.title);
+        showMilestoneToast(ICON_CHECK, "Series Finished", show.title, goToShow);
         return;
     }
     const seasonEps = getAvailableEpisodes(show).filter(ep => ep.season === seasonNumber);
     if (seasonEps.length > 0 && seasonEps.every(ep => ep.watched)) {
-        showMilestoneToast(ICON_CHECK, "Season Complete", `Season ${seasonNumber} \u00b7 ${show.title}`);
+        showMilestoneToast(ICON_CHECK, "Season Complete", `Season ${seasonNumber} \u00b7 ${show.title}`, goToShow);
     }
 }
 
@@ -1143,7 +1171,8 @@ function announceCollectionContinuation(movie) {
     );
     if (candidates.length === 0) return;
     candidates.sort((a, b) => new Date(a.releaseDate || 0) - new Date(b.releaseDate || 0));
-    showMilestoneToast(ICON_FILM, `Up Next in ${movie.collectionName}`, candidates[0].title);
+    const next = candidates[0];
+    showMilestoneToast(ICON_FILM, `Up Next in ${movie.collectionName}`, next.title, () => openDetails(next.id));
 }
 
 /* =========================================================
