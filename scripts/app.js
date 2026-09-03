@@ -14,14 +14,19 @@ const firebaseConfig = {
 let db = null;
 let auth = null;
 let currentUser = null;
-// Firestore onSnapshot() returns an unsubscribe function - captured here so
-// a repeat sign-in within the same tab (sign out, then back in - a normal
-// flow, not an edge case) can detach the PREVIOUS account's listeners
-// before attaching new ones, rather than stacking an extra live listener
-// on every single sign-in for the rest of the tab's life. Found via a full
-// audit: neither listener was ever being unsubscribed anywhere before this.
+// Unsubscribe handle for the live Firestore library listener registered in
+// proceedToApp() - without this, signing out and back in within the same
+// tab (the normal flow) would register a brand-new onSnapshot listener on
+// top of any still-active one from a prior sign-in, since nothing ever
+// tore the old one down. Each stacked listener independently re-derives
+// state.library from its own snapshot and calls refreshActivePage() on
+// every change - not corrupting (all listeners see the same underlying
+// data), but wasteful, and it compounds by one on every sign-in/sign-out
+// cycle for as long as the tab stays open. Detached in both places a
+// session actually ends: handleSignOut's explicit sign-out and
+// onAuthStateChanged's signed-out branch (covers session expiry/other
+// tabs signing out too).
 let libraryListenerUnsub = null;
-let listsListenerUnsub = null;
 
 try {
     if (firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY") {
@@ -68,12 +73,6 @@ const NOVAWATCH_APP_URL = window.location.origin + "/";
 
 let state = {
     library: [],
-    // Each { id, name, itemIds, createdAt } - see the LISTS block further
-    // down for the full CRUD. The automatic "Favourites" list isn't
-    // stored here at all - it's computed on the fly from library items'
-    // own isFavorite flag, not a real document, so there's nothing to
-    // keep in sync when a favorite is toggled.
-    lists: [],
     profiles: [
         {
             id: "profile-guest",
@@ -87,14 +86,7 @@ let state = {
     // ISO 3166-1 country code (e.g. "ZA") used for TMDB/JustWatch "where to
     // watch" lookups. null until detectDefaultRegion() runs on first sign-in
     // or an existing profile doc is loaded - see proceedToApp().
-    region: null,
-    // Placeholder until real subscription/billing infrastructure exists.
-    // Hardcoded false for now - this is the single flag every premium-gated
-    // feature (extra profiles, deeper Wrapped, premium achievements, avatar
-    // upload once Blaze is in use) should check, so wiring up real payment
-    // status later is a one-line change here rather than touching every
-    // feature individually.
-    isPremiumUser: false
+    region: null
 };
 
 /* =========================================================
@@ -128,7 +120,7 @@ function setTheme(theme) {
     } catch (e) { /* localStorage unavailable - theme just won't persist */ }
 
     const metaTheme = document.getElementById('metaThemeColor');
-    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#060606' : '#ececec');
+    if (metaTheme) metaTheme.setAttribute('content', effectiveTheme === 'dark' ? '#0a0d14' : '#e8edf4');
 
     syncThemeToggleUI();
 }
@@ -326,12 +318,18 @@ function closeAvatarPickerOutside(event) {
 
 async function selectAvatar(avatarId) {
     if (!state.profiles || !state.profiles[0]) return;
-    const prevAvatarId = state.profiles[0].avatarId;
+    // saveUserProfile() resolves to false (never throws) on a failed
+    // Firestore write, so the previous version here always optimistically
+    // closed the picker and moved on even when nothing was actually saved -
+    // the change would then silently revert on the next reload with no
+    // indication anything went wrong. Roll back and surface the failure
+    // instead.
+    const previousAvatarId = state.profiles[0].avatarId;
     state.profiles[0].avatarId = avatarId;
     const saved = await saveUserProfile();
     if (!saved) {
-        state.profiles[0].avatarId = prevAvatarId;
-        showErrorToast("Couldn't save - check your connection and try again.");
+        state.profiles[0].avatarId = previousAvatarId;
+        showErrorToast("Couldn't save your avatar. Please try again.");
         return;
     }
     updateHomeUI();
@@ -349,41 +347,53 @@ async function selectAvatar(avatarId) {
    Only the small unlockedAchievements ID array on the profile is written,
    so a milestone doesn't re-trigger its unlock toast on every reload.
 
-   Premium achievements are pulled out for now (not shown, not checked) -
-   kept in PREMIUM_ACHIEVEMENTS below rather than deleted, so they're a
-   one-line change (append them back into ACHIEVEMENTS) once premium is
-   actually ready to launch.
-========================================================= */
-const ACHIEVEMENTS = [
-    { id: 'movies_10', tier: 'free', title: '10 Movies Watched', description: 'Watch 10 movies.', check: (s) => s.moviesWatched >= 10 },
-    { id: 'shows_10', tier: 'free', title: '10 Shows Completed', description: 'Finish watching 10 TV shows.', check: (s) => s.showsCompleted >= 10 },
-    { id: 'streak_7', tier: 'free', title: '7-Day Streak', description: 'Watch something 7 days in a row.', check: (s) => s.longestStreak >= 7 },
-    { id: 'first_rewatch', tier: 'free', title: 'First Rewatch', description: 'Log your first rewatch.', check: (s) => s.totalRewatches >= 1 },
-    { id: 'night_owl', tier: 'free', title: 'Night Owl', description: 'Watch something between midnight and 5am.', check: (s) => s.nightOwlWatch },
-    { id: 'time_capsule', tier: 'free', title: 'Time Capsule', description: 'Watch something released 25 or more years ago.', check: (s) => s.timeCapsuleWatch },
-    { id: 'opening_weekend', tier: 'free', title: 'Opening Weekend', description: 'Watch something within 3 days of its release.', check: (s) => s.openingWeekendWatch },
-    { id: 'marathon_day', tier: 'free', title: 'Marathon Day', description: 'Watch 5 or more episodes of the same show in a single day.', check: (s) => s.marathonDay },
-    { id: 'double_feature', tier: 'free', title: 'Double Feature', description: 'Watch a movie and a TV episode on the same day.', check: (s) => s.doubleFeatureDay },
-    { id: 'the_collector', tier: 'free', title: 'The Collector', description: 'Have 100 or more titles in your library.', check: (s) => s.libraryCount >= 100 },
-    { id: 'list_maker', tier: 'free', title: 'List Maker', description: 'Create 3 or more custom lists.', check: (s) => s.listCount >= 3 },
-    { id: 'heart_eyes', tier: 'free', title: 'Heart Eyes', description: 'Favorite 10 or more titles.', check: (s) => s.favoriteCount >= 10 },
-    { id: 'word_of_mouth', tier: 'free', title: 'Word of Mouth', description: 'Share a show, movie, episode, or list.', check: (s) => s.hasShared }
-];
+   One flat list - everyone can unlock every achievement here, no tiers.
 
-// Not currently active - see comment block above. Untouched otherwise so
-// re-enabling later is just `ACHIEVEMENTS.push(...PREMIUM_ACHIEVEMENTS)`
-// (or folding this list back into ACHIEVEMENTS directly) once
-// state.isPremiumUser is backed by real subscription status.
-const PREMIUM_ACHIEVEMENTS = [
-    { id: 'movies_50', tier: 'premium', title: '50 Movies Watched', description: 'Watch 50 movies.', check: (s) => s.moviesWatched >= 50 },
-    { id: 'movies_100', tier: 'premium', title: '100 Movies Watched', description: 'Watch 100 movies.', check: (s) => s.moviesWatched >= 100 },
-    { id: 'movies_500', tier: 'premium', title: '500 Movies Watched', description: 'Watch 500 movies.', check: (s) => s.moviesWatched >= 500 },
-    { id: 'shows_50', tier: 'premium', title: '50 Shows Completed', description: 'Finish watching 50 TV shows.', check: (s) => s.showsCompleted >= 50 },
-    { id: 'shows_100', tier: 'premium', title: '100 Shows Completed', description: 'Finish watching 100 TV shows.', check: (s) => s.showsCompleted >= 100 },
-    { id: 'streak_30', tier: 'premium', title: '30-Day Streak', description: 'Watch something 30 days in a row.', check: (s) => s.longestStreak >= 30 },
-    { id: 'season_rewatch', tier: 'premium', title: 'Rewatched a Full Season', description: 'Rewatch every episode in a full season at least once.', check: (s) => s.rewatchedFullSeason },
-    { id: 'cleared_watchlist', tier: 'premium', title: 'Cleared Your Watchlist', description: 'Watch everything currently in your library.', check: (s) => s.clearedWatchlist },
-    { id: 'same_week_finish', tier: 'premium', title: 'Binge Finisher', description: 'Finish a show within a week of starting it.', check: (s) => s.sameWeekFinish }
+   Each entry's `icon` is the inner content of a standard 24x24 stroke
+   icon (see renderAchievementsList) - grouped so entries about the same
+   kind of thing share a shape (every movie-count milestone reuses
+   ICON_FILM, every streak reuses ICON_FLAME, etc.), while genuinely
+   different achievements get a shape that actually fits what they're
+   about, rather than one identical medal icon for all of them.
+========================================================= */
+const ICON_FILM = '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18"/><path d="M17 3v18"/><path d="M3 7.5h4"/><path d="M17 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 16.5h4"/>';
+const ICON_TV = '<rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/>';
+const ICON_FLAME = '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>';
+const ICON_REPEAT = '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>';
+const ICON_PLAY = '<circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>';
+const ICON_SHUFFLE = '<path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22"/><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.7l-.359-.5"/>';
+const ICON_MOON = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
+const ICON_LIBRARY = '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>';
+const ICON_LAYERS = '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>';
+const ICON_CHECK = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>';
+const ICON_ZAP = '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>';
+const ICON_TIMER = '<line x1="10" y1="2" x2="14" y2="2"/><line x1="12" y1="14" x2="15" y2="11"/><circle cx="12" cy="14" r="8"/>';
+const ICON_ROWS = '<rect x="3" y="3" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="17" width="18" height="4" rx="1"/>';
+const ICON_UNDO = '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/>';
+
+const ACHIEVEMENTS = [
+    { id: 'movies_10', title: '10 Movies Watched', description: 'Watch 10 movies.', icon: ICON_FILM, check: (s) => s.moviesWatched >= 10 },
+    { id: 'movies_50', title: '50 Movies Watched', description: 'Watch 50 movies.', icon: ICON_FILM, check: (s) => s.moviesWatched >= 50 },
+    { id: 'movies_100', title: '100 Movies Watched', description: 'Watch 100 movies.', icon: ICON_FILM, check: (s) => s.moviesWatched >= 100 },
+    { id: 'movies_500', title: '500 Movies Watched', description: 'Watch 500 movies.', icon: ICON_FILM, check: (s) => s.moviesWatched >= 500 },
+    { id: 'shows_10', title: '10 Shows Completed', description: 'Finish watching 10 TV shows.', icon: ICON_TV, check: (s) => s.showsCompleted >= 10 },
+    { id: 'shows_50', title: '50 Shows Completed', description: 'Finish watching 50 TV shows.', icon: ICON_TV, check: (s) => s.showsCompleted >= 50 },
+    { id: 'shows_100', title: '100 Shows Completed', description: 'Finish watching 100 TV shows.', icon: ICON_TV, check: (s) => s.showsCompleted >= 100 },
+    { id: 'episodes_100', title: '100 Episodes Watched', description: 'Watch 100 TV episodes, across any shows.', icon: ICON_PLAY, check: (s) => s.totalEpisodesWatched >= 100 },
+    { id: 'episodes_500', title: '500 Episodes Watched', description: 'Watch 500 TV episodes, across any shows.', icon: ICON_PLAY, check: (s) => s.totalEpisodesWatched >= 500 },
+    { id: 'streak_7', title: '7-Day Streak', description: 'Watch something 7 days in a row.', icon: ICON_FLAME, check: (s) => s.longestStreak >= 7 },
+    { id: 'streak_30', title: '30-Day Streak', description: 'Watch something 30 days in a row.', icon: ICON_FLAME, check: (s) => s.longestStreak >= 30 },
+    { id: 'first_rewatch', title: 'First Rewatch', description: 'Log your first rewatch.', icon: ICON_REPEAT, check: (s) => s.totalRewatches >= 1 },
+    { id: 'rewatch_regular', title: 'Rewatch Regular', description: 'Log 10 total rewatches.', icon: ICON_REPEAT, check: (s) => s.totalRewatches >= 10 },
+    { id: 'season_rewatch', title: 'Rewatched a Full Season', description: 'Rewatch every episode in a full season at least once.', icon: ICON_LAYERS, check: (s) => s.rewatchedFullSeason },
+    { id: 'well_rounded', title: 'Well-Rounded Viewer', description: 'Watch a movie and finish a whole TV show.', icon: ICON_SHUFFLE, check: (s) => s.wellRounded },
+    { id: 'night_owl', title: 'Night Owl', description: 'Watch something between midnight and 4 AM.', icon: ICON_MOON, check: (s) => s.nightOwlWatch },
+    { id: 'collector_25', title: 'Collector', description: 'Have 25 movies or shows in your library at once.', icon: ICON_LIBRARY, check: (s) => s.libraryCollector },
+    { id: 'cleared_watchlist', title: 'Cleared Your Watchlist', description: 'Watch everything currently in your library.', icon: ICON_CHECK, check: (s) => s.clearedWatchlist },
+    { id: 'same_week_finish', title: 'Binge Finisher', description: 'Finish a show within a week of starting it.', icon: ICON_ZAP, check: (s) => s.sameWeekFinish },
+    { id: 'speed_run', title: 'Speed Run', description: 'Finish a show within 48 hours of adding it to your library.', icon: ICON_TIMER, check: (s) => s.speedRunShow },
+    { id: 'big_binge', title: 'Big Binge', description: 'Finish a show with 20 or more episodes.', icon: ICON_ROWS, check: (s) => s.bigBinge },
+    { id: 'comeback', title: 'The Comeback', description: 'Return to watching after a break of 30 days or more.', icon: ICON_UNDO, check: (s) => s.comebackAfterGap }
 ];
 
 // Whether a run of consecutive watch-days is still "live" right now -
@@ -418,6 +428,16 @@ function getCurrentWatchStreak(watchedDates) {
     return streak;
 }
 
+// True if this stored watched/rewatch timestamp (watchedAt/lastWatchedAt,
+// stored as a UTC ISO string via new Date().toISOString()) falls between
+// local midnight and 4 AM for whoever's evaluating it right now - the
+// same "read a UTC timestamp in the viewer's own local time" approach
+// used everywhere else timestamps like this are displayed.
+function isNightOwlHour(isoTimestamp) {
+    const hour = new Date(isoTimestamp).getHours();
+    return hour >= 0 && hour < 4;
+}
+
 function computeAchievementStats() {
     let moviesWatched = 0;
     let showsCompleted = 0;
@@ -426,22 +446,11 @@ function computeAchievementStats() {
     let sameWeekFinish = false;
     let clearedWatchlist = true;
     let anyItems = false;
-    const watchedDates = new Set();
-
-    // New stats below - each backing one of the newer, more specific
-    // achievements rather than another "watch N more things" variant of
-    // what already existed.
+    let totalEpisodesWatched = 0;
     let nightOwlWatch = false;
-    let timeCapsuleWatch = false;
-    let openingWeekendWatch = false;
-    const movieWatchDates = new Set();
-    const episodeWatchDates = new Set();
-    // Keyed by "showId::date" - counts episodes of the SAME show watched
-    // on the SAME day, for Marathon Day below. A day with 5 episodes
-    // spread across 3 different shows shouldn't count the same as 5
-    // episodes of one show back to back.
-    const showDayEpisodeCounts = new Map();
-    const now = new Date();
+    let speedRunShow = false;
+    let bigBinge = false;
+    const watchedDates = new Set();
 
     state.library.forEach(item => {
         if (item.type === 'movie') {
@@ -450,16 +459,8 @@ function computeAchievementStats() {
                 moviesWatched++;
                 totalRewatches += (item.rewatchCount || 0);
                 if (item.lastWatchedAt) {
-                    const d = item.lastWatchedAt.slice(0, 10);
-                    watchedDates.add(d);
-                    movieWatchDates.add(d);
-                    if (new Date(item.lastWatchedAt).getHours() < 5) nightOwlWatch = true;
-                    if (item.releaseDate) {
-                        const ageYears = (now - new Date(item.releaseDate)) / (365.25 * 24 * 60 * 60 * 1000);
-                        if (ageYears >= 25) timeCapsuleWatch = true;
-                        const daysSinceRelease = (new Date(item.lastWatchedAt) - new Date(item.releaseDate)) / (24 * 60 * 60 * 1000);
-                        if (daysSinceRelease >= 0 && daysSinceRelease <= 3) openingWeekendWatch = true;
-                    }
+                    watchedDates.add(item.lastWatchedAt.slice(0, 10));
+                    if (isNightOwlHour(item.lastWatchedAt)) nightOwlWatch = true;
                 }
             } else {
                 clearedWatchlist = false;
@@ -468,11 +469,27 @@ function computeAchievementStats() {
             anyItems = true;
             const releasedEps = getAvailableEpisodes(item);
             const watchedEps = releasedEps.filter(ep => ep.watched);
+            totalEpisodesWatched += watchedEps.length;
             if (releasedEps.length > 0 && watchedEps.length === releasedEps.length) {
                 showsCompleted++;
                 const timestamps = watchedEps.filter(ep => ep.watchedAt).map(ep => new Date(ep.watchedAt).getTime());
                 if (timestamps.length > 1 && (Math.max(...timestamps) - Math.min(...timestamps)) <= 7 * 24 * 60 * 60 * 1000) {
                     sameWeekFinish = true;
+                }
+                // A long-running show finished in full - 20 is comfortably
+                // more than a typical single season (usually 8-13
+                // episodes), so this means multiple seasons or a long one,
+                // not just "watched one normal-length season".
+                if (releasedEps.length >= 20) bigBinge = true;
+                // Every released episode watched within 48 hours of the
+                // show being added - catches someone who added an already-
+                // finished show and binged the whole backlog fast, not
+                // just someone who's been slowly watching a new one as it
+                // airs (which would spread watchedAt timestamps out over
+                // the show's real release schedule instead).
+                if (item.addedAt && timestamps.length > 0) {
+                    const addedMs = new Date(item.addedAt).getTime();
+                    if (Math.max(...timestamps) - addedMs <= 48 * 60 * 60 * 1000) speedRunShow = true;
                 }
             }
             if (watchedEps.length < releasedEps.length) clearedWatchlist = false;
@@ -481,36 +498,19 @@ function computeAchievementStats() {
                 if (ep.watched) {
                     totalRewatches += (ep.rewatchCount || 0);
                     if (ep.watchedAt) {
-                        const d = ep.watchedAt.slice(0, 10);
-                        watchedDates.add(d);
-                        episodeWatchDates.add(d);
-                        if (new Date(ep.watchedAt).getHours() < 5) nightOwlWatch = true;
-                        if (ep.releaseDate) {
-                            const ageYears = (now - new Date(ep.releaseDate)) / (365.25 * 24 * 60 * 60 * 1000);
-                            if (ageYears >= 25) timeCapsuleWatch = true;
-                            const daysSinceRelease = (new Date(ep.watchedAt) - new Date(ep.releaseDate)) / (24 * 60 * 60 * 1000);
-                            if (daysSinceRelease >= 0 && daysSinceRelease <= 3) openingWeekendWatch = true;
-                        }
-                        const key = `${item.id}::${d}`;
-                        showDayEpisodeCounts.set(key, (showDayEpisodeCounts.get(key) || 0) + 1);
+                        watchedDates.add(ep.watchedAt.slice(0, 10));
+                        if (isNightOwlHour(ep.watchedAt)) nightOwlWatch = true;
                     }
                 }
             });
 
-            // Same getAvailableEpisodes() filter the showsCompleted check
-            // above already uses - found during a full audit using the
-            // raw, unfiltered item.episodes here instead, which meant a
-            // season with any not-yet-aired episode could never trigger
-            // this (an achievement requiring rewatchCount > 0 on an
-            // episode that hasn't even aired once yet). Currently
-            // dormant (season_rewatch is a premium achievement, not in
-            // the active free-tier ACHIEVEMENTS list), so this had zero
-            // live effect, but would have misfired the moment premium
-            // achievements went live.
-            const availableEps = getAvailableEpisodes(item);
-            const seasons = [...new Set(availableEps.map(ep => ep.season))];
+            // Only released episodes count toward "a full season rewatched" -
+            // using item.episodes directly here would wrongly require an
+            // unaired future episode to also be rewatched before this could
+            // ever unlock for a season with one still pending.
+            const seasons = [...new Set(releasedEps.map(ep => ep.season))];
             seasons.forEach(s => {
-                const seasonEps = availableEps.filter(ep => ep.season === s);
+                const seasonEps = releasedEps.filter(ep => ep.season === s);
                 if (seasonEps.length > 0 && seasonEps.every(ep => (ep.rewatchCount || 0) > 0)) rewatchedFullSeason = true;
             });
         }
@@ -520,26 +520,36 @@ function computeAchievementStats() {
 
     // Longest streak = longest run of consecutive calendar days with at
     // least one watch/rewatch logged, from the set of distinct dates above.
+    // The same pass also flags a "comeback": a 30+ day gap somewhere in
+    // the watch history followed by picking it back up again, rather than
+    // someone who's simply never gone quiet for that long.
     const sortedDates = [...watchedDates].sort();
-    let longestStreak = 0, currentStreak = 0, prevDate = null;
+    let longestStreak = 0, currentStreak = 0, prevDate = null, comebackAfterGap = false;
     sortedDates.forEach(dateStr => {
         const d = new Date(dateStr + 'T00:00:00Z');
-        currentStreak = (prevDate && Math.round((d - prevDate) / 86400000) === 1) ? currentStreak + 1 : 1;
+        if (prevDate) {
+            const gapDays = Math.round((d - prevDate) / 86400000);
+            if (gapDays === 1) {
+                currentStreak++;
+            } else {
+                if (gapDays >= 30) comebackAfterGap = true;
+                currentStreak = 1;
+            }
+        } else {
+            currentStreak = 1;
+        }
         longestStreak = Math.max(longestStreak, currentStreak);
         prevDate = d;
     });
 
-    const marathonDay = [...showDayEpisodeCounts.values()].some(count => count >= 5);
-    const doubleFeatureDay = [...movieWatchDates].some(d => episodeWatchDates.has(d));
-    const libraryCount = state.library.length;
-    const listCount = state.lists.length;
-    const favoriteCount = state.library.filter(i => i.isFavorite).length;
+    const wellRounded = moviesWatched >= 1 && showsCompleted >= 1;
+    const libraryCollector = state.library.length >= 25;
 
     return {
-        moviesWatched, showsCompleted, totalRewatches, longestStreak, rewatchedFullSeason,
-        clearedWatchlist, sameWeekFinish, nightOwlWatch, timeCapsuleWatch, openingWeekendWatch,
-        marathonDay, doubleFeatureDay, libraryCount, listCount, favoriteCount,
-        hasShared: !!state.hasSharedSomething
+        moviesWatched, showsCompleted, totalRewatches, longestStreak,
+        rewatchedFullSeason, clearedWatchlist, sameWeekFinish,
+        totalEpisodesWatched, nightOwlWatch, wellRounded, libraryCollector,
+        speedRunShow, bigBinge, comebackAfterGap
     };
 }
 
@@ -580,7 +590,6 @@ function runAchievementsCheck() {
         const meetsCondition = ach.check(stats);
 
         if (!isUnlocked && meetsCondition) {
-            if (ach.tier === 'premium' && !state.isPremiumUser) return;
             profile.unlockedAchievements.push(ach.id);
             newlyUnlocked.push(ach);
             changed = true;
@@ -630,15 +639,14 @@ function renderAchievementsList() {
 
     container.innerHTML = ACHIEVEMENTS.map(ach => {
         const isUnlocked = unlocked.includes(ach.id);
-        const isPremiumLocked = ach.tier === 'premium' && !state.isPremiumUser;
         return `
             <div class="analytics-card settings-card" style="padding: 14px; opacity: ${isUnlocked ? '1' : '0.55'};">
                 <div class="settings-row" style="padding: 0;">
-                    <div class="settings-row-icon" style="background: ${isUnlocked ? 'var(--glass-sheen), var(--warning-fill)' : 'var(--surface-2)'}; color: ${isUnlocked ? 'white' : 'var(--text-muted)'};">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/></svg>
+                    <div class="settings-row-icon" style="background: ${isUnlocked ? 'var(--glass-sheen), var(--orange-gradient)' : 'var(--surface-2)'}; color: ${isUnlocked ? 'white' : 'var(--text-muted)'};">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ach.icon}</svg>
                     </div>
                     <div class="settings-row-text">
-                        <div class="settings-row-title">${escapeHTML(ach.title)}${isPremiumLocked ? ' <span style="color: var(--blue); font-size: 10.5px; font-weight: 800;">PREMIUM</span>' : ''}</div>
+                        <div class="settings-row-title">${escapeHTML(ach.title)}</div>
                         <div class="settings-row-sub">${escapeHTML(ach.description)}</div>
                     </div>
                     ${isUnlocked ? '<svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
@@ -717,8 +725,9 @@ function renderLibraryDisplayModal() {
 
     container.innerHTML = LIBRARY_VISIBILITY_CATEGORIES.map(cat => {
         const isOn = !!prefs[cat.key];
-        // Same on/off pill classes as the notification-permission
-        // button - see .hero-pill-btn.pill-on/.pill-off in app.css.
+        // Same on/off pill classes as Notification Types and the
+        // notification-permission button - see
+        // .hero-pill-btn.pill-on/.pill-off in app.css.
         return `
             <div class="analytics-card settings-card" style="padding: 14px;">
                 <div class="settings-row" style="padding: 0;">
@@ -766,22 +775,10 @@ let selectedSeason = 1;
 // re-render (season switches, watched toggles, background TMDB refreshes).
 let scrollToNextEpisodeOnRender = false;
 let currentSearchType = 'tv';
-// Guards fetchForYou/performTMDBSearch against a genuine race condition
-// found during a full audit: neither had any way to tell an in-flight
-// request was stale. Typing fast enough to fire two overlapping TMDB
-// requests (the 200ms debounce only limits how OFTEN a request fires,
-// not how long any one of them takes to come back), or switching the
-// TV/Movies toggle while a request for the other type is still in
-// flight, meant whichever response happened to arrive LAST always won -
-// occasionally an older, no-longer-relevant one landing after a newer
-// one, silently showing results for a query/type you'd already moved
-// on from. Each fetch captures the counter's value at its own start;
-// before rendering, it checks that value is still current - if a newer
-// request has since started, this one's result is simply discarded.
-let discoverRequestToken = 0;
 let currentAuthMode = 'signin';
 let currentLibraryView = 'tv';
 let searchDebounceTimer = null;
+let libSearchDebounceTimers = {};
 
 /* =========================================================
    NOTIFICATIONS SYSTEM
@@ -877,12 +874,11 @@ async function checkNotificationPermissionState() {
     const btn = document.getElementById("notificationBtn");
     if (!btn) return;
 
-    // Same on/off pill classes as Library
+    // Same on/off pill classes as Notification Types and Library
     // Display - see .hero-pill-btn.pill-on/.pill-off/.pill-neutral in
     // app.css. "Unsupported" is neither on nor off (the device simply
-    // can't), so it gets the neutral variant instead of the "off" one -
-    // that darker-gray treatment should mean "you turned this off,"
-    // not "this can't work here."
+    // can't), so it gets the neutral variant instead of red - red
+    // should mean "you turned this off," not "this can't work here."
     btn.classList.remove("pill-on", "pill-off", "pill-neutral");
 
     if (!("Notification" in window)) {
@@ -1037,6 +1033,10 @@ function clearSearch(inputId) {
     input.value = "";
     input.parentElement.classList.remove("has-text");
     if (inputId === "onlineSearchInput") fetchForYou();
+    if (inputId === "tvLibrarySearchInput") renderTVLibrarySection();
+    if (inputId === "movieLibrarySearchInput") renderMovieLibrarySection();
+    if (inputId === "upcomingTVSearchInput") renderUpcomingTVSection();
+    if (inputId === "upcomingMovieSearchInput") renderUpcomingMovieSection();
     if (inputId === "regionSearchInput") filterRegionOptions("");
 }
 
@@ -1060,12 +1060,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
 
-    // Only two real search inputs left in the app now - Discover and the
-    // region picker. Library, Upcoming, and the Full Library "View All"
-    // view all had their own search boxes removed (each entry point
-    // already disambiguates what you're looking at before you get
-    // there, so a search field inside as well was redundant).
-    const searchInputs = ['onlineSearchInput', 'regionSearchInput'];
+    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'upcomingTVSearchInput', 'upcomingMovieSearchInput', 'regionSearchInput'];
     
     searchInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -1333,56 +1328,127 @@ function tmdbDateToISO(dateStr) {
 /* =========================================================
    TV EPISODE RELEASE TIMING
    Real per-episode release instants, timezone-correct for every viewer.
-   TV episode timing was fully removed once before (a long saga: real
+   TV episode timing was fully removed at one point (a long saga: real
    TVmaze-sourced airtimes -> repeated validation tightening as new edge
    cases kept surfacing -> pure TMDB-date+convention math -> a manual
    correction feature -> two abandoned admin-correction systems -> full
-   removal). It was then brought back with a TVmaze network/webChannel
-   split (real broadcast-anchored time for shows TVmaze lists under a
-   real `network`, streaming-default otherwise) - and TVmaze was removed
-   again from here after that split turned out not to actually solve the
-   problem it was meant to: TVmaze has no reliable per-episode time for
-   the increasingly common case of a show that simulcasts on a broadcast/
-   cable network AND a streaming platform but that TVmaze itself only
-   ever tags under `webChannel` (confirmed directly against a real show:
-   "The Shards" airs on FX *and* streams on Hulu the same evening, but
-   TVmaze lists it as webChannel-only, with no time-of-day on any of its
-   episodes) - so those shows silently got the exact same
-   midnight-Pacific default as a genuine streaming-only show anyway,
-   while adding a second external API, a caching field (`tvmazeId`), and
-   a whole extra failure surface for no actual accuracy gain. TMDB alone,
-   applying the same streaming convention movies already use, is
-   EXACTLY as accurate for every show TVmaze's webChannel-only case
-   already degraded to - so removing TVmaze costs nothing real and
-   drops a real source of fragility.
+   removal). Brought back deliberately differently this time: rather
+   than trying to force one computed formula to cover every show, this
+   splits by what TVmaze itself says it actually knows -
 
-   Every TV episode now gets the same treatment as a movie: TMDB's own
-   air_date, anchored to the streaming/midnight-Pacific convention
-   (getPacificMidnightUTC/tmdbDateToISO above). Netflix/Disney+'s own
-   stated policy is "12:01 AM Pacific Time" - the latest time in the
-   range real streaming platforms actually use (most release earlier in
-   the evening PT) - so this can under-promise (show "not released yet"
-   for a few extra hours on an early-release platform) but never
-   over-promise (claim something's out before it verifiably is,
-   anywhere) EXCEPT for a show with a real evening broadcast/cable
-   airtime, where it can show up to a day early for viewers meaningfully
-   east of Pacific - a known, accepted limitation (see the note on
-   "The Shards"/FX+Hulu above) rather than something local logic can fix
-   without a data source that actually has a trustworthy per-episode
-   time for that case, which nothing available to this app currently
-   does.
+     - A show TVmaze lists under a real `network` (broadcast/cable) has
+       a genuinely reliable, network-announced local airtime - used
+       as-is (see buildBroadcastTimingMap).
+     - Everything else (a TVmaze `webChannel` entry, or no TVmaze match
+       at all) falls back to the same midnight-Pacific streaming
+       convention movies already use. TVmaze itself does NOT store a
+       trustworthy per-episode time for global streaming shows (their
+       own API returns a fixed noon-UTC placeholder for those) - so
+       there's nothing worth reading from TVmaze for that case, and
+       midnight Pacific is the latest time in the range real streaming
+       platforms actually use (official Netflix/Disney+ policy; most
+       others release earlier in the evening PT). That means this can
+       under-promise (show "not released yet" for a few extra hours on
+       an early-release platform) but never over-promise (claim
+       something's out before it verifiably is, anywhere).
 
    Only the calendar DATE this produces is meant to be trusted per
    viewer timezone - not treated as a promise of the exact hour.
 ========================================================= */
+const TVMAZE_API_BASE = "https://api.tvmaze.com";
 
-// The one place a TV episode's release date gets anchored - the same
-// streaming convention movies use, applied to TMDB's own per-episode
-// air_date. No broadcast/network special-casing (see the block comment
-// above for why that was removed).
-function getEpisodeReleaseDate(tmdbEp) {
-    if (!tmdbEp.air_date) return null;
-    return tmdbDateToISO(tmdbEp.air_date);
+// Resolves a show's TVmaze record (with its full embedded episode list),
+// caching the result on the item itself (`tvmazeId`) so a show only ever
+// gets searched for once. `undefined` = never attempted, `null` =
+// attempted and not found (or TVmaze unreachable) - both simply mean
+// this show stays on the streaming-midnight-Pacific default, same as
+// every TV show did before this feature existed. Never a hard failure -
+// a network error or a show TVmaze doesn't have is a normal outcome
+// here, not something to surface to the user.
+async function resolveTVmazeShow(item, showData, imdbId) {
+    if (item.tvmazeId === null) return null;
+
+    if (typeof item.tvmazeId === 'number') {
+        try {
+            const res = await fetch(`${TVMAZE_API_BASE}/shows/${item.tvmazeId}?embed=episodes`);
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (e) {
+            return null;
+        }
+    }
+
+    try {
+        let tvmazeShow = null;
+        if (imdbId) {
+            const res = await fetch(`${TVMAZE_API_BASE}/lookup/shows?imdb=${imdbId}`);
+            if (res.ok) tvmazeShow = await res.json();
+        }
+        // Fallback is a best-effort name search - only reachable when
+        // there's no IMDB id to do an exact lookup with. A loose name
+        // match occasionally being wrong just means that one show keeps
+        // the streaming-default date instead of a real broadcast one -
+        // never worse than the "no TV timing at all" baseline this is
+        // replacing.
+        if (!tvmazeShow) {
+            const res = await fetch(`${TVMAZE_API_BASE}/singlesearch/shows?q=${encodeURIComponent(showData.name || item.title)}`);
+            if (res.ok) tvmazeShow = await res.json();
+        }
+        if (!tvmazeShow || !tvmazeShow.id) {
+            item.tvmazeId = null;
+            return null;
+        }
+        item.tvmazeId = tvmazeShow.id;
+        const epRes = await fetch(`${TVMAZE_API_BASE}/shows/${tvmazeShow.id}?embed=episodes`);
+        if (!epRes.ok) return null;
+        return await epRes.json();
+    } catch (e) {
+        item.tvmazeId = null;
+        return null;
+    }
+}
+
+// A `season+episode -> real anchor instant` lookup, populated only when
+// TVmaze has this show under a real broadcast/cable `network` (not a
+// streaming `webChannel` - see the block comment above for why that
+// half is deliberately never trusted for per-episode time). Empty map
+// for any show that doesn't qualify, which getEpisodeReleaseDate below
+// treats the same as "TVmaze doesn't have this show" - falls straight
+// through to the streaming default.
+function buildBroadcastTimingMap(tvmazeShow) {
+    const map = new Map();
+    if (!tvmazeShow || !tvmazeShow.network) return map;
+    const episodes = tvmazeShow._embedded && tvmazeShow._embedded.episodes;
+    if (!episodes) return map;
+    const timeZone = tvmazeShow.network.country && tvmazeShow.network.country.timezone;
+    if (!timeZone) return map;
+
+    episodes.forEach(ep => {
+        if (!ep.airdate) return;
+        const timeStr = ep.airtime || (tvmazeShow.schedule && tvmazeShow.schedule.time) || '20:00';
+        const parts = timeStr.split(':').map(Number);
+        const hour = Number.isFinite(parts[0]) ? parts[0] : 20;
+        const minute = Number.isFinite(parts[1]) ? parts[1] : 0;
+        // -5 (US Eastern standard time) as the fallback offset if the
+        // browser's Intl support falls through - matches getPacificMidnightUTC's
+        // pattern of a safe fixed guess for the rare non-DST-aware path.
+        const anchor = getTimezoneAnchorUTC(ep.airdate, timeZone, hour, minute, -5);
+        map.set(`s${ep.season}e${ep.number}`, new Date(anchor).toISOString());
+    });
+    return map;
+}
+
+// The one place a TV episode's release date gets anchored. Real
+// broadcast time when the show qualifies for one (see
+// buildBroadcastTimingMap), otherwise the same streaming convention
+// movies use, applied to TMDB's own per-episode air_date.
+function getEpisodeReleaseDate(tmdbEp, seasonNumber, broadcastTimingMap) {
+    const key = `s${seasonNumber}e${tmdbEp.episode_number}`;
+    if (broadcastTimingMap && broadcastTimingMap.has(key)) {
+        return { releaseDate: broadcastTimingMap.get(key), timingSource: 'broadcast' };
+    }
+    if (!tmdbEp.air_date) return { releaseDate: null, timingSource: null };
+    return { releaseDate: tmdbDateToISO(tmdbEp.air_date), timingSource: 'streaming' };
 }
 
 // A season's episode fetch, retried once before giving up on it - a
@@ -1403,9 +1469,12 @@ async function fetchTMDBSeason(tmdbId, seasonNumber) {
 }
 
 // Builds one standardized episode object from a single TMDB episode.
-// Every episode gets a streaming-default releaseDate as long as TMDB
-// itself has an air_date for it (see getEpisodeReleaseDate above).
-function buildEpisodeFields(seasonNumber, ep) {
+// `broadcastTimingMap` is optional (omit/pass null for contexts that
+// deliberately skip TVmaze - see the preview-fetch call site) - every
+// episode still gets a streaming-default releaseDate either way, as
+// long as TMDB itself has an air_date for it.
+function buildEpisodeFields(seasonNumber, ep, broadcastTimingMap) {
+    const timing = getEpisodeReleaseDate(ep, seasonNumber, broadcastTimingMap);
     return {
         id: `s${seasonNumber}e${ep.episode_number}`,
         season: seasonNumber,
@@ -1414,7 +1483,8 @@ function buildEpisodeFields(seasonNumber, ep) {
         overview: ep.overview || '',
         still: ep.still_path ? `https://image.tmdb.org/t/p/w780${ep.still_path}` : '',
         runtime: ep.runtime ? `${ep.runtime} min` : "45 min",
-        releaseDate: getEpisodeReleaseDate(ep),
+        releaseDate: timing.releaseDate,
+        timingSource: timing.timingSource,
         watched: false,
         watchedAt: null
     };
@@ -1432,13 +1502,13 @@ function buildEpisodeFields(seasonNumber, ep) {
 // episodes, completely untouched, instead of being silently dropped (a
 // real, confirmed bug this once caused: a single transient season
 // failure wiping that season's watched history on the very next sync).
-function buildEpisodesFromSeasons(validSeasons, seasonsData, existingEpisodes = null) {
+function buildEpisodesFromSeasons(validSeasons, seasonsData, existingEpisodes = null, broadcastTimingMap = null) {
     const episodes = [];
     validSeasons.forEach((season, i) => {
         const seasonData = seasonsData[i];
         if (seasonData && seasonData.episodes) {
             seasonData.episodes.forEach(ep => {
-                episodes.push(buildEpisodeFields(seasonData.season_number, ep));
+                episodes.push(buildEpisodeFields(seasonData.season_number, ep, broadcastTimingMap));
             });
         } else if (existingEpisodes && existingEpisodes.length > 0) {
             episodes.push(...existingEpisodes.filter(ep => ep.season === season.season_number));
@@ -1475,6 +1545,24 @@ function formatDateWithReleaseTime(dateStr) {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'TBA';
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// Combines the exact calendar date with a friendly relative countdown for
+// anything that hasn't released yet - "Aug 14, 2026 · In 3 days" instead
+// of a bare date that leaves the person doing the "how soon is that?" math
+// themselves, or a bare countdown with no real date to anchor it to. Once
+// something has actually released, this is just the plain date again - a
+// countdown adds nothing once "how soon" isn't the question anymore.
+// Used anywhere a release date is shown as part of a longer meta line
+// (the movie/episode details modals); getCountdown() alone is still the
+// right call for a standalone badge or caption that already has other
+// context around it (the Upcoming tab's cards, the episode list rows).
+function formatReleaseDescription(dateStr) {
+    if (!dateStr) return 'TBA';
+    const formatted = formatDateWithReleaseTime(dateStr);
+    if (formatted === 'TBA') return 'TBA';
+    if (isReleased(dateStr)) return formatted;
+    return `${formatted} \u00b7 ${getCountdown(dateStr)}`;
 }
 
 // Same plain local-calendar-day formatting, for a non-release timestamp
@@ -1788,14 +1876,15 @@ async function submitChosenUsername() {
             state.profiles[0].avatarId = randomAvatarId();
         }
         state.username = username;
+        // claimUsername()'s transaction is idempotent for the same uid (a
+        // retry here just re-confirms the same reservation, it won't throw
+        // "taken"), so it's safe to fail here and let the person try again
+        // rather than proceeding as if the profile write succeeded when
+        // saveUserProfile() resolved to false.
         const saved = await saveUserProfile();
         if (!saved) {
-            // The username claim itself already succeeded and won't be
-            // retried/undone here (see the catch block's own reasoning
-            // on that) - this is specifically about the profile doc that
-            // should reflect it failing to save, which used to show
-            // "Username saved!" regardless.
-            showChooseUsernameError("Your username was claimed, but saving your profile failed - check your connection and try again.");
+            state.username = null;
+            showChooseUsernameError("Couldn't save right now. Please try again.");
             return;
         }
 
@@ -1845,12 +1934,6 @@ async function handleGoogleSignIn() {
 
     clearAuthMessage();
 
-    // Same double-tap guard handleSignIn already has - without it, a
-    // second tap while the OAuth popup is still opening could spawn a
-    // second popup window rather than just refocusing the first one.
-    const googleBtn = document.getElementById("googleAuthBtn");
-    if (googleBtn) googleBtn.disabled = true;
-
     try {
         const provider = new firebase.auth.GoogleAuthProvider();
         await auth.signInWithPopup(provider);
@@ -1858,8 +1941,6 @@ async function handleGoogleSignIn() {
     } catch (err) {
         console.error("Google Sign-In Error:", err);
         showAuthMessage(err.message || "Failed to sign in with Google.");
-    } finally {
-        if (googleBtn) googleBtn.disabled = false;
     }
 }
 
@@ -2201,20 +2282,13 @@ async function handleSignUp() {
         }
         state.username = username;
 
-        const saved = await saveUserProfile();
+        await saveUserProfile();
 
         // Fire-and-forget: verification email shouldn't block account
-        // creation from succeeding if sending it fails for some reason,
-        // and should still go out even if the profile save below failed -
-        // the account itself was created either way.
+        // creation from succeeding if sending it fails for some reason.
         userCredential.user.sendEmailVerification().catch((err) => {
             console.warn("Failed to send verification email:", err);
         });
-
-        if (!saved) {
-            showToast("Account created, but saving your profile failed - check your connection. You can retry from Settings.", "success");
-            return;
-        }
 
         showToast("Account created! Check your inbox to verify your email.", "success");
 
@@ -2242,8 +2316,11 @@ async function handleSignOut() {
     if (!auth) return;
     try {
         await auth.signOut();
+        if (libraryListenerUnsub) {
+            libraryListenerUnsub();
+            libraryListenerUnsub = null;
+        }
         state.library = [];
-        state.lists = [];
         hideChooseUsernameScreen();
         // Explicitly reset to Home on sign-out, not just relying on
         // proceedToApp's own showPage('home') on the NEXT sign-in - if
@@ -2358,15 +2435,27 @@ async function resendVerificationEmail() {
    requires a *recent* sign-in for an operation this sensitive, so if the
    session is older than a few minutes this re-prompts for credentials
    (password re-entry for email/password accounts, a fresh Google popup
-   for Google accounts) and retries once - see confirmDeleteAccount
-   below, which handles both branches directly rather than through a
-   separate reauthenticateCurrentUser() helper (removed - its
-   email/password branch used a native prompt() for the password, which
-   this app deliberately avoids everywhere else; see
-   handleForgotPassword's own comment on why. Folding the logic in
-   directly is what let the email/password branch use the delete modal's
-   own inline field instead).
+   for Google accounts) and retries once.
 ========================================================= */
+async function reauthenticateCurrentUser(user) {
+    const isGoogleAccount = user.providerData.some(p => p.providerId === 'google.com');
+    try {
+        if (isGoogleAccount) {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            await user.reauthenticateWithPopup(provider);
+        } else {
+            const password = prompt("For your security, please re-enter your password to confirm account deletion:");
+            if (!password) return false;
+            const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
+            await user.reauthenticateWithCredential(credential);
+        }
+        return true;
+    } catch (err) {
+        console.error("Reauthentication failed:", err);
+        return false;
+    }
+}
+
 // Firestore doesn't cascade-delete a subcollection when its parent
 // document is deleted, so the library subcollection has to be cleared out
 // document-by-document (batched, since a batch write tops out at 500 ops).
@@ -2390,17 +2479,28 @@ async function deleteAllUserData(uid) {
 
     await deleteCollection("library");
     await deleteCollection("archivedShows");
-    // Found via a full audit tracing data across the whole app, not just
-    // this file: both of these were being left behind forever on account
-    // deletion. "lists" is a real gap in this file alone (it exists,
-    // just wasn't in this function's list). "_internal" is worse - it's
-    // never written by app.js at all, only by the separate server-side
+    // Notification-dedup state written server-side only by
     // send-release-notifications.js (lastStreakReminder,
-    // lastContinueWatchingReminder, notifiedReleases) - genuinely
-    // invisible to anyone auditing only the client code, which is
-    // presumably how it got missed here in the first place.
-    await deleteCollection("lists");
-    await deleteCollection("_internal");
+    // lastContinueWatchingReminder, notifiedReleases) - invisible from
+    // the client's own read paths, so it's easy to forget this exists
+    // when auditing account deletion from app.js alone. Left orphaned
+    // in Firestore forever (tied to a uid with no account left to
+    // recognize it) if not cleaned up here too.
+    //
+    // Wrapped in its own try/catch, unlike library/archivedShows above -
+    // this collection needs its own Firestore rule to even be readable
+    // from the client (see firestore-rules.md), and a rules deployment
+    // can lag behind a code deploy. If that rule isn't live yet, this
+    // would otherwise throw and abort attemptDelete() before it ever
+    // reaches the username release or the actual account deletion below
+    // - failing the ENTIRE account deletion over a minor cleanup
+    // collection the person has never directly interacted with. Better
+    // to log and move on, same as the username-release guard just below.
+    try {
+        await deleteCollection("_internal");
+    } catch (err) {
+        console.warn("Couldn't clean up notification-dedup state on account deletion:", err);
+    }
 
     // Free up the reserved username so someone else can claim it -
     // otherwise a deleted account would permanently squat on the name.
@@ -2532,12 +2632,6 @@ function openNovaWrappedModal() {
 function closeNovaWrappedModal() {
     document.getElementById("novaWrappedModal").classList.remove("open");
     unlockBodyScroll("novaWrappedModal");
-    // Only ever added while the slideshow itself was active (see
-    // startWrappedSlideshow) - removing it unconditionally here is safe
-    // either way, since removeEventListener on a listener that was never
-    // added (closing from the year-picker landing screen, which never
-    // attaches this) is simply a no-op, not an error.
-    document.removeEventListener("keydown", handleWrappedKeydown);
 }
 
 function closeNovaWrappedModalOutside(event) {
@@ -2880,31 +2974,9 @@ function startWrappedSlideshow() {
             <div class="wrapped-tap-zone wrapped-tap-zone-left" onclick="wrappedGoBack()"></div>
             <div class="wrapped-tap-zone wrapped-tap-zone-right" onclick="wrappedGoNext()"></div>
         </div>
-        <!-- Visible, tappable arrows alongside the tap zones above, not
-             instead of them - a full-bleed invisible tap zone is the
-             established convention for story-style formats (Instagram/
-             Snapchat), but it's discoverable only if you already know
-             that convention exists. A visible control means someone
-             seeing this for the first time doesn't have to guess where
-             the screen is tappable at all. stopPropagation so tapping
-             the arrow doesn't also fire the tap zone underneath it. -->
-        <button class="wrapped-nav-arrow wrapped-nav-arrow-left" id="wrappedArrowPrev" onclick="event.stopPropagation(); wrappedGoBack()" aria-label="Previous">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <button class="wrapped-nav-arrow wrapped-nav-arrow-right" id="wrappedArrowNext" onclick="event.stopPropagation(); wrappedGoNext()" aria-label="Next">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-        <div class="wrapped-slide-counter" id="wrappedSlideCounter"></div>
     `;
-    // Each segment is tappable too, not just fillable - jumps straight
-    // to that slide instead of only ever being able to step one at a
-    // time, the same "tap the progress dots to jump" pattern most
-    // story-style formats with a visible progress row already support.
     document.getElementById("wrappedProgressRow").innerHTML =
-        wrappedSlides.map((_, i) => `<div class="wrapped-progress-seg" id="wrappedSeg${i}" onclick="jumpToWrappedSlide(${i})"></div>`).join('');
-
-    initWrappedSwipeGesture();
-    document.addEventListener("keydown", handleWrappedKeydown);
+        wrappedSlides.map((_, i) => `<div class="wrapped-progress-seg" id="wrappedSeg${i}"></div>`).join('');
 
     renderWrappedSlideAt(0);
 }
@@ -2920,19 +2992,6 @@ function renderWrappedSlideAt(index) {
         seg.classList.toggle('filled', i < index);
         seg.classList.toggle('active', i === index);
     });
-
-    const counter = document.getElementById("wrappedSlideCounter");
-    if (counter) counter.textContent = `${index + 1} / ${wrappedSlides.length}`;
-
-    // The Next arrow visually disables on the last slide rather than
-    // just silently doing nothing when tapped there (wrappedGoNext()
-    // already no-ops past the end) - a visible, tappable-looking button
-    // that does nothing is a worse experience than one that's clearly
-    // not available right now. Previous never disables, even on the
-    // first slide - going back there exits to the year picker screen
-    // instead (see wrappedGoBack()), which is a real, valid action.
-    const nextArrow = document.getElementById("wrappedArrowNext");
-    if (nextArrow) nextArrow.disabled = index >= wrappedSlides.length - 1;
 
     const existing = stage.querySelector('.wrapped-slide-panel');
     if (existing) existing.remove();
@@ -2952,16 +3011,6 @@ function renderWrappedSlideAt(index) {
     stage.insertBefore(panel, stage.firstChild);
 }
 
-// Jumps straight to a specific slide via its progress segment (see
-// startWrappedSlideshow) - same rendering path a normal next/back step
-// already uses, just landing on an arbitrary index instead of an
-// adjacent one.
-function jumpToWrappedSlide(index) {
-    if (index < 0 || index >= wrappedSlides.length || index === wrappedSlideIndex) return;
-    wrappedSlideIndex = index;
-    renderWrappedSlideAt(wrappedSlideIndex);
-}
-
 function wrappedGoNext() {
     if (wrappedSlideIndex >= wrappedSlides.length - 1) return;
     wrappedSlideIndex++;
@@ -2978,57 +3027,6 @@ function wrappedGoBack() {
     }
     wrappedSlideIndex--;
     renderWrappedSlideAt(wrappedSlideIndex);
-}
-
-// Swipe left/right, not just tap zones - a story format like this one
-// is conventionally navigated by swipe on a touch device (the same
-// Instagram/Snapchat-style interaction language the tap zones already
-// borrow from), so relying on tap alone left out the gesture people are
-// actually most likely to reach for first. Runs once when the
-// slideshow starts (see startWrappedSlideshow) rather than being
-// re-attached on every single slide change - the listeners live on the
-// stage itself, not any one slide's own DOM, so they don't need to be.
-// A horizontal swipe is distinguished from a vertical one (scroll/
-// dismiss) by checking which axis moved further, so an accidental
-// diagonal drag doesn't misfire as a slide change.
-function initWrappedSwipeGesture() {
-    const stage = document.getElementById("wrappedSlideStage");
-    if (!stage) return;
-    let startX = 0, startY = 0, tracking = false;
-
-    stage.addEventListener("touchstart", (e) => {
-        if (e.touches.length !== 1) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        tracking = true;
-    }, { passive: true });
-
-    stage.addEventListener("touchend", (e) => {
-        if (!tracking) return;
-        tracking = false;
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
-        const dx = endX - startX;
-        const dy = endY - startY;
-        // Under ~40px isn't a deliberate swipe - closer to a tap that
-        // moved slightly, which the tap zones underneath already handle
-        // on their own.
-        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
-        if (dx < 0) wrappedGoNext(); else wrappedGoBack();
-    }, { passive: true });
-}
-
-// Left/right arrow keys, for anyone on a desktop browser rather than a
-// touchscreen - tap zones and swipe both assume touch/click input, which
-// a keyboard has neither of. Escape closes the slideshow entirely, the
-// keyboard equivalent of the header's own close button. Attached once
-// when the slideshow starts, removed when it ends (see
-// startWrappedSlideshow/closeNovaWrappedModal) rather than left
-// listening app-wide the whole time this modal isn't even open.
-function handleWrappedKeydown(e) {
-    if (e.key === "ArrowRight") wrappedGoNext();
-    else if (e.key === "ArrowLeft") wrappedGoBack();
-    else if (e.key === "Escape") closeNovaWrappedModal();
 }
 
 async function shareNovaWrapped() {
@@ -3056,10 +3054,7 @@ async function shareNovaWrapped() {
             console.error("Clipboard write failed:", err);
             showErrorToast("Unable to share.");
         }
-        return;
     }
-
-    showErrorToast("Sharing isn't supported on this device.");
 }
 
 
@@ -3124,14 +3119,6 @@ function handleDeleteAccount() {
     const modal = document.getElementById("deleteAccountModal");
     if (modal.classList.contains("open")) return;
     clearInlineMessage("deleteAccountError");
-    // Always starts hidden - only shown mid-flow if a deletion attempt
-    // actually comes back needing re-authentication (see
-    // confirmDeleteAccount). A stale value left over from a cancelled
-    // previous attempt should never carry over either.
-    const passwordRow = document.getElementById("deleteAccountPasswordRow");
-    const passwordInput = document.getElementById("deleteAccountPassword");
-    if (passwordRow) passwordRow.style.display = "none";
-    if (passwordInput) passwordInput.value = "";
     modal.classList.add("open");
     lockBodyScroll("deleteAccountModal");
 }
@@ -3150,8 +3137,10 @@ async function confirmDeleteAccount() {
 
     const user = auth.currentUser;
     const btn = document.getElementById("confirmDeleteBtn");
-    const passwordRow = document.getElementById("deleteAccountPasswordRow");
-    const passwordInput = document.getElementById("deleteAccountPassword");
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Deleting...";
+    }
     clearInlineMessage("deleteAccountError");
 
     async function attemptDelete() {
@@ -3159,74 +3148,28 @@ async function confirmDeleteAccount() {
         await user.delete();
     }
 
-    // The password row only becomes visible mid-flow, once a first
-    // attempt has already come back needing re-authentication (below) -
-    // its visibility IS the state of which step this tap represents,
-    // rather than a separate flag to keep in sync with it.
-    const isPasswordStep = passwordRow && passwordRow.style.display !== "none";
-
-    if (isPasswordStep) {
-        const password = passwordInput ? passwordInput.value : "";
-        if (!password) {
-            showInlineMessage("deleteAccountError", "Please enter your password.");
-            return;
-        }
-        if (btn) { btn.disabled = true; btn.textContent = "Deleting..."; }
-        try {
-            const credential = firebase.auth.EmailAuthProvider.credential(user.email, password);
-            await user.reauthenticateWithCredential(credential);
-            await attemptDelete();
-            closeDeleteAccountModal();
-            showToast("Your account has been deleted.", "success");
-        } catch (err) {
-            console.error("Account deletion failed after password re-entry:", err);
-            if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
-                showInlineMessage("deleteAccountError", "Incorrect password. Please try again.");
-            } else {
-                showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
-            }
-        } finally {
-            if (btn) { btn.disabled = false; btn.textContent = "Delete"; }
-        }
-        return;
-    }
-
-    if (btn) { btn.disabled = true; btn.textContent = "Deleting..."; }
-
     try {
         await attemptDelete();
         closeDeleteAccountModal();
         showToast("Your account has been deleted.", "success");
     } catch (err) {
         if (err.code === "auth/requires-recent-login") {
-            const isGoogleAccount = user.providerData.some(p => p.providerId === 'google.com');
-            if (isGoogleAccount) {
-                // A popup, not prompt() - popups work fine in an
-                // installed PWA, unlike native prompt/alert/confirm
-                // dialogs (see handleForgotPassword's own comment on
-                // why those are avoided everywhere in this app).
+            const reauthed = await reauthenticateCurrentUser(user);
+            if (!reauthed) {
+                // The modal stays open here (reauthentication was
+                // cancelled, not the deletion itself failing) - needs to
+                // actually say so, since nothing else about the screen
+                // changes to indicate it.
+                showInlineMessage("deleteAccountError", "Account deletion cancelled - please try again.");
+            } else {
                 try {
-                    const provider = new firebase.auth.GoogleAuthProvider();
-                    await user.reauthenticateWithPopup(provider);
                     await attemptDelete();
                     closeDeleteAccountModal();
                     showToast("Your account has been deleted.", "success");
                 } catch (err2) {
-                    console.error("Account deletion failed after Google reauth:", err2);
+                    console.error("Account deletion failed after reauthentication:", err2);
                     showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
                 }
-            } else {
-                // Email/password account - reveal the inline password
-                // field instead of the native prompt() this used to call
-                // (see reauthenticateCurrentUser's removal - it's now
-                // just the Google popup branch above, folded in here
-                // directly rather than kept as a function whose only
-                // other caller was this one). Stops here and waits for
-                // the next tap on this same button, now running the
-                // isPasswordStep branch above instead.
-                if (passwordRow) passwordRow.style.display = "";
-                if (passwordInput) passwordInput.focus();
-                showInlineMessage("deleteAccountError", "Please confirm your password to continue.");
             }
         } else {
             console.error("Account deletion failed:", err);
@@ -3260,88 +3203,11 @@ function setInnerHTMLIfChanged(el, html) {
     return false;
 }
 
-// A targeted alternative to the whole-container replacement above,
-// specifically for poster grids (createCard's own output, which
-// already tags each card with data-id="<item id>") - setInnerHTMLIfChanged
-// is all-or-nothing: if a SINGLE card's content changes anywhere in the
-// container (a progress bar updating for one show among a dozen),
-// string comparison sees the whole block as different and replaces the
-// entire container, destroying and recreating every <img> in it - which
-// is what was actually causing posters to visibly flicker/"reload" on
-// every library update, tab switch, or modal open, even for cards
-// whose own data never changed at all. This instead updates only the
-// specific cards whose own rendered HTML actually changed, and leaves
-// every other card's existing DOM node - including its already-decoded
-// image - completely untouched.
-function syncCardGrid(container, items, cardHtmlFn) {
-    if (!container) return;
-
-    const newIds = new Set(items.map(item => item.id));
-    Array.from(container.children).forEach(child => {
-        if (!newIds.has(child.dataset.id)) child.remove();
-    });
-
-    let previousNode = null;
-    items.forEach(item => {
-        const html = cardHtmlFn(item).trim();
-        let node = container.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
-
-        if (!node || node.outerHTML !== html) {
-            const temp = document.createElement('div');
-            temp.innerHTML = html;
-            const freshNode = temp.firstElementChild;
-            if (node) {
-                node.replaceWith(freshNode);
-            } else {
-                container.appendChild(freshNode);
-            }
-            node = freshNode;
-        }
-
-        // Keeps items in the right order without moving nodes that are
-        // already correctly positioned - only touches the DOM when an
-        // item has actually moved, same "don't disturb what's already
-        // right" principle as the replacement logic above.
-        if (previousNode ? previousNode.nextElementSibling !== node : container.firstElementChild !== node) {
-            if (previousNode) previousNode.after(node);
-            else container.prepend(node);
-        }
-        previousNode = node;
-    });
-}
-
 function refreshActivePage() {
-    if (document.getElementById("libraryPage").classList.contains("active")) renderLibraryHome();
-
-    // Independent of which tab is "active" underneath - the Full Library
-    // modal is its own overlay, not tied to .page.active the way the
-    // preview above is, so a library change (a new watch, a remove)
-    // needs to refresh it too whenever it happens to be open, regardless
-    // of which tab is showing behind it.
-    if (document.getElementById("fullLibraryModal").classList.contains("open")) {
+    if (document.getElementById("libraryPage").classList.contains("active")) {
         if (currentLibraryView === 'tv') renderTVLibrarySection();
         if (currentLibraryView === 'movies') renderMovieLibrarySection();
     }
-
-    // Same idea for the Add to List picker - a list created from
-    // within it (via + Create New List) needs to appear in its own
-    // checklist right away, not just the next time it's reopened.
-    if (document.getElementById("listPickerModal").classList.contains("open")) {
-        renderListPickerContent();
-    }
-
-    // And the List Detail view - a list can be edited/deleted from
-    // another device while it's open here.
-    if (document.getElementById("listDetailModal").classList.contains("open")) {
-        renderListDetailContent();
-    }
-
-    // And Reorder Lists - a list created/deleted/renamed elsewhere
-    // should be reflected immediately if this happens to be open too.
-    if (document.getElementById("reorderListsModal").classList.contains("open")) {
-        renderReorderListsContent();
-    }
-
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
     if (document.getElementById("upcomingPage").classList.contains("active")) {
         if (currentUpcomingView === 'tv') renderUpcomingTVSection();
@@ -3471,11 +3337,28 @@ async function refreshItemFromTMDBInternal(item) {
                     }
                 } else {
                     // TV Shows: refresh show-level metadata AND the full episode/season list.
-                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}`);
+                    // external_ids appended so resolveTVmazeShow() below has an
+                    // IMDB id for an exact TVmaze lookup, without a second round-trip.
+                    const res = await fetch(`https://api.themoviedb.org/3/tv/${item.tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
                     const showData = await res.json();
                     if (!showData || !showData.seasons) return { changed: false, failed: false };
                     const validSeasons = showData.seasons.filter(s => s.season_number > 0);
                     const seasonsData = await Promise.all(validSeasons.map(season => fetchTMDBSeason(item.tmdbId, season.season_number)));
+
+                    // Real per-episode timing (see the TV EPISODE RELEASE TIMING
+                    // block near tmdbDateToISO) - resolved every sync so a show
+                    // that only just got picked up by a network TVmaze tracks
+                    // (or one whose schedule changed) picks that up here, not
+                    // just at add time. resolveTVmazeShow() mutates item.tvmazeId
+                    // as a caching side effect - captured before/after so that
+                    // first-time resolution gets saved even on a sync where
+                    // nothing else about the show happened to change (otherwise
+                    // it'd never persist and every sync would re-search TVmaze
+                    // from scratch, forever).
+                    const prevTvmazeId = item.tvmazeId;
+                    const tvmazeShow = await resolveTVmazeShow(item, showData, showData.external_ids && showData.external_ids.imdb_id);
+                    const broadcastTimingMap = buildBroadcastTimingMap(tvmazeShow);
+                    const tvmazeIdChanged = item.tvmazeId !== prevTvmazeId;
 
                     // BUG FIX (shared logic - see buildEpisodesFromSeasons()):
                     // a season whose fetch still failed even after
@@ -3488,11 +3371,11 @@ async function refreshItemFromTMDBInternal(item) {
                     // transient failure for one season out of several used to be
                     // enough to permanently wipe that season's episodes - watched
                     // history included - with no error shown anywhere.
-                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, item.episodes);
+                    const newEpisodes = buildEpisodesFromSeasons(validSeasons, seasonsData, item.episodes, broadcastTimingMap);
 
                     // Merge against the existing episode list: keep each episode's
                     // watched flag (and the date it was watched on - see
-                    // setEpisodeWatched), but pick up any TMDB edit (renamed
+                    // setEpisodeWatched), but pick up any TMDB/TVmaze edit (renamed
                     // episode, fixed synopsis/still/air date/runtime/release timing).
                     // This runs on every periodic background sync, so skipping the
                     // watchedAt carryover here would quietly erase every
@@ -3564,7 +3447,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.numberOfEpisodes !== newEpisodeCount
                     );
 
-                    if (episodesChanged || metadataChanged) {
+                    if (episodesChanged || metadataChanged || tvmazeIdChanged) {
                         if (newEpisodes.length > 0) item.episodes = newEpisodes;
                         item.title = newTitle;
                         item.year = newYear;
@@ -3576,6 +3459,7 @@ async function refreshItemFromTMDBInternal(item) {
                         item.rating = newRating;
                         item.numberOfSeasons = newSeasonCount;
                         item.numberOfEpisodes = newEpisodeCount;
+                        // item.tvmazeId was already set in place by resolveTVmazeShow().
 
                         await saveItem(item);
                         changed = true;
@@ -4244,12 +4128,10 @@ if (auth) {
             hideVerifyScreen();
             hideChooseUsernameScreen();
             oneSignalLogout();
-            // A signed-out tab shouldn't have any live Firestore listeners
-            // running at all - covers plain sign-out (not just the repeat-
-            // sign-in case proceedToApp's own call handles) and means an
-            // account switch (sign out, sign in as someone else) can never
-            // catch a listener mid-detach between the two calls.
-            detachLibraryListeners();
+            if (libraryListenerUnsub) {
+                libraryListenerUnsub();
+                libraryListenerUnsub = null;
+            }
             // A shared/public device shouldn't show whoever was signed in
             // before flashing briefly on the next person's first paint -
             // see restoreCachedIdentitySnapshot(), which is exactly what
@@ -4262,7 +4144,6 @@ if (auth) {
 
             // Clear local state
             state.library = [];
-            state.lists = [];
             libraryLoaded = false;
             document.getElementById("homeName").textContent = "Guest";
             const homeEmailSubtitleEl = document.getElementById("homeEmailSubtitle");
@@ -4281,30 +4162,12 @@ if (auth) {
     });
 }
 
-// Detaches any live library/lists Firestore listeners from a previous
-// sign-in - safe to call even when nothing's attached (unsubscribing an
-// already-null ref is just a no-op check, not an error). Called both at
-// the top of proceedToApp (covers a repeat sign-in stacking a duplicate
-// listener on top of one never cleaned up) and in the signed-out branch
-// of onAuthStateChanged (a signed-out tab shouldn't have any live
-// Firestore listeners running at all).
-function detachLibraryListeners() {
-    if (libraryListenerUnsub) { libraryListenerUnsub(); libraryListenerUnsub = null; }
-    if (listsListenerUnsub) { listsListenerUnsub(); listsListenerUnsub = null; }
-}
-
 // Everything involved in actually entering the app once a user is signed
 // in AND verified (or on a provider that never needed verification) -
 // factored out so both the normal auth listener above and a successful
 // in-app verification check (checkVerificationStatus) land in the same
 // place instead of duplicating this logic.
 async function proceedToApp(user, authScreen, mainApp) {
-            // Detach any listeners left over from a previous sign-in in
-            // this same tab, before this call attaches its own below -
-            // see detachLibraryListeners' own comment for why this needed
-            // to exist at all.
-            detachLibraryListeners();
-
             // Hide Auth Screen, Show Main App
             authScreen.style.display = "none";
             mainApp.style.display = "block";
@@ -4454,10 +4317,13 @@ async function proceedToApp(user, authScreen, mainApp) {
                 // Trigger Background Updates & Notifications
                 await checkLibraryForUpdates();
 
-                // Listen for real-time changes. detachLibraryListeners()
-                // (called at the top of proceedToApp and on sign-out) is
-                // what keeps this from stacking a duplicate listener on
-                // every repeat sign-in within the same tab.
+                // Listen for real-time changes. Tear down any listener left
+                // over from a prior sign-in in this same tab first - see
+                // libraryListenerUnsub's declaration for why this matters.
+                if (libraryListenerUnsub) {
+                    libraryListenerUnsub();
+                    libraryListenerUnsub = null;
+                }
                 libraryListenerUnsub = db.collection("users")
                     .doc(user.uid)
                     .collection("library")
@@ -4493,19 +4359,6 @@ async function proceedToApp(user, authScreen, mainApp) {
                         state.library = updatedLibrary;
                         refreshActivePage();
                     });
-
-                // Lists get their own, simpler listener - no dedup/cleanup
-                // needed the way library items do (a list is just a name
-                // and an array of ids, not a rich document that can end
-                // up a broken partial stub), so this is a plain mirror of
-                // the collection into state.lists.
-                listsListenerUnsub = db.collection("users")
-                    .doc(user.uid)
-                    .collection("lists")
-                    .onSnapshot((snapshot) => {
-                        state.lists = snapshot.docs.map(d => d.data());
-                        refreshActivePage();
-                    });
             } catch (err) {
                 console.error("Error fetching cloud data:", err);
                 showErrorToast("Library sync failed.");
@@ -4531,11 +4384,6 @@ function setSearchType(type) {
     currentSearchType = type;
     document.getElementById("searchTypeTV").classList.toggle("active", type === 'tv');
     document.getElementById("searchTypeMovie").classList.toggle("active", type === 'movie');
-    // Keeps the sliding indicator in sync for a plain tap too, not just
-    // a drag release (drag already repositions it directly in
-    // finishDrag) - a tap never touches the indicator otherwise, since
-    // this function is the only thing that runs for it.
-    updateSegmentedIndicator(document.getElementById("searchTypeToggle"), document.getElementById("searchTypeIndicator"));
 
     const searchInput = document.getElementById("onlineSearchInput");
     const query = searchInput ? searchInput.value.trim() : "";
@@ -4565,7 +4413,43 @@ function initSearchPage() {
         }, 200);
     });
 
+    const tvLibInput = document.getElementById("tvLibrarySearchInput");
+    if (tvLibInput) {
+        tvLibInput.addEventListener("input", () => {
+            debounceLibraryFilter("tvLib", () => renderTVLibrarySection());
+        });
+    }
+
+    const movieLibInput = document.getElementById("movieLibrarySearchInput");
+    if (movieLibInput) {
+        movieLibInput.addEventListener("input", () => {
+            debounceLibraryFilter("movieLib", () => renderMovieLibrarySection());
+        });
+    }
+
+    const upcomingTVInput = document.getElementById("upcomingTVSearchInput");
+    if (upcomingTVInput) {
+        upcomingTVInput.addEventListener("input", () => {
+            debounceLibraryFilter("upcomingTV", () => renderUpcomingTVSection());
+        });
+    }
+
+    const upcomingMovieInput = document.getElementById("upcomingMovieSearchInput");
+    if (upcomingMovieInput) {
+        upcomingMovieInput.addEventListener("input", () => {
+            debounceLibraryFilter("upcomingMovie", () => renderUpcomingMovieSection());
+        });
+    }
+
     fetchForYou();
+}
+
+// Rebuilding a categorized poster grid on every single keystroke can feel
+// janky with a larger library, so local (already-in-memory) filtering gets
+// the same lightweight debounce treatment as the network-bound TMDB search.
+function debounceLibraryFilter(key, renderFn) {
+    clearTimeout(libSearchDebounceTimers[key]);
+    libSearchDebounceTimers[key] = setTimeout(renderFn, 120);
 }
 
 // Picks the library items most worth seeding recommendations from: highest
@@ -4584,12 +4468,7 @@ function getForYouSeeds(type) {
         .slice(0, 5);
 }
 
-async function fetchTrending(existingToken) {
-    // Accepts an existing token from fetchForYou's own call (the no-seeds
-    // fallback) rather than minting a second one for what's really the
-    // same logical request - only mints its own when nothing was passed
-    // in, so this still works correctly as a standalone entry point too.
-    const myToken = existingToken || ++discoverRequestToken;
+async function fetchTrending() {
     const listContainer = document.getElementById("searchResultsList");
     const heading = document.getElementById("searchResultsHeading");
 
@@ -4605,8 +4484,6 @@ async function fetchTrending(existingToken) {
         const response = await fetch(endpoint);
         const data = await response.json();
 
-        if (myToken !== discoverRequestToken) return;
-
         if (!response.ok) {
             console.warn(`TMDB trending request failed (${response.status}):`, data?.status_message || data);
             listContainer.innerHTML = emptyState("Couldn't Load Trending", "There was a problem reaching TMDB. Check your connection and try again.");
@@ -4615,7 +4492,6 @@ async function fetchTrending(existingToken) {
 
         renderSearchResults(data.results || []);
     } catch (error) {
-        if (myToken !== discoverRequestToken) return;
         console.error("Error fetching trending media:", error);
         listContainer.innerHTML = emptyState("Unable to load trending items", "Please check your network connection.");
     }
@@ -4628,14 +4504,13 @@ async function fetchTrending(existingToken) {
 // anything already in the library. Falls back to plain Trending when the
 // library has nothing of this type yet to seed from.
 async function fetchForYou() {
-    const myToken = ++discoverRequestToken;
     const listContainer = document.getElementById("searchResultsList");
     const heading = document.getElementById("searchResultsHeading");
     const mediaLabel = currentSearchType === 'movie' ? 'Movies' : 'TV Shows';
 
     const seeds = getForYouSeeds(currentSearchType);
     if (seeds.length === 0) {
-        return fetchTrending(myToken);
+        return fetchTrending();
     }
 
     if (heading) heading.textContent = `For You`;
@@ -4653,8 +4528,6 @@ async function fetchForYou() {
                     .catch(() => ({ results: [] }))
             )
         );
-
-        if (myToken !== discoverRequestToken) return;
 
         const libraryTmdbIds = new Set(state.library.map(item => item.tmdbId));
         const scored = new Map();
@@ -4685,14 +4558,12 @@ async function fetchForYou() {
 
         renderSearchResults(ranked);
     } catch (error) {
-        if (myToken !== discoverRequestToken) return;
         console.error("Error fetching For You recommendations:", error);
         listContainer.innerHTML = emptyState("Unable to Load Recommendations", "Please check your network connection.");
     }
 }
 
 async function performTMDBSearch(query) {
-    const myToken = ++discoverRequestToken;
     const listContainer = document.getElementById("searchResultsList");
     const heading = document.getElementById("searchResultsHeading");
 
@@ -4707,8 +4578,6 @@ async function performTMDBSearch(query) {
         const response = await fetch(endpoint);
         const data = await response.json();
 
-        if (myToken !== discoverRequestToken) return;
-
         if (!response.ok) {
             console.warn(`TMDB search request failed (${response.status}):`, data?.status_message || data);
             listContainer.innerHTML = emptyState("Couldn't Load Results", "There was a problem reaching TMDB. Check your connection and try again.");
@@ -4722,7 +4591,6 @@ async function performTMDBSearch(query) {
 
         renderSearchResults(data.results);
     } catch (error) {
-        if (myToken !== discoverRequestToken) return;
         console.error("Error searching TMDB:", error);
         listContainer.innerHTML = emptyState("Search Error", "Couldn't reach TMDB. Check your connection and try again.");
     }
@@ -4946,19 +4814,13 @@ async function importMediaData(id, type, buttonElement) {
 
             state.library.push(newMovie);
             const savedMovie = await saveItem(newMovie);
-
             if (!savedMovie) {
-                // Roll back the optimistic in-memory add so the app
-                // doesn't keep showing something in the library that was
-                // never actually saved - it would otherwise look present
-                // for the rest of this session and then silently vanish
-                // the moment Firestore's own data resyncs in. Found via a
-                // full audit: this add flow updated the button to
-                // "added" unconditionally, the same class of bug already
-                // fixed once for the poster/backdrop picker (see
-                // saveItem's own comment) but never applied here.
-                state.library = state.library.filter(i => i !== newMovie);
-                showErrorToast(`Couldn't save - check your connection and try again.`);
+                state.library = state.library.filter(i => i.id !== newMovie.id);
+                showErrorToast("Couldn't add to your library right now. Please try again.");
+                if (buttonElement) {
+                    buttonElement.disabled = false;
+                    buttonElement.textContent = "Add to Library";
+                }
                 return;
             }
 
@@ -4972,7 +4834,9 @@ async function importMediaData(id, type, buttonElement) {
 
         } else {
             const availabilityPromise = fetchWatchAvailability(id, 'tv');
-            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}`);
+            // external_ids appended for the TVmaze lookup below (an exact
+            // IMDB-id match beats the name-search fallback).
+            const showRes = await fetch(`https://api.themoviedb.org/3/tv/${id}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`);
             const showData = await showRes.json();
 
             if (!showRes.ok || !showData || !showData.id || !showData.name) {
@@ -4999,11 +4863,27 @@ async function importMediaData(id, type, buttonElement) {
             }
 
             let episodes = [];
+            // Stays undefined (not null) unless a TVmaze resolution is
+            // actually attempted below - matches resolveTVmazeShow()'s own
+            // undefined/null distinction, so a show added with no seasons
+            // yet still gets a real attempt on its first background sync
+            // rather than being permanently treated as "already tried".
+            let tvmazeId;
 
             if (showData.seasons && showData.seasons.length > 0) {
                 const validSeasons = showData.seasons.filter(s => s.season_number > 0);
                 const seasonsData = await Promise.all(validSeasons.map(season => fetchTMDBSeason(id, season.season_number)));
-                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData);
+
+                // Real per-episode timing, resolved once up front so the show
+                // enters the library with accurate dates immediately instead
+                // of waiting for the first background sync (see the TV
+                // EPISODE RELEASE TIMING block near tmdbDateToISO).
+                const timingContext = { title: showData.name };
+                const tvmazeShow = await resolveTVmazeShow(timingContext, showData, showData.external_ids && showData.external_ids.imdb_id);
+                tvmazeId = timingContext.tvmazeId;
+                const broadcastTimingMap = buildBroadcastTimingMap(tvmazeShow);
+
+                episodes = buildEpisodesFromSeasons(validSeasons, seasonsData, null, broadcastTimingMap);
             }
 
             // Carry watched flags (and the date each was watched on - see
@@ -5050,18 +4930,22 @@ async function importMediaData(id, type, buttonElement) {
                 watchLink: availability.link,
                 contentRating: availability.contentRating
             };
+            // Only set when a TVmaze resolution was actually attempted above -
+            // an omitted key (rather than an explicit `undefined` value) is
+            // what keeps this field out of the Firestore write entirely,
+            // consistent with resolveTVmazeShow()'s own undefined/null
+            // distinction (see its comment).
+            if (typeof tvmazeId !== 'undefined') newShow.tvmazeId = tvmazeId;
 
             state.library.push(newShow);
             const savedShow = await saveItem(newShow);
-
             if (!savedShow) {
-                // Same rollback as the movie add path above - and
-                // deliberately does NOT touch archivedShow/clear the
-                // archive entry below, since the restore didn't actually
-                // happen either; leaving the archived watch history in
-                // place is the correct outcome for a save that failed.
-                state.library = state.library.filter(i => i !== newShow);
-                showErrorToast(`Couldn't save - check your connection and try again.`);
+                state.library = state.library.filter(i => i.id !== newShow.id);
+                showErrorToast("Couldn't add to your library right now. Please try again.");
+                if (buttonElement) {
+                    buttonElement.disabled = false;
+                    buttonElement.textContent = "Add to Library";
+                }
                 return;
             }
 
@@ -5225,36 +5109,6 @@ function sortTVShowsByLatestAired(shows) {
     return shows.sort((a, b) => getLatestAiredEpisodeDate(b) - getLatestAiredEpisodeDate(a));
 }
 
-// Movie equivalent of the above - every Library category, TV or movie,
-// sorts by the item's own release date, latest first, as one single
-// consistent rule rather than each category picking its own dimension
-// (this used to mix release-date-ish TV sorting with watch-date sorting
-// for movies' own Watched category, and no sorting at all for movies'
-// Unwatched/Coming Soon - inconsistent, not really "latest to oldest"
-// as one coherent rule at all).
-function sortMoviesByReleaseDate(movies) {
-    return movies.sort((a, b) => new Date(b.releaseDate || 0) - new Date(a.releaseDate || 0));
-}
-
-// Different from sortTVShowsByLatestAired above - that one sorts by the
-// show's own airing schedule (when TMDB says an episode released),
-// which has nothing to do with when the viewer actually watched it.
-// This sorts by the viewer's own activity instead - the Library
-// preview's "most recently watched" ordering needs the latter, not the
-// former, so it reflects what someone's actually been doing rather
-// than what happened to air recently.
-function getLastWatchedEpisodeTimestamp(show) {
-    if (!show.episodes) return 0;
-    const watchedTimes = show.episodes
-        .filter(ep => ep.watched && ep.watchedAt)
-        .map(ep => new Date(ep.watchedAt).getTime());
-    return watchedTimes.length > 0 ? Math.max(...watchedTimes) : 0;
-}
-
-function sortTVShowsByLastWatched(shows) {
-    return [...shows].sort((a, b) => getLastWatchedEpisodeTimestamp(b) - getLastWatchedEpisodeTimestamp(a));
-}
-
 function sortMoviesByWatchedDate(movies) {
     return movies.sort((a, b) => {
         const timeA = a.lastWatchedAt ? new Date(a.lastWatchedAt).getTime() : 0;
@@ -5286,30 +5140,13 @@ function showPage(page, subType = null, focusSearch = false) {
 
     updateNavIndicator();
 
-    if (page === "library") renderLibraryHome();
+    if (page === "library") setLibraryView(subType || currentLibraryView);
     if (page === "discover") {
         if (subType) {
             setSearchType(subType);
         } else {
             const query = document.getElementById("onlineSearchInput").value.trim();
             if (!query) fetchForYou();
-            // setSearchType() (which also repositions the toggle's own
-            // sliding indicator) only runs above when a subType was
-            // explicitly passed - the common case, just tapping the
-            // Search nav button with no subtype, skipped it entirely.
-            // The indicator was positioned once already, back on
-            // DOMContentLoaded, but #discoverPage was still display:
-            // none at that exact moment (only one page is ever visible
-            // at a time), so its own getBoundingClientRect() measured a
-            // zero-width container - the indicator has been sitting at
-            // that same zero width ever since, on every single visit to
-            // this page, until someone happened to tap a toggle button
-            // directly and trigger a real setSearchType() call. Re-
-            // measuring here, every time the page is actually shown,
-            // fixes it without needing to run the rest of
-            // setSearchType()'s own work (re-fetching search results)
-            // just to reposition one element.
-            updateSegmentedIndicator(document.getElementById("searchTypeToggle"), document.getElementById("searchTypeIndicator"), false);
         }
 
         // Only auto-focus when the person actually tapped their way to
@@ -5532,103 +5369,20 @@ function initNavBarDragToSwitch() {
 
 document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 
-// Same architecture as updateNavIndicator/positionNavIndicatorAt above,
-// generalized for the two TV Shows/Movies toggles (Search, Upcoming) -
-// a real sliding pill behind the buttons, not each button carrying its
-// own fill directly.
-function positionSegmentedIndicatorAt(containerEl, indicatorEl, btn) {
-    if (!containerEl || !indicatorEl || !btn) return;
-    const rect = containerEl.getBoundingClientRect();
-    const btnRect = btn.getBoundingClientRect();
-    indicatorEl.style.width = `${btnRect.width}px`;
-    indicatorEl.style.transform = `translateX(${btnRect.left - rect.left}px)`;
-}
-
-function updateSegmentedIndicator(containerEl, indicatorEl, animate = true) {
-    if (!containerEl || !indicatorEl) return;
-    const activeBtn = containerEl.querySelector(".segmented-btn.active");
-    if (!activeBtn) return;
-
-    if (!animate) indicatorEl.style.transition = "none";
-    positionSegmentedIndicatorAt(containerEl, indicatorEl, activeBtn);
-    if (!animate) {
-        indicatorEl.getBoundingClientRect();
-        indicatorEl.style.transition = "";
-    }
-}
-
-// Positions the sliding indicator correctly on first load (each toggle's
-// page starts display:none, so an initial measurement here would read a
-// zero-width container - see the fix in showPage()/setUpcomingView()
-// that re-measures once the page is actually visible) and keeps it
-// aligned on resize. No drag-to-switch gesture on these two toggles -
-// removed per explicit request; tapping a button (via each button's own
-// onclick) is what switches between TV Shows and Movies, and
-// setSearchType()/setUpcomingView() already reposition the pill
-// themselves on every tap. The bottom nav bar's own drag gesture
-// (initNavBarDragToSwitch above) is untouched - this was never shared
-// code with it, just a matching gesture built the same way, so removing
-// this doesn't affect the nav bar at all.
-function initTVMovieToggleIndicators() {
-    const searchContainer = document.getElementById("searchTypeToggle");
-    const searchIndicator = document.getElementById("searchTypeIndicator");
-    updateSegmentedIndicator(searchContainer, searchIndicator, false);
-
-    const upcomingContainer = document.getElementById("upcomingTypeToggle");
-    const upcomingIndicator = document.getElementById("upcomingTypeIndicator");
-    updateSegmentedIndicator(upcomingContainer, upcomingIndicator, false);
-
-    window.addEventListener("resize", () => {
-        updateSegmentedIndicator(searchContainer, searchIndicator, false);
-        updateSegmentedIndicator(upcomingContainer, upcomingIndicator, false);
-    });
-}
-
-document.addEventListener("DOMContentLoaded", initTVMovieToggleIndicators);
-
-
 // Switches between the TV Shows / Movies sub-views inside the Library
 // tab, toggling the segmented control and showing/hiding each sub-view's
 // container rather than re-rendering the whole page.
 function setLibraryView(view) {
     currentLibraryView = view;
 
-    // Guarded, not assumed to exist - the segmented toggle these used to
-    // belong to was removed (each section's own "View All" already
-    // disambiguates TV vs Movies before the modal ever opens, so there
-    // was nothing left to switch between once inside it), but this
-    // function's actual job - showing the right subview and rendering
-    // it - still needs to work exactly the same regardless.
-    const tabTV = document.getElementById("libraryTabTV");
-    const tabMovies = document.getElementById("libraryTabMovies");
-    if (tabTV) tabTV.classList.toggle("active", view === 'tv');
-    if (tabMovies) tabMovies.classList.toggle("active", view === 'movies');
+    document.getElementById("libraryTabTV").classList.toggle("active", view === 'tv');
+    document.getElementById("libraryTabMovies").classList.toggle("active", view === 'movies');
 
     document.getElementById("libraryViewTV").style.display = view === 'tv' ? 'block' : 'none';
     document.getElementById("libraryViewMovies").style.display = view === 'movies' ? 'block' : 'none';
 
     if (view === 'tv') renderTVLibrarySection();
     if (view === 'movies') renderMovieLibrarySection();
-}
-
-// 'tv' or 'movies' - which segmented-toggle tab the modal opens showing,
-// matching whichever "View All" button was actually tapped rather than
-// always defaulting to TV regardless of which section someone came from.
-function openFullLibraryModal(startView) {
-    const modal = document.getElementById("fullLibraryModal");
-    if (modal.classList.contains("open")) return;
-    setLibraryView(startView || currentLibraryView);
-    modal.classList.add("open");
-    lockBodyScroll("fullLibraryModal");
-}
-
-function closeFullLibraryModal() {
-    document.getElementById("fullLibraryModal").classList.remove("open");
-    unlockBodyScroll("fullLibraryModal");
-}
-
-function closeFullLibraryModalOutside(event) {
-    if (event.target.id === "fullLibraryModal") closeFullLibraryModal();
 }
 
 /* =========================================================
@@ -5718,10 +5472,16 @@ function renderHomeTab() {
     renderContinueWatching();
 }
 
-function renderTVLibrarySection() {
-    const container = document.getElementById("tvLibraryCategories");
+function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "tvLibrarySearchInput") {
+    const container = document.getElementById(containerId);
+    const searchInput = document.getElementById(inputId);
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
     let items = state.library.filter(i => i.type === 'tv' || !i.type);
+
+    if (query) {
+        items = items.filter(item => item.title.toLowerCase().includes(query));
+    }
 
     // Same "still loading, not actually empty" guard as renderContinueWatching.
     if (!items.length && !libraryLoaded) {
@@ -5730,7 +5490,16 @@ function renderTVLibrarySection() {
     }
 
     if (!items.length) {
-        setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Search", onclick: "showPage('discover', 'tv')" }));
+        // Query-aware: if a search actually filtered everything out, say
+        // that - "your library is empty" is simply false when there ARE
+        // shows in the library and the search just didn't match any of
+        // them. This branch used to always claim the whole library was
+        // empty regardless of why the filtered list came up empty.
+        if (query) {
+            setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
+        } else {
+            setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'tv')" }));
+        }
         return;
     }
 
@@ -5757,33 +5526,32 @@ function renderTVLibrarySection() {
 
     const visPrefs = getLibraryVisibilityPrefs();
 
-    const categories = [];
-    if (inProgress.length > 0) categories.push({ title: "In Progress", items: inProgress });
-    if (upToDate.length > 0) categories.push({ title: "Up to Date", items: upToDate });
-    if (finished.length > 0 && visPrefs.showFinished) categories.push({ title: "Finished", items: finished });
-    if (unwatched.length > 0 && visPrefs.showUnwatched) categories.push({ title: "Unwatched", items: unwatched });
-    if (comingSoon.length > 0) categories.push({ title: "Coming Soon", items: comingSoon });
-    if (stopped.length > 0 && visPrefs.showStopped) categories.push({ title: "Stopped Watching", items: stopped });
+    let html = "";
 
-    if (categories.length === 0) {
-        // Not a search miss (there's no search box here) - every category
-        // that DOES have shows in it is currently hidden by Library
-        // Display settings. The old message here claimed this was a
-        // search query not matching anything, which was never true for
-        // this branch even before the search boxes were removed - this
-        // path is reached purely by visibility prefs, so the message
-        // and the way out (open Library Display) should say that.
-        setInnerHTMLIfChanged(container, emptyState("Nothing to Show", "Every category with shows in it is currently hidden in Library Display.", { label: "Library Display", onclick: "openLibraryDisplayModal()" }));
-        return;
+    if (inProgress.length > 0) html += renderCategoryBlock("In Progress", inProgress);
+    if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", upToDate);
+    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
+    if (unwatched.length > 0 && visPrefs.showUnwatched) html += renderCategoryBlock("Unwatched", unwatched);
+    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
+    if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", stopped);
+
+    if (!html) {
+        html = emptyState("No TV Shows Matching", "No TV shows match your search query.");
     }
 
-    renderCategorizedLibrary(container, categories);
+    setInnerHTMLIfChanged(container, html);
 }
 
-function renderMovieLibrarySection() {
-    const container = document.getElementById("movieLibraryCategories");
+function renderMovieLibrarySection(containerId = "movieLibraryCategories", inputId = "movieLibrarySearchInput") {
+    const container = document.getElementById(containerId);
+    const searchInput = document.getElementById(inputId);
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
     let items = state.library.filter(i => i.type === 'movie');
+
+    if (query) {
+        items = items.filter(item => item.title.toLowerCase().includes(query));
+    }
 
     // Same "still loading, not actually empty" guard as renderContinueWatching.
     if (!items.length && !libraryLoaded) {
@@ -5792,363 +5560,37 @@ function renderMovieLibrarySection() {
     }
 
     if (!items.length) {
-        setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Search", onclick: "showPage('discover', 'movie')" }));
+        // Same query-aware fix as renderTVLibrarySection - "your library
+        // is empty" is false when the library has movies and the search
+        // just didn't match any of them.
+        if (query) {
+            setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
+        } else {
+            setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Discover", onclick: "showPage('discover', 'movie')" }));
+        }
         return;
     }
 
-    const unwatched = sortMoviesByReleaseDate(items.filter(item => !item.watched && isReleased(item.releaseDate)));
-    const comingSoon = sortMoviesByReleaseDate(items.filter(item => !item.watched && !isReleased(item.releaseDate)));
-    const watched = sortMoviesByReleaseDate(items.filter(item => item.watched));
+    const unwatched = items.filter(item => !item.watched && isReleased(item.releaseDate));
+    const comingSoon = items.filter(item => !item.watched && !isReleased(item.releaseDate));
+    const watched = sortMoviesByWatchedDate(items.filter(item => item.watched));
 
-    const categories = [];
-    if (unwatched.length > 0) categories.push({ title: "Unwatched", items: unwatched });
-    if (comingSoon.length > 0) categories.push({ title: "Coming Soon", items: comingSoon });
-    if (watched.length > 0) categories.push({ title: "Watched", items: watched });
+    let html = "";
 
-    // Defensive only - every movie always lands in exactly one of the
-    // three buckets above (watched, or unwatched split by release), so
-    // this can't actually be reached with the current category logic.
-    // Kept in case that ever changes, rather than trusting items.length
-    // > 0 to guarantee categories.length > 0 forever.
-    if (categories.length === 0) {
-        setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty."));
-        return;
+    if (unwatched.length > 0) html += renderCategoryBlock("Unwatched", unwatched);
+    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
+    if (watched.length > 0) html += renderCategoryBlock("Watched", watched);
+
+    if (!html) {
+        html = emptyState("No Movies Matching", "No movies match your search query.");
     }
 
-    renderCategorizedLibrary(container, categories);
-}
-
-/* =========================================================
-   LIBRARY HOME (Lists row + TV/Movie previews)
-   What the Library tab itself shows now - the segmented TV/Movies view
-   that used to live directly on this tab moved into #fullLibraryModal
-   (see openFullLibraryModal), reachable via either section's "View
-   All". This is the tab's own content: a horizontally-scrolling Lists
-   row, then a curated 9-item preview each for TV and Movies that
-   updates automatically based on watch activity - nothing here is
-   manually arranged by the person using it.
-========================================================= */
-// Priority 1: shows genuinely in progress (watched some, not all,
-// released episodes) - not Home's broader Continue Watching definition,
-// which also includes shows never even started; this is specifically
-// "shows watched episodes but hasn't finished the series", sorted by
-// the viewer's own most recent activity. Priority 2, filling any
-// remaining slots up to 9: shows fully caught up with everything
-// currently out, also by most recent activity - so a barely-used
-// library still shows something sensible rather than a mostly-empty
-// preview.
-function pickLibraryPreviewShows() {
-    const tvItems = state.library.filter(i => (i.type === 'tv' || !i.type) && !i.isStopped);
-
-    const inProgress = sortTVShowsByLastWatched(tvItems.filter(item => {
-        const p = getTVProgress(item);
-        return p.watched > 0 && p.watched < p.total;
-    }));
-
-    const upToDate = sortTVShowsByLastWatched(tvItems.filter(item => isTVUpToDate(item)));
-
-    const combined = [...inProgress];
-    upToDate.forEach(show => {
-        if (combined.length < 9 && !combined.includes(show)) combined.push(show);
-    });
-
-    return combined.slice(0, 9);
-}
-
-// Same idea as the TV preview, adapted for movies not having partial
-// progress the way a show does - a movie is either watched or it
-// isn't, so "in progress" doesn't apply. Priority 1: watched movies,
-// most recently watched first (sortMoviesByWatchedDate already does
-// exactly this). Priority 2, filling remaining slots: released but
-// unwatched movies, newest addition first, so a library with little
-// watch history yet still shows a full preview rather than a sparse
-// one.
-function pickLibraryPreviewMovies() {
-    const movieItems = state.library.filter(i => i.type === 'movie');
-
-    const watched = sortMoviesByWatchedDate(movieItems.filter(item => item.watched));
-
-    const unwatched = movieItems
-        .filter(item => !item.watched && isReleased(item.releaseDate))
-        .sort((a, b) => {
-            const dateA = a.addedAt ? new Date(a.addedAt).getTime() : 0;
-            const dateB = b.addedAt ? new Date(b.addedAt).getTime() : 0;
-            return dateB - dateA;
-        });
-
-    const combined = [...watched];
-    unwatched.forEach(movie => {
-        if (combined.length < 9 && !combined.includes(movie)) combined.push(movie);
-    });
-
-    return combined.slice(0, 9);
-}
-
-// One list card - a 2x2 mini-collage of up to the first 4 items' own
-// posters (any empty slots left blank/neutral rather than forcing a
-// placeholder icon into every gap, since a brand new list or a not-yet-
-// favorited Favourites list legitimately has zero items to show yet),
-// name and item count in a gradient scrim over the bottom, the same
-// image+text-overlay pattern already used for the modal backdrop
-// header elsewhere in the app rather than a new visual language just
-// for this.
-function createListCard(list, isFavorites) {
-    const items = isFavorites ? getFavoriteListItems() : getListItems(list.id);
-
-    // A chosen custom backdrop (see openListBackdropPicker, and the
-    // Favourites-specific version below) always wins when set.
-    // Otherwise, auto-pick whichever item was added most recently that
-    // actually has a backdrop image, and use that, full-size, rather
-    // than a poster collage - a backdrop is already the right shape for
-    // this card (landscape, matching its own 2:1 aspect ratio), where a
-    // poster (portrait) never was. The collage approach broke down
-    // visibly for any list under 4 items - the normal case, not a rare
-    // one - since empty slots just showed blank instead of anything
-    // meaningful; one full-card image reads as considered regardless of
-    // how many items are actually in the list. "Most recent" specifically
-    // (not just "the first one with a backdrop") means favoriting a new
-    // item updates the card immediately, and un-favoriting it correctly
-    // falls back to whichever item is now the most recent instead of an
-    // arbitrary one. getFavoriteListItems() already returns most-recent-
-    // first; getListItems() returns insertion order (oldest first, since
-    // addItemToList appends), so regular lists search from the end
-    // instead - same "most recent" intent, just walking the opposite
-    // direction to match how each list is actually ordered. Falls back
-    // to a plain surface color only if literally nothing in the list has
-    // a backdrop at all.
-    const customBackdrop = !isFavorites && list.backdropUrl;
-    const favoritesBackdrop = isFavorites && state.favoritesBackdropUrl;
-    const searchOrder = isFavorites ? items : [...items].reverse();
-    const autoBackdrop = (!customBackdrop && !favoritesBackdrop) ? searchOrder.find(item => item.backdrop) : null;
-    const backdropSrc = customBackdrop ? list.backdropUrl : (favoritesBackdrop ? state.favoritesBackdropUrl : (autoBackdrop ? autoBackdrop.backdrop : null));
-
-    const visualHTML = backdropSrc
-        ? `<img class="list-card-backdrop" src="${tmdbThumb(backdropSrc, 'w780')}" alt="" loading="lazy" decoding="async">`
-        : '';
-
-    const listIdAttr = isFavorites ? '' : list.id;
-
-    return `
-        <div class="list-card${backdropSrc ? '' : ' no-backdrop'}"
-             onclick="handleListCardClick(event, '${listIdAttr}', ${isFavorites})"
-             onmousedown="startListPress('${listIdAttr}', ${isFavorites}, event)"
-             onmouseup="endListPress()"
-             onmouseleave="endListPress()"
-             ontouchstart="startListPress('${listIdAttr}', ${isFavorites}, event)"
-             ontouchmove="moveListPress(event)"
-             ontouchend="endListPress()"
-             ontouchcancel="endListPress()">
-            ${visualHTML}
-            ${backdropSrc ? '<div class="list-card-scrim"></div>' : ''}
-            <div class="list-card-label">
-                <div class="list-card-name">${escapeHTML(isFavorites ? "Favourites" : list.name)}</div>
-                <div class="list-card-count">${items.length} ${items.length === 1 ? 'title' : 'titles'}</div>
-            </div>
-        </div>
-    `;
-}
-
-// Shared by renderListsRow and the Reorder Lists modal, so both always
-// agree on the same order. Favourites is included as a movable entry
-// now too (see moveList below) - it has no list document of its own,
-// so its position is stored as favoritesOrder on the account's own
-// document instead, the same pattern favoritesBackdropUrl already
-// established. Once anything has an explicit order value (assigned the
-// first time anyone actually reorders anything at all), everything
-// sorts purely by that. Before that first reorder, Favourites stays
-// first and lists fall back to creation order - exactly the behavior
-// this app already had before reordering existed at all, so nobody
-// sees anything change until they actually touch it.
-function getOrderedListEntries() {
-    const favoritesEntry = { id: '__favorites__', isFavorites: true, order: state.favoritesOrder };
-    const listEntries = state.lists.map(l => ({ id: l.id, isFavorites: false, list: l, order: l.order }));
-    const all = [favoritesEntry, ...listEntries];
-
-    if (all.some(e => e.order != null)) {
-        return all.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity));
-    }
-
-    return [
-        favoritesEntry,
-        ...listEntries.sort((a, b) => new Date(a.list.createdAt || 0) - new Date(b.list.createdAt || 0))
-    ];
-}
-
-function renderListsRow() {
-    const container = document.getElementById("listsRow");
-    if (!container) return;
-
-    container.innerHTML = getOrderedListEntries()
-        .map(e => createListCard(e.isFavorites ? null : e.list, e.isFavorites))
-        .join("");
-}
-
-/* =========================================================
-   REORDER LISTS
-========================================================= */
-function openReorderListsModal() {
-    const modal = document.getElementById("reorderListsModal");
-    if (modal.classList.contains("open")) return;
-    renderReorderListsContent();
-    modal.classList.add("open");
-    lockBodyScroll("reorderListsModal");
-}
-
-function closeReorderListsModal() {
-    document.getElementById("reorderListsModal").classList.remove("open");
-    unlockBodyScroll("reorderListsModal");
-}
-
-function closeReorderListsModalOutside(event) {
-    if (event.target.id === "reorderListsModal") closeReorderListsModal();
-}
-
-function renderReorderListsContent() {
-    const container = document.getElementById("reorderListsRows");
-    const entries = getOrderedListEntries();
-
-    container.innerHTML = entries.map((entry, i) => `
-        <div class="reorder-list-row">
-            <div class="reorder-list-name">${escapeHTML(entry.isFavorites ? "Favourites" : entry.list.name)}</div>
-            <div class="reorder-list-controls">
-                <button class="reorder-move-btn" onclick="moveList('${entry.id}', -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move up">
-                    <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
-                </button>
-                <button class="reorder-move-btn" onclick="moveList('${entry.id}', 1)" ${i === entries.length - 1 ? 'disabled' : ''} aria-label="Move down">
-                    <svg class="icon icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                </button>
-            </div>
-        </div>
-    `).join("");
-}
-
-// entryId: a real list's own id, or '__favorites__' for the automatic
-// Favourites list, which is now a movable entry in this same ordering
-// too - see getOrderedListEntries above for why that needed its own
-// dedicated field (favoritesOrder, on the account document, since
-// Favourites has no list document of its own to store this on).
-// direction: -1 to move earlier, 1 to move later. Simple adjacent-swap
-// move buttons rather than drag-and-drop - genuine drag gestures behave
-// inconsistently across touch, mouse, and different browsers (native
-// HTML5 drag-and-drop in particular barely works on touch devices at
-// all), where a plain button tap works identically everywhere this app
-// runs. The first move for any account backfills a real order value
-// onto every entry at once (from whatever order they're already
-// showing in, so nothing visibly jumps the first time this runs) -
-// after that, every entry already has one and this just swaps two
-// adjacent values. The Firestore batch mixes a user-document update
-// (for Favourites) with list-document updates (for everything else) in
-// the same commit where needed - a single batch isn't limited to one
-// collection or document shape, so this doesn't need two separate
-// writes just because the two kinds of entry are stored differently.
-async function moveList(entryId, direction) {
-    if (!auth || !auth.currentUser) return;
-    const entries = getOrderedListEntries();
-    const index = entries.findIndex(e => e.id === entryId);
-    const targetIndex = index + direction;
-    if (index === -1 || targetIndex < 0 || targetIndex >= entries.length) return;
-
-    const needsBackfill = entries.some(e => e.order == null);
-    // Snapshots every entry that's about to change - just a/b normally,
-    // but backfill touches every entry at once the first time anyone
-    // reorders anything at all, so a failure needs to be able to put
-    // all of them back, not just the two that were actually being
-    // swapped.
-    const touched = needsBackfill ? entries : [entries[index], entries[targetIndex]];
-    const previousOrders = touched.map(e => e.order);
-
-    if (needsBackfill) {
-        entries.forEach((e, i) => { e.order = i; });
-    }
-
-    const a = entries[index];
-    const b = entries[targetIndex];
-    const aOrder = a.order;
-    a.order = b.order;
-    b.order = aOrder;
-
-    try {
-        const userRef = db.collection("users").doc(auth.currentUser.uid);
-        const listsRef = userRef.collection("lists");
-        const batch = db.batch();
-        const writeEntry = (e) => {
-            if (e.isFavorites) {
-                batch.update(userRef, { favoritesOrder: e.order });
-                state.favoritesOrder = e.order;
-            } else {
-                batch.update(listsRef.doc(e.id), { order: e.order });
-                // Was missing entirely - e.order is a copied value on
-                // this wrapper object (see getOrderedListEntries above),
-                // not a live reference back to the real list object in
-                // state.lists, so mutating it here alone never actually
-                // changed anything either render function would read.
-                // Reordering only appeared to work once the Firestore
-                // listener round-tripped back with the server's own
-                // confirmation - not instantly, the same class of bug
-                // fixed in add/removeItemFromList and deleteList above.
-                e.list.order = e.order;
-            }
-        };
-        if (needsBackfill) {
-            entries.forEach(writeEntry);
-        } else {
-            writeEntry(a);
-            writeEntry(b);
-        }
-        await batch.commit();
-        renderReorderListsContent();
-        // The Reorder modal's own list above is a separate render pass
-        // from the Lists row on Library's home page - without this too,
-        // that row would keep showing the pre-move order until the
-        // person navigated away and back, or the Firestore listener
-        // eventually caught up.
-        renderListsRow();
-    } catch (err) {
-        console.error("Reorder lists FAILED", err);
-        showErrorToast(`Couldn't reorder lists (${err.code || err.message || 'unknown error'}).`);
-        // Rolls every touched entry back to its pre-move order on a
-        // genuine failure - otherwise the reordered position would
-        // stick locally even though the server never actually saved it.
-        touched.forEach((e, i) => {
-            e.order = previousOrders[i];
-            if (e.isFavorites) {
-                state.favoritesOrder = previousOrders[i];
-            } else {
-                e.list.order = previousOrders[i];
-            }
-        });
-        renderReorderListsContent();
-        renderListsRow();
-    }
-}
-
-function renderLibraryHome() {
-    renderListsRow();
-
-    const tvContainer = document.getElementById("tvLibraryPreviewGrid");
-    if (tvContainer) {
-        const shows = pickLibraryPreviewShows();
-        if (shows.length > 0) {
-            syncCardGrid(tvContainer, shows, createCard);
-        } else {
-            tvContainer.innerHTML = emptyState("Nothing to Show Yet", "Shows you're watching will appear here.");
-        }
-    }
-
-    const movieContainer = document.getElementById("movieLibraryPreviewGrid");
-    if (movieContainer) {
-        const movies = pickLibraryPreviewMovies();
-        if (movies.length > 0) {
-            syncCardGrid(movieContainer, movies, createCard);
-        } else {
-            movieContainer.innerHTML = emptyState("Nothing to Show Yet", "Movies you're watching will appear here.");
-        }
-    }
+    setInnerHTMLIfChanged(container, html);
 }
 
 function renderCategoryBlock(title, items) {
     return `
-        <div class="category-block" data-category="${escapeHTML(title)}">
+        <div class="category-block">
             <div class="category-title">
                 <span>${escapeHTML(title)}</span>
                 <span class="category-count">${items.length}</span>
@@ -6160,47 +5602,18 @@ function renderCategoryBlock(title, items) {
     `;
 }
 
-// Same "only touch what actually changed" idea as syncCardGrid, one
-// level up - renderTVLibrarySection/renderMovieLibrarySection build a
-// multi-category view (In Progress, Up to Date, Finished, ...), and
-// setInnerHTMLIfChanged alone meant ANY single card changing anywhere
-// in ANY category replaced the ENTIRE multi-category block, destroying
-// and recreating every <img> in every category, not just the one that
-// actually changed - the same poster-flicker problem syncCardGrid
-// already fixed for the Library home preview and List Detail, just not
-// yet here. This checks whether the SET of categories present (by
-// title, in order) genuinely changed first - if a show moved between
-// categories (In Progress -> Finished) or a category appeared/emptied
-// out, that's a real structural change and still gets the full
-// replacement, since inserting/removing a whole category block isn't
-// something worth building a general keyed-reconciliation system for.
-// But the common case - nothing changed categories, a progress bar
-// updated somewhere - now updates only that one card's grid via
-// syncCardGrid, leaving every other category's cards, and their
-// already-decoded images, completely untouched.
-function renderCategorizedLibrary(container, categories) {
-    if (!container) return;
-
-    const existingBlocks = Array.from(container.children).filter(el => el.classList.contains("category-block"));
-    const existingKeys = existingBlocks.map(b => b.dataset.category);
-    const newKeys = categories.map(c => c.title);
-    const sameStructure = existingKeys.length === newKeys.length && existingKeys.every((k, i) => k === newKeys[i]);
-
-    if (!sameStructure) {
-        const html = categories.map(c => renderCategoryBlock(c.title, c.items)).join("");
-        setInnerHTMLIfChanged(container, html);
-        return;
-    }
-
-    categories.forEach((cat, i) => {
-        const block = existingBlocks[i];
-        const countEl = block.querySelector(".category-count");
-        if (countEl && countEl.textContent !== String(cat.items.length)) {
-            countEl.textContent = cat.items.length;
-        }
-        const grid = block.querySelector(".library-grid");
-        syncCardGrid(grid, cat.items, createCard);
-    });
+// Only meaningful for a not-yet-released item - the earliest date
+// something in this card could actually be watched. Movies have one
+// releaseDate; a TV show's own "release" is really its earliest
+// not-yet-aired episode (getTVProgress's `total` only counts released
+// ones - see the "Coming Soon" bucket above - so a show with zero
+// released episodes still has real future ones stored on it worth
+// surfacing here).
+function getCardReleaseDate(item) {
+    if (item.type === 'movie') return item.releaseDate || null;
+    if (!item.episodes || item.episodes.length === 0) return null;
+    const futureDates = item.episodes.map(ep => ep.releaseDate).filter(Boolean).sort();
+    return futureDates.length > 0 ? futureDates[0] : null;
 }
 
 /* =========================================================
@@ -6233,8 +5646,21 @@ function createCard(item) {
         ? `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
         : `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>`;
 
+    // A Coming Soon card (movie or TV) otherwise shows nothing about
+    // when it's actually expected - no caption, not even on hover - so
+    // someone browsing Library has to open it just to find out. A title
+    // attribute is enough to surface that without adding a visible badge
+    // over the poster (the Upcoming tab's cards already have room for a
+    // real caption underneath; a Library grid card doesn't, and adding
+    // one here would mean every card in the grid growing to fit it, not
+    // just the handful of unreleased ones).
+    const cardReleaseDate = getCardReleaseDate(item);
+    const releaseTitleAttr = (cardReleaseDate && !isReleased(cardReleaseDate))
+        ? ` title="${escapeHTML(formatReleaseDescription(cardReleaseDate))}"`
+        : '';
+
     return `
-        <div class="card" onclick="handleCardClick(event, '${item.id}')" data-id="${item.id}">
+        <div class="card" onclick="handleCardClick(event, '${item.id}')" data-id="${item.id}"${releaseTitleAttr}>
             <div class="poster"
                  oncontextmenu="return false;"
                  onmousedown="startPosterPress('${item.id}', '${item.type}', event)"
@@ -6374,7 +5800,7 @@ function renderContinueWatching(containerId = "continueWatchingList") {
         setInnerHTMLIfChanged(container, emptyState(
             "You're All Caught Up",
             "New episodes and unwatched movies from your library will show up here.",
-            { label: "Search", onclick: "showPage('discover', null, true)" }
+            { label: "Browse Discover", onclick: "showPage('discover', null, true)" }
         ));
         return;
     }
@@ -6524,7 +5950,7 @@ function renderUpcomingCategoryBlock(title, entries) {
     `;
 }
 
-function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOnclick) {
+function renderUpcomingBuckets(container, entries, query, emptyTitle, emptySub, emptyOnclick, matchingTitle, matchingSub) {
     if (!container) return;
 
     if (!libraryLoaded) {
@@ -6533,7 +5959,14 @@ function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOn
     }
 
     if (entries.length === 0) {
-        setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Search", onclick: emptyOnclick }));
+        // Same query-aware distinction as the Library empty states -
+        // "nothing upcoming at all" and "your search matched nothing"
+        // are different situations and shouldn't share one message.
+        if (query) {
+            setInnerHTMLIfChanged(container, emptyState(matchingTitle, matchingSub));
+        } else {
+            setInnerHTMLIfChanged(container, emptyState(emptyTitle, emptySub, { label: "Browse Discover", onclick: emptyOnclick }));
+        }
         return;
     }
 
@@ -6547,26 +5980,40 @@ function renderUpcomingBuckets(container, entries, emptyTitle, emptySub, emptyOn
 }
 
 function renderUpcomingTVSection() {
-    const items = getUpcomingItems().filter(entry => entry.type === 'tv');
+    const searchInput = document.getElementById("upcomingTVSearchInput");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+    let items = getUpcomingItems().filter(entry => entry.type === 'tv');
+    if (query) items = items.filter(entry => entry.item.title.toLowerCase().includes(query));
 
     renderUpcomingBuckets(
         document.getElementById("upcomingTVCategories"),
         items,
+        query,
         "Nothing Upcoming",
         "New episodes from your TV shows will show up here.",
-        "showPage('discover', 'tv')"
+        "showPage('discover', 'tv')",
+        "No TV Shows Matching",
+        "No upcoming TV shows match your search query."
     );
 }
 
 function renderUpcomingMovieSection() {
-    const items = getUpcomingItems().filter(entry => entry.type === 'movie');
+    const searchInput = document.getElementById("upcomingMovieSearchInput");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+    let items = getUpcomingItems().filter(entry => entry.type === 'movie');
+    if (query) items = items.filter(entry => entry.item.title.toLowerCase().includes(query));
 
     renderUpcomingBuckets(
         document.getElementById("upcomingMovieCategories"),
         items,
+        query,
         "Nothing Upcoming",
         "New movie releases from your library will show up here.",
-        "showPage('discover', 'movie')"
+        "showPage('discover', 'movie')",
+        "No Movies Matching",
+        "No upcoming movies match your search query."
     );
 }
 
@@ -6577,8 +6024,6 @@ function setUpcomingView(view) {
 
     document.getElementById("upcomingTabTV").classList.toggle("active", view === 'tv');
     document.getElementById("upcomingTabMovies").classList.toggle("active", view === 'movies');
-    // Same reasoning as setSearchType's own indicator update above.
-    updateSegmentedIndicator(document.getElementById("upcomingTypeToggle"), document.getElementById("upcomingTypeIndicator"));
 
     document.getElementById("upcomingViewTV").style.display = view === 'tv' ? 'block' : 'none';
     document.getElementById("upcomingViewMovies").style.display = view === 'movies' ? 'block' : 'none';
@@ -6592,21 +6037,20 @@ function setUpcomingView(view) {
 // back. A vertical drag (scrolling) is left alone.
 //
 // Direction matters: swiping right always marks the up-next episode/movie
-// watched (the lightest gray in the scale). Swiping left removes the item
-// outright (the darkest) - or, for TV shows with some watched episodes
-// already, marks it Stopped Watching instead (a middle gray) so that
-// watch history isn't lost. Movies never have partial watch history to
-// protect here (Continue Watching only shows unwatched movies), so a
-// movie's left-swipe is always a plain removal.
+// watched (green). Swiping left removes the item outright (red) - or, for
+// TV shows with some watched episodes already, marks it Stopped Watching
+// instead (orange) so that watch history isn't lost. Movies never have
+// partial watch history to protect here (Continue Watching only shows
+// unwatched movies), so a movie's left-swipe is always a plain removal.
 function initContinueCardSwipe(container) {
     const threshold = 90;
 
     const RIGHT_BG_HTML = `<span>Mark Watched</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
     const STOP_BG_HTML = `<span>Stop Watching</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
     const REMOVE_BG_HTML = `<span>Remove</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
-    const RIGHT_BG_COLOR = "var(--glass-sheen), var(--success-fill)";
-    const STOP_BG_COLOR = "var(--glass-sheen), var(--warning-fill)";
-    const REMOVE_BG_COLOR = "var(--glass-sheen), var(--danger-fill)";
+    const RIGHT_BG_COLOR = "var(--glass-sheen), var(--green-gradient)";
+    const STOP_BG_COLOR = "var(--glass-sheen), var(--orange-gradient)";
+    const REMOVE_BG_COLOR = "var(--glass-sheen), var(--red-gradient)";
 
     container.querySelectorAll(".continue-card").forEach(card => {
         let startX = 0, startY = 0, deltaX = 0, dragging = false, axisLocked = null, pointerId = null;
@@ -6731,37 +6175,35 @@ async function markContinueItemWatched(type, itemId, epId) {
     const item = getItem(itemId);
     if (!item) return;
 
-    let prevMovieState = null, ep = null, prevEpState = null;
-
+    let rollback;
     if (type === 'movie') {
-        prevMovieState = { watched: item.watched, lastWatchedAt: item.lastWatchedAt };
+        const prevWatched = item.watched;
+        const prevLastWatchedAt = item.lastWatchedAt;
+        rollback = () => { item.watched = prevWatched; item.lastWatchedAt = prevLastWatchedAt; };
         item.watched = true;
         item.lastWatchedAt = new Date().toISOString();
     } else if (item.episodes) {
-        ep = item.episodes.find(e => e.id === epId);
+        const ep = item.episodes.find(e => e.id === epId);
         if (ep) {
-            prevEpState = { ...ep };
+            const prevWatched = ep.watched;
+            const prevWatchedAt = ep.watchedAt;
+            const prevRewatchCount = ep.rewatchCount;
+            const prevRewatchedAt = ep.rewatchedAt;
+            rollback = () => { ep.watched = prevWatched; ep.watchedAt = prevWatchedAt; ep.rewatchCount = prevRewatchCount; ep.rewatchedAt = prevRewatchedAt; };
             setEpisodeWatched(ep, true);
+        } else {
+            rollback = () => {};
         }
+    } else {
+        rollback = () => {};
     }
 
     const saved = await saveItem(item);
     if (!saved) {
-        // The card's already swiped away visually by the time this runs
-        // (see the 240ms setTimeout at this function's own call site) -
-        // rolling back the underlying data and refreshing is what brings
-        // it back, since there's no separate "un-swipe" animation to
-        // reverse. Silently leaving it swiped away while nothing was
-        // actually saved would make the item vanish from Continue
-        // Watching with no obvious cause and no way back short of
-        // reloading and hoping it resyncs correctly.
-        if (prevMovieState) Object.assign(item, prevMovieState);
-        if (ep && prevEpState) Object.assign(ep, prevEpState);
-        refreshActivePage();
-        showErrorToast(`Couldn't save - check your connection and try again.`);
+        rollback();
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
-
     refreshActivePage();
 
     // How many released-but-unwatched episodes remain for this show,
@@ -6989,8 +6431,14 @@ async function saveDisplayName() {
         btn.textContent = "Saving...";
     }
 
-    const prevProfilesSnapshot = state.profiles ? JSON.parse(JSON.stringify(state.profiles)) : null;
-
+    // Snapshot so a failed save can be rolled back instead of leaving the
+    // UI showing a name that was never actually persisted - saveUserProfile()
+    // resolves to false rather than throwing on a Firestore failure, so the
+    // old code's try/catch never caught the case where the write silently
+    // didn't happen.
+    const previousProfile = state.profiles && state.profiles[0]
+        ? { ...state.profiles[0] }
+        : null;
     try {
         if (!state.profiles || state.profiles.length === 0) {
             state.profiles = [{ id: "profile-main", name: name, initials: name.charAt(0).toUpperCase(), avatarId: randomAvatarId() }];
@@ -7005,13 +6453,8 @@ async function saveDisplayName() {
         }
         const saved = await saveUserProfile();
         if (!saved) {
-            // saveUserProfile() never throws (see its own comment) so
-            // this needed its own explicit check - found via a full
-            // audit repeated across nearly every save in the app: this
-            // showed "Display name updated!" even when the Firestore
-            // write had actually failed.
-            state.profiles = prevProfilesSnapshot;
-            showEditDisplayNameError("Couldn't save - check your connection and try again.");
+            if (previousProfile) state.profiles[0] = previousProfile;
+            showEditDisplayNameError("Couldn't save right now. Please try again.");
             return;
         }
 
@@ -7025,6 +6468,7 @@ async function saveDisplayName() {
         showToast("Display name updated!", "success");
     } catch (err) {
         console.error("Display name save FAILED", err);
+        if (previousProfile) state.profiles[0] = previousProfile;
         showEditDisplayNameError("Couldn't save right now. Please try again.");
     } finally {
         if (btn) {
@@ -7032,575 +6476,6 @@ async function saveDisplayName() {
             btn.textContent = "Save";
         }
     }
-}
-
-/* =========================================================
-   LISTS
-   Each list is { id, name, itemIds, createdAt } in
-   users/{uid}/lists/{listId} - itemIds stored on the list itself
-   (rather than "which lists" on each library item) so reading a list's
-   contents, or reordering it later, is a single document read rather
-   than a scan across the whole library. The automatic "Favourites"
-   list is deliberately NOT one of these documents - see
-   getFavoriteListItems() below - so favoriting something never needs a
-   second write to keep a list in sync with it.
-========================================================= */
-// null while the Create/Rename List modal is open to make a brand new
-// list; set to a list's own id while renaming an existing one - the
-// one thing that differs between those two flows (see saveList below).
-let editingListId = null;
-
-function openCreateListModal() {
-    if (!auth || !auth.currentUser) return;
-    editingListId = null;
-    const modal = document.getElementById("createListModal");
-    if (modal.classList.contains("open")) return;
-
-    document.getElementById("createListModalTitle").textContent = "New List";
-    const input = document.getElementById("createListInput");
-    if (input) input.value = "";
-    clearCreateListError();
-
-    modal.classList.add("open");
-    lockBodyScroll("createListModal");
-    setTimeout(() => input && input.focus(), 50);
-}
-
-function openRenameListModal(listId) {
-    if (!auth || !auth.currentUser) return;
-    const list = state.lists.find(l => l.id === listId);
-    if (!list) return;
-    editingListId = listId;
-    const modal = document.getElementById("createListModal");
-    if (modal.classList.contains("open")) return;
-
-    document.getElementById("createListModalTitle").textContent = "Rename List";
-    const input = document.getElementById("createListInput");
-    if (input) input.value = list.name;
-    clearCreateListError();
-
-    modal.classList.add("open");
-    lockBodyScroll("createListModal");
-    setTimeout(() => input && input.focus(), 50);
-}
-
-function closeCreateListModal() {
-    document.getElementById("createListModal").classList.remove("open");
-    unlockBodyScroll("createListModal");
-    editingListId = null;
-}
-
-function closeCreateListModalOutside(event) {
-    if (event.target.id === "createListModal") closeCreateListModal();
-}
-
-function clearCreateListError() {
-    const errEl = document.getElementById("createListError");
-    if (errEl) {
-        errEl.textContent = "";
-        errEl.classList.remove("show");
-    }
-    const input = document.getElementById("createListInput");
-    if (input) input.classList.remove("input-error");
-}
-
-function showCreateListError(message) {
-    const errEl = document.getElementById("createListError");
-    if (errEl) {
-        errEl.textContent = message;
-        errEl.classList.add("show");
-    }
-    const input = document.getElementById("createListInput");
-    if (input) input.classList.add("input-error");
-}
-
-function handleCreateListKeydown(event) {
-    if (event.key === "Enter") saveList();
-}
-
-async function saveList() {
-    if (!auth || !auth.currentUser) return;
-
-    const input = document.getElementById("createListInput");
-    const name = input ? input.value.trim() : "";
-
-    if (!name) {
-        showCreateListError("Please enter a list name.");
-        return;
-    }
-
-    const btn = document.getElementById("saveListBtn");
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Saving...";
-    }
-
-    try {
-        const listsRef = db.collection("users").doc(auth.currentUser.uid).collection("lists");
-
-        if (editingListId) {
-            const list = state.lists.find(l => l.id === editingListId);
-            const previousName = list ? list.name : null;
-            // Same reasoning as every other list mutation above -
-            // updates the local copy immediately so the Lists row's own
-            // card, and this list's own title if its detail view is
-            // open underneath, show the new name the instant this
-            // returns rather than waiting on a round-trip.
-            if (list) list.name = name;
-            renderListsRow();
-            if (document.getElementById("listDetailModal").classList.contains("open")) {
-                renderListDetailContent();
-            }
-            try {
-                await listsRef.doc(editingListId).update({ name });
-            } catch (err) {
-                if (list) list.name = previousName;
-                renderListsRow();
-                if (document.getElementById("listDetailModal").classList.contains("open")) {
-                    renderListDetailContent();
-                }
-                throw err;
-            }
-        } else {
-            const newRef = listsRef.doc();
-            // If this list is being created from within the Add to List
-            // picker (rather than Library's own "+ New"), the whole
-            // reason someone got here was to add THIS item somewhere -
-            // creating an empty list and making them tap "Add" a second
-            // time for the item they came here to add would be
-            // pointless friction, so it's included at creation time
-            // instead of a separate follow-up step.
-            const pickerOpen = document.getElementById("listPickerModal").classList.contains("open");
-            const initialItemIds = (pickerOpen && currentItem) ? [currentItem.id] : [];
-            const newList = { id: newRef.id, name, itemIds: initialItemIds, createdAt: new Date().toISOString() };
-            // newRef.id is a real, permanent id generated client-side by
-            // the SDK, not a placeholder - Firestore always assigns the
-            // document's id up front, before the write is ever sent, so
-            // this is safe to add locally right away rather than
-            // waiting for the write to come back with an id to use.
-            state.lists.push(newList);
-            renderListsRow();
-            try {
-                await newRef.set(newList);
-            } catch (err) {
-                state.lists = state.lists.filter(l => l.id !== newRef.id);
-                renderListsRow();
-                throw err;
-            }
-        }
-
-        closeCreateListModal();
-        showToast(editingListId ? "List renamed!" : "List created!", "success");
-    } catch (err) {
-        console.error("List save FAILED", err);
-        showCreateListError(`Couldn't save right now (${err.code || err.message || 'unknown error'}).`);
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = "Save";
-        }
-    }
-}
-
-async function deleteList(listId) {
-    if (!auth || !auth.currentUser) return false;
-    const index = state.lists.findIndex(l => l.id === listId);
-    const removed = index !== -1 ? state.lists[index] : null;
-    // Same optimistic-local-update reasoning as add/removeItemFromList
-    // above - removes it from the local copy immediately rather than
-    // waiting on a round-trip, so the Lists row (and Reorder Lists, if
-    // that's where this was triggered from) drops the card the instant
-    // this returns.
-    if (removed) state.lists.splice(index, 1);
-    renderListsRow();
-
-    try {
-        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).delete();
-        showToast("List deleted.", "success");
-        return true;
-    } catch (err) {
-        console.error("List delete FAILED", err);
-        showErrorToast(`Couldn't delete this list (${err.code || err.message || 'unknown error'}).`);
-        // Rolls the optimistic removal back out on a genuine failure,
-        // at its original position rather than just appended to the
-        // end - otherwise the list would keep looking deleted even
-        // though the server never actually removed it.
-        if (removed) {
-            state.lists.splice(index, 0, removed);
-            renderListsRow();
-        }
-        return false;
-    }
-}
-
-// Both add/remove read the list's current itemIds straight from
-// state.lists (already kept live by the onSnapshot listener - see
-// proceedToApp) rather than re-fetching, then write the whole updated
-// array back. Lists are small enough (a handful of shows/movies, not
-// hundreds of library items) that this is simpler and plenty fast,
-// unlike the library's own more careful merge/dedupe handling.
-async function addItemToList(listId, itemId) {
-    if (!auth || !auth.currentUser) return;
-    const list = state.lists.find(l => l.id === listId);
-    if (!list) return;
-    if (list.itemIds.includes(itemId)) return;
-
-    const previousItemIds = list.itemIds;
-    const itemIds = [...list.itemIds, itemId];
-    // Same reasoning as removeItemFromList's own local update above -
-    // updates the local copy immediately, before the write, so anything
-    // reading state.lists (the Lists row's card, this list's own
-    // checkbox state in the Add to List picker) is correct the instant
-    // this function returns rather than waiting on a round-trip.
-    list.itemIds = itemIds;
-    renderListsRow();
-
-    try {
-        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
-        showToast(`Added to "${list.name}".`, "success");
-    } catch (err) {
-        console.error("Add to list FAILED", err);
-        showErrorToast(`Couldn't add this to the list (${err.code || err.message || 'unknown error'}).`);
-        // Rolls the optimistic update back out on a genuine failure -
-        // otherwise the checkbox/card would keep showing the item as
-        // added even though the server never actually got the change.
-        list.itemIds = previousItemIds;
-        renderListsRow();
-    }
-}
-
-async function removeItemFromList(listId, itemId) {
-    if (!auth || !auth.currentUser) return;
-    const list = state.lists.find(l => l.id === listId);
-    if (!list) return;
-
-    const previousItemIds = list.itemIds;
-    const itemIds = list.itemIds.filter(id => id !== itemId);
-    // Updates the local copy immediately, before the write below - the
-    // Lists row and this modal's own grid both read straight from
-    // state.lists, so without this they'd keep showing the pre-removal
-    // count/items until the onSnapshot listener round-trips back with
-    // the server's confirmation, even though Firestore's local-write
-    // behavior usually makes that fast. Setting it directly here means
-    // the UI is correct the instant this function returns, not "usually
-    // fast" - genuinely not dependent on listener timing at all.
-    list.itemIds = itemIds;
-
-    try {
-        await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(listId).update({ itemIds });
-    } catch (err) {
-        console.error("Remove from list FAILED", err);
-        showErrorToast(`Couldn't remove this from the list (${err.code || err.message || 'unknown error'}).`);
-        // Rolls the optimistic update back out on a genuine failure
-        // (not Firestore's own offline retry queue, which resolves on
-        // its own once connectivity returns) - otherwise the screen
-        // would keep showing the item as removed even though the
-        // server never actually got the change.
-        list.itemIds = previousItemIds;
-        renderListDetailContent();
-        renderListsRow();
-    }
-}
-
-// Resolves a list's stored itemIds into the actual current library item
-// objects - filters out any id that no longer matches anything (the
-// item was removed from the library entirely since being added to this
-// list) rather than showing a broken/blank card for it.
-function getListItems(listId) {
-    const list = state.lists.find(l => l.id === listId);
-    if (!list) return [];
-    return list.itemIds
-        .map(id => state.library.find(i => i.id === id))
-        .filter(Boolean);
-}
-
-// The automatic Favourites "list" - deliberately not a real document
-// (see the LISTS block comment above), just every library item with
-// isFavorite set, computed fresh every time rather than tracked
-// separately.
-// Most recently favorited first - not just "everything with isFavorite
-// set" in whatever order state.library happens to be in. The Favourites
-// list card's auto-picked backdrop (see createListCard) depends on this
-// order specifically: it always wants the most recent favorite that has
-// a backdrop, and unfavoriting that one should correctly fall back to
-// whichever favorite is now the most recent, not an arbitrary one.
-function getFavoriteListItems() {
-    return state.library
-        .filter(i => i.isFavorite)
-        .sort((a, b) => new Date(b.favoritedAt || 0) - new Date(a.favoritedAt || 0));
-}
-
-/* =========================================================
-   LIST DETAIL
-========================================================= */
-// null while viewing the automatic Favourites list, since it isn't a
-// real document with an id - checked throughout below instead of
-// tracking a separate boolean, so there's exactly one source of truth
-// for "which list, if any, is currently open".
-let currentListDetailId = null;
-
-function openListDetailModal(listId, isFavorites) {
-    currentListDetailId = isFavorites ? null : listId;
-    const modal = document.getElementById("listDetailModal");
-    if (modal.classList.contains("open")) return;
-
-    // Rename/Delete/Share only make sense for a real list document, so
-    // this whole row hides for the automatic Favourites list - unlike
-    // when Backdrop lived here too (it doesn't anymore; long-pressing
-    // the list's own card is how that's reached now, for every list
-    // including Favourites), there's nothing left in this row that
-    // applies to Favourites at all, so hiding the individual buttons
-    // one by one would leave an empty row still taking up its own
-    // margin space rather than actually disappearing.
-    const actionRow = document.getElementById("listDetailActionRow");
-    if (actionRow) actionRow.style.display = isFavorites ? "none" : "";
-
-    renderListDetailContent();
-    modal.classList.add("open");
-    lockBodyScroll("listDetailModal");
-}
-
-function closeListDetailModal() {
-    document.getElementById("listDetailModal").classList.remove("open");
-    unlockBodyScroll("listDetailModal");
-}
-
-function closeListDetailModalOutside(event) {
-    if (event.target.id === "listDetailModal") closeListDetailModal();
-}
-
-function renderListDetailContent() {
-    const isFavorites = !currentListDetailId;
-    const list = isFavorites ? null : state.lists.find(l => l.id === currentListDetailId);
-    if (!isFavorites && !list) {
-        // The list was deleted (from another device, or this one)
-        // while its detail view happened to be open - close rather
-        // than show a broken, list-less screen.
-        closeListDetailModal();
-        return;
-    }
-
-    document.getElementById("listDetailTitle").textContent = isFavorites ? "Favourites" : list.name;
-
-    const items = isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId);
-    const grid = document.getElementById("listDetailGrid");
-    if (items.length > 0) {
-        syncCardGrid(grid, items, item => createListDetailCard(item, currentListDetailId, isFavorites));
-    } else {
-        grid.innerHTML = emptyState(
-            isFavorites ? "No Favourites Yet" : "Nothing in This List Yet",
-            isFavorites ? "Favorite a show or movie from its details to see it here." : "Add shows or movies to this list from their details."
-        );
-    }
-}
-
-// A simpler, separate render from the shared createCard() used
-// everywhere else - deliberately doesn't wire up createCard's own
-// long-press/swipe gesture handling here, since that gesture means
-// "remove from the library entirely" elsewhere, which would be the
-// wrong action to trigger by accident in a context that's specifically
-// about list membership, not library membership. Tapping the poster
-// opens the item normally; the small corner button removes it from
-// just this list (or unfavorites it, for Favourites) without touching
-// whether it's still in the library at all.
-function createListDetailCard(item, listId, isFavorites) {
-    const hasPoster = item.poster && item.poster.trim() !== "";
-    const placeholderIcon = item.type === 'movie'
-        ? `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
-        : `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>`;
-
-    const removeOnclick = isFavorites
-        ? `event.stopPropagation(); unfavoriteFromListDetail('${item.id}')`
-        : `event.stopPropagation(); removeItemFromListDetail('${listId}', '${item.id}')`;
-
-    return `
-        <div class="card" data-id="${item.id}" onclick="openDetails('${item.id}')">
-            <div class="poster">
-                ${hasPoster ? `
-                    <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
-                ` : `
-                    <div class="poster-placeholder">${placeholderIcon}</div>
-                `}
-                <button class="list-detail-remove-btn" onclick="${removeOnclick}" aria-label="Remove">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-async function removeItemFromListDetail(listId, itemId) {
-    await removeItemFromList(listId, itemId);
-    renderListDetailContent();
-    // The Lists row on Library's home page (the card's own item count
-    // and auto-picked backdrop, if it's not showing a custom one) is a
-    // separate render pass from this modal's own grid above - without
-    // calling it directly here too, that card would keep showing its
-    // pre-removal count/backdrop until something else happened to
-    // trigger a re-render (navigating away and back, or the Firestore
-    // listener eventually catching up), rather than updating the
-    // moment the removal actually happens.
-    renderListsRow();
-}
-
-async function unfavoriteFromListDetail(itemId) {
-    const item = state.library.find(i => i.id === itemId);
-    if (!item) return;
-    item.isFavorite = false;
-    const saved = await saveItem(item);
-    if (!saved) {
-        item.isFavorite = true;
-        showErrorToast("Couldn't save - check your connection and try again.");
-        return;
-    }
-    renderListDetailContent();
-    // Same reasoning as removeItemFromListDetail above - Favourites'
-    // own card on the Lists row needs the same direct, immediate update.
-    renderListsRow();
-}
-
-// A list's chosen backdrop is only ever one of its own members' own
-// backdrop images - picked here, from whatever's already in the list,
-// rather than any kind of upload or external image search. Works for
-// the automatic Favourites list too (currentListDetailId is null while
-// viewing it, the same check used throughout Lists) - Favourites has no
-// list document to store this on, so its choice is saved on the user's
-// own account document instead (see selectListBackdrop below), which
-// state's own boot-time load already spreads directly into state, so
-// no separate fetch is needed to read it back.
-// Every backdrop TMDB actually has for each item in the list, not just
-// the single one saved on it - reuses fetchItemImages(), the same
-// per-title alternate-image gallery the poster/backdrop picker for an
-// individual show already pulls from. Fetched in parallel (not one
-// request after another) so opening this for a list with several items
-// doesn't feel like it's loading each one in sequence. Capped at 8
-// backdrops per item - some titles have dozens of alternates on TMDB,
-// and showing every single one for every item in a larger list would
-// make the grid unmanageably long for a marginal amount of extra
-// choice.
-async function openListBackdropPicker() {
-    const isFavorites = !currentListDetailId;
-    const items = isFavorites ? getFavoriteListItems() : getListItems(currentListDetailId);
-    const grid = document.getElementById("listBackdropPickerGrid");
-    const modal = document.getElementById("listBackdropPickerModal");
-
-    if (items.length === 0) {
-        grid.innerHTML = emptyState("No Backdrops Available", "Add something to this list first.");
-    } else {
-        grid.innerHTML = emptyState("Loading Backdrops...", "Fetching every available image for what's in this list.");
-    }
-    if (!modal.classList.contains("open")) {
-        modal.classList.add("open");
-        lockBodyScroll("listBackdropPickerModal");
-    }
-    if (items.length === 0) return;
-
-    const galleries = await Promise.all(items.map(item => fetchItemImages(item.tmdbId, item.type)));
-    const options = [];
-    items.forEach((item, i) => {
-        const backdrops = galleries[i].backdrops.slice(0, 8);
-        backdrops.forEach(img => options.push({ title: item.title, thumb: img.thumb, full: img.full }));
-    });
-
-    if (options.length === 0) {
-        grid.innerHTML = emptyState("No Backdrops Available", "Nothing in this list has a backdrop image available.");
-        return;
-    }
-
-    // The backdrop URL travels via a data attribute, not interpolated
-    // directly into the onclick string - escapeHTML() is the right
-    // tool for embedding it as an HTML attribute value (which this
-    // is), not for safely embedding it inside a JS string literal
-    // (which the previous version effectively needed, since the URL
-    // was interpolated straight into onclick="selectListBackdrop('...')").
-    // The browser handles decoding a data attribute back to its
-    // original value automatically when read via .dataset, so this
-    // sidesteps that whole class of escaping mismatch entirely
-    // rather than trying to pick the "correct" escaping for a JS
-    // string context by hand.
-    grid.innerHTML = options.map(opt => `
-        <button class="poster-picker-item" data-backdrop="${escapeHTML(opt.full)}" onclick="selectListBackdrop(this.dataset.backdrop)" aria-label="${escapeHTML(opt.title)}">
-            <img src="${opt.thumb}" alt="${escapeHTML(opt.title)}" loading="lazy" decoding="async">
-        </button>
-    `).join("");
-}
-
-function closeListBackdropPicker() {
-    document.getElementById("listBackdropPickerModal").classList.remove("open");
-    unlockBodyScroll("listBackdropPickerModal");
-}
-
-function closeListBackdropPickerOutside(event) {
-    if (event.target.id === "listBackdropPickerModal") closeListBackdropPicker();
-}
-
-async function selectListBackdrop(backdropUrl) {
-    if (!auth || !auth.currentUser) return;
-    const isFavorites = !currentListDetailId;
-    try {
-        if (isFavorites) {
-            await db.collection("users").doc(auth.currentUser.uid).update({ favoritesBackdropUrl: backdropUrl });
-            state.favoritesBackdropUrl = backdropUrl;
-            refreshActivePage();
-        } else {
-            const list = state.lists.find(l => l.id === currentListDetailId);
-            await db.collection("users").doc(auth.currentUser.uid).collection("lists").doc(currentListDetailId).update({ backdropUrl });
-            // Was missing entirely for the non-Favourites branch - the
-            // write succeeded, but nothing told the Lists row's own
-            // card to actually show the new backdrop, so it would keep
-            // showing the old one until something else happened to
-            // trigger a re-render (navigating away and back, or the
-            // Firestore listener eventually catching up). Setting the
-            // local copy directly here, same as the optimistic updates
-            // in add/removeItemFromList, means it's correct the instant
-            // this returns rather than depending on that round-trip.
-            if (list) list.backdropUrl = backdropUrl;
-            renderListsRow();
-        }
-        closeListBackdropPicker();
-    } catch (err) {
-        // Surfaces the real Firestore error code (e.g. "permission-denied"
-        // if the lists subcollection is missing its own security rule -
-        // see the README's note on this) rather than a generic message,
-        // so a failure here is actually diagnosable from what shows on
-        // screen instead of needing a console dump to explain it.
-        console.error("Set list backdrop FAILED", err);
-        showErrorToast(`Couldn't set that backdrop (${err.code || err.message || 'unknown error'}).`);
-    }
-}
-
-function confirmDeleteCurrentList() {
-    if (!currentListDetailId) return;
-    const list = state.lists.find(l => l.id === currentListDetailId);
-    if (!list) return;
-    document.getElementById("deleteListTitle").textContent = `Delete "${list.name}"?`;
-    const modal = document.getElementById("deleteListModal");
-    modal.classList.add("open");
-    lockBodyScroll("deleteListModal");
-}
-
-function closeDeleteListModal() {
-    document.getElementById("deleteListModal").classList.remove("open");
-    unlockBodyScroll("deleteListModal");
-}
-
-function closeDeleteListModalOutside(event) {
-    if (event.target.id === "deleteListModal") closeDeleteListModal();
-}
-
-async function executeDeleteCurrentList() {
-    if (!currentListDetailId) return;
-    const succeeded = await deleteList(currentListDetailId);
-    closeDeleteListModal();
-    // Was unconditional - closing the list's own detail view even when
-    // the delete genuinely failed made it look like it had succeeded,
-    // right as an error toast was telling the person otherwise. Now
-    // only closes it on a real success, leaving them on the list they
-    // tried to delete (still there, per deleteList's own rollback)
-    // rather than dropped back to Library with no clear sense of
-    // whether anything actually happened.
-    if (succeeded) closeListDetailModal();
 }
 
 /* =========================================================
@@ -7676,11 +6551,10 @@ function openShortcutTabFromURL() {
 
 // Reads a shared item link from the URL, if present, and opens the right
 // thing directly - this is what makes a shared link actually take the
-// recipient to the specific show/movie/episode/list instead of just the
-// app's home screen. Shapes:
+// recipient to the specific show/movie/episode instead of just the app's
+// home screen. Two shapes:
 //   ?share_type=tv|movie&share_id=<tmdbId>              - a show or movie
 //   ?share_type=episode&share_id=<showTmdbId>&share_ep=sXeY - one episode
-//   ?share_type=list&share_id=<sharedListDocId>          - a shared list
 // Returns true if a shared item was found and opened, so the caller can
 // skip anything (like a generic "Welcome back!" toast) that would
 // otherwise talk over it.
@@ -7692,11 +6566,7 @@ function openSharedItemFromURL() {
 
     const isEpisodeShare = type === 'episode' && id && !isNaN(Number(id)) && epId && /^s\d+e\d+$/.test(epId);
     const isItemShare = (type === 'tv' || type === 'movie') && id && !isNaN(Number(id));
-    // A shared list's id is a Firestore auto-id (opaque string), not a
-    // numeric TMDB id like the other two share shapes - no numeric check
-    // here, just that something was actually provided.
-    const isListShare = type === 'list' && !!id;
-    if (!isEpisodeShare && !isItemShare && !isListShare) return false;
+    if (!isEpisodeShare && !isItemShare) return false;
 
     // Strip the params so refreshing or navigating within the app doesn't
     // keep reopening the same shared item.
@@ -7704,8 +6574,6 @@ function openSharedItemFromURL() {
 
     if (isEpisodeShare) {
         openSharedEpisode(Number(id), epId);
-    } else if (isListShare) {
-        openSharedList(id);
     } else {
         openSearchResultDetails(Number(id), type);
     }
@@ -7751,26 +6619,6 @@ async function openSharedEpisode(showTmdbId, epId) {
     }, 300);
 }
 
-// Backs the Word of Mouth achievement - set the first time any share
-// genuinely succeeds (the native share sheet completing, or a clipboard
-// copy landing), across any of the three share functions below (a show/
-// movie, an episode, or a list). Persisted on the account document like
-// favoritesBackdropUrl/favoritesOrder, so it's a real, permanent
-// account-wide fact once true, not something that resets per device or
-// session. Guarded so it only ever writes once - nothing else depends
-// on this being current beyond "has this ever happened", so there's no
-// reason to touch it again after the first time.
-async function markHasShared() {
-    if (state.hasSharedSomething || !auth || !auth.currentUser) return;
-    state.hasSharedSomething = true;
-    try {
-        await db.collection("users").doc(auth.currentUser.uid).update({ hasSharedSomething: true });
-        checkAchievements();
-    } catch (err) {
-        console.error("Mark hasShared FAILED", err);
-    }
-}
-
 async function shareCurrentItem() {
     if (!currentItem || !currentItem.tmdbId) return;
 
@@ -7787,7 +6635,6 @@ async function shareCurrentItem() {
     if (navigator.share) {
         try {
             await navigator.share(shareData);
-            markHasShared();
         } catch (err) {
             if (err.name !== 'AbortError') console.error("Share failed:", err);
         }
@@ -7798,7 +6645,6 @@ async function shareCurrentItem() {
         try {
             await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
             showToast("Link copied to clipboard!", "success");
-            markHasShared();
         } catch (err) {
             console.error("Clipboard write failed:", err);
             showErrorToast("Unable to share.");
@@ -7824,7 +6670,6 @@ async function shareCurrentEpisode() {
     if (navigator.share) {
         try {
             await navigator.share(shareData);
-            markHasShared();
         } catch (err) {
             if (err.name !== 'AbortError') console.error("Share failed:", err);
         }
@@ -7835,7 +6680,6 @@ async function shareCurrentEpisode() {
         try {
             await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
             showToast("Link copied to clipboard!", "success");
-            markHasShared();
         } catch (err) {
             console.error("Clipboard write failed:", err);
             showErrorToast("Unable to share.");
@@ -7844,145 +6688,6 @@ async function shareCurrentEpisode() {
     }
 
     showErrorToast("Sharing isn't supported on this device.");
-}
-
-// Sharing a list is fundamentally different from sharing a show/movie/
-// episode above - those point at public TMDB data, so there's nothing to
-// protect and the deep link alone is enough. A list is private data
-// behind Firestore rules (only the owner can read users/{uid}/lists/*),
-// so a friend's account could never read it directly even with the
-// right link. Instead this writes a lightweight, standalone, PUBLIC
-// snapshot to its own top-level sharedLists collection - just the list's
-// name and a plain array of {tmdbId, type, title, poster} for whatever
-// was in it at share time, decoupled entirely from the owner's private
-// library/lists structure. That needs its own separate Firestore rule
-// (see README) - readable by anyone with the exact link, but never
-// listable/browsable, and writable by any signed-in account (creating a
-// snapshot of a list you own, not modifying anyone else's data). A
-// snapshot is immutable once created - if the original list changes
-// later, an already-shared link keeps showing what it looked like at
-// share time, the same reasonable tradeoff most "share a copy" features
-// make elsewhere.
-async function shareCurrentList() {
-    if (!currentListDetailId || !auth || !auth.currentUser) return;
-    const list = state.lists.find(l => l.id === currentListDetailId);
-    if (!list) return;
-
-    const items = getListItems(currentListDetailId);
-    if (items.length === 0) {
-        showErrorToast("Add something to this list before sharing it.");
-        return;
-    }
-
-    try {
-        const snapshot = {
-            name: list.name,
-            items: items.map(i => ({
-                tmdbId: i.tmdbId,
-                type: i.type,
-                title: i.title,
-                poster: i.poster || null
-            })),
-            createdAt: new Date().toISOString()
-        };
-        const docRef = await db.collection("sharedLists").add(snapshot);
-        const deepLink = `${NOVAWATCH_APP_URL}?share_type=list&share_id=${docRef.id}`;
-
-        const shareData = {
-            title: `${list.name} - NovaWatch`,
-            text: `Check out my "${list.name}" list on NovaWatch!`,
-            url: deepLink
-        };
-
-        if (navigator.share) {
-            try {
-                await navigator.share(shareData);
-                markHasShared();
-            } catch (err) {
-                if (err.name !== 'AbortError') console.error("Share failed:", err);
-            }
-            return;
-        }
-
-        if (navigator.clipboard) {
-            try {
-                await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
-                showToast("Link copied to clipboard!", "success");
-                markHasShared();
-            } catch (err) {
-                console.error("Clipboard write failed:", err);
-                showErrorToast("Unable to share.");
-            }
-            return;
-        }
-
-        showErrorToast("Sharing isn't supported on this device.");
-    } catch (err) {
-        console.error("Share list FAILED", err);
-        showErrorToast(`Couldn't share this list (${err.code || err.message || 'unknown error'}).`);
-    }
-}
-
-// Opens a shared list from a deep link - a plain, read-only viewer, not
-// the same List Detail modal an owner sees. There's no rename/delete/
-// remove/backdrop here at all, since the viewer doesn't own this list
-// and the snapshot has no such data anyway; tapping an item just opens
-// the normal Details preview for it (openSearchResultDetails, the same
-// path a shared show/movie link already used), so the recipient can add
-// it to their own library the ordinary way.
-async function openSharedList(shareId) {
-    try {
-        const doc = await db.collection("sharedLists").doc(shareId).get();
-        if (!doc.exists) {
-            showErrorToast("This shared list link isn't valid anymore.");
-            return;
-        }
-        const data = doc.data();
-        document.getElementById("sharedListTitle").textContent = data.name || "Shared List";
-
-        const grid = document.getElementById("sharedListGrid");
-        const items = Array.isArray(data.items) ? data.items : [];
-        if (items.length === 0) {
-            grid.innerHTML = emptyState("Empty List", "This list didn't have anything in it when it was shared.");
-        } else {
-            grid.innerHTML = items.map(item => {
-                const hasPoster = item.poster && item.poster.trim() !== "";
-                const placeholderIcon = item.type === 'movie'
-                    ? `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`
-                    : `<svg class="icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>`;
-                return `
-                    <div class="card" onclick="openSearchResultDetails(${item.tmdbId}, '${item.type}')">
-                        <div class="poster">
-                            ${hasPoster ? `
-                                <img src="${tmdbThumb(item.poster, 'w342')}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div class="poster-placeholder" style="display: none;">${placeholderIcon}</div>
-                            ` : `
-                                <div class="poster-placeholder">${placeholderIcon}</div>
-                            `}
-                        </div>
-                    </div>
-                `;
-            }).join("");
-        }
-
-        const modal = document.getElementById("sharedListModal");
-        if (!modal.classList.contains("open")) {
-            modal.classList.add("open");
-            lockBodyScroll("sharedListModal");
-        }
-    } catch (err) {
-        console.error("Open shared list FAILED", err);
-        showErrorToast("Couldn't open this shared list.");
-    }
-}
-
-function closeSharedListModal() {
-    document.getElementById("sharedListModal").classList.remove("open");
-    unlockBodyScroll("sharedListModal");
-}
-
-function closeSharedListModalOutside(event) {
-    if (event.target.id === "sharedListModal") closeSharedListModal();
 }
 
 function openDetails(itemId) {
@@ -8071,20 +6776,6 @@ function updateModalContent() {
 
     document.getElementById("modalTitle").textContent = currentItem.title;
 
-    // Reflects favorite state whenever the modal opens for a different
-    // item or after toggling it - "filled" reads as favorited without
-    // needing separate on/off icon artwork, the same fill-vs-outline
-    // convention most apps already use for this. The label swaps too
-    // (Favorite/Unfavorite), not just the icon - the chip has room for
-    // a word, so it should say what tapping it will actually do next,
-    // not require already knowing the fill/outline convention to tell.
-    const favBtn = document.getElementById("modalFavoriteBtn");
-    if (favBtn) {
-        favBtn.classList.toggle("favorited", !!currentItem.isFavorite);
-        favBtn.querySelector("svg").setAttribute("fill", currentItem.isFavorite ? "currentColor" : "none");
-        document.getElementById("modalFavoriteBtnLabel").textContent = currentItem.isFavorite ? "Unfavorite" : "Favorite";
-    }
-
     let metaHTML = "";
 
     const ratingHTML = currentItem.rating ? `<span>•</span><span>★ ${escapeHTML(currentItem.rating)}</span>` : '';
@@ -8093,7 +6784,7 @@ function updateModalContent() {
     const contentRatingHTML = currentItem.contentRating ? `<span>•</span><span class="content-rating-badge">${escapeHTML(currentItem.contentRating)}</span>` : '';
 
     if (currentItem.type === 'movie') {
-        const releaseDateStr = currentItem.releaseDate ? formatDateWithReleaseTime(currentItem.releaseDate) : 'TBA';
+        const releaseDateStr = currentItem.releaseDate ? formatReleaseDescription(currentItem.releaseDate) : 'TBA';
         metaHTML = `
             <span>${currentItem.year || 'N/A'}</span>
             <span>•</span>
@@ -8167,7 +6858,7 @@ function updateModalContent() {
                 </button>
             </div>
             <div style="margin-top: 10px;">
-                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="width: 100%; ${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(163, 163, 163, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
+                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="width: 100%; ${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(52, 199, 89, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
                     ${isAdded ? 'In Library' : 'Add to Library'}
                 </button>
             </div>
@@ -8194,7 +6885,7 @@ function updateModalContent() {
                 <button class="action-button ${currentItem.isStopped ? 'primary' : 'warning'}" onclick="toggleStopWatching('${currentItem.id}')">
                     ${currentItem.isStopped ? 'Resume Show' : 'Stop Watching'}
                 </button>
-                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(163, 163, 163, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
+                <button id="modalAddLibBtn" class="action-button ${isAdded ? '' : 'primary'}" style="${isAdded ? 'background: var(--surface-2); color: var(--success); border: 1px solid rgba(52, 199, 89, 0.3);' : ''}" onclick="addModalItemToLibrary()" ${isAdded ? 'disabled' : ''}>
                     ${isAdded ? 'In Library' : 'Add to Library'}
                 </button>
             </div>
@@ -8447,77 +7138,6 @@ function handleCardClick(event, itemId) {
     openDetails(itemId);
 }
 
-/* =========================================================
-   LIST CARD LONG-PRESS -> CHANGE BACKDROP
-   Same 600ms long-press pattern as the poster/backdrop change above
-   (same move-cancellation, same click-suppression) - holding a list
-   card jumps straight into that list's backdrop picker rather than
-   needing to open the list's own detail view first just to reach the
-   Backdrop button in there. Genuinely the same interaction people
-   already learned from posters, not a new one to discover separately.
-========================================================= */
-let listPressTimer = null;
-let isListLongPress = false;
-let listPressStartX = 0;
-let listPressStartY = 0;
-const LIST_PRESS_MOVE_THRESHOLD = 10;
-
-function startListPress(listId, isFavorites, event) {
-    isListLongPress = false;
-    const touch = event && event.touches && event.touches[0];
-    listPressStartX = touch ? touch.clientX : 0;
-    listPressStartY = touch ? touch.clientY : 0;
-    listPressTimer = setTimeout(() => {
-        isListLongPress = true;
-        if (navigator.vibrate) navigator.vibrate(50);
-        // openListBackdropPicker() reads currentListDetailId to decide
-        // which list it's working with (null means Favourites) - the
-        // same variable openListDetailModal() sets when entering a
-        // list's own detail view normally. Setting it directly here,
-        // without actually opening that modal, is what lets this
-        // shortcut skip straight to the picker. Any real navigation
-        // into a list's detail view afterward overwrites this the same
-        // way it always does, so there's nothing to reset or clean up.
-        currentListDetailId = isFavorites ? null : listId;
-        openListBackdropPicker();
-    }, 600);
-}
-
-function moveListPress(event) {
-    if (!listPressTimer) return;
-    const touch = event && event.touches && event.touches[0];
-    if (!touch) return;
-    const dx = touch.clientX - listPressStartX;
-    const dy = touch.clientY - listPressStartY;
-    if (Math.hypot(dx, dy) > LIST_PRESS_MOVE_THRESHOLD) {
-        endListPress();
-    }
-}
-
-function endListPress() {
-    if (listPressTimer) {
-        clearTimeout(listPressTimer);
-        listPressTimer = null;
-    }
-}
-
-// Wraps the card's normal tap-to-open behavior so a long-press (which
-// already opened the backdrop picker above) doesn't also open the
-// list's detail view underneath it.
-function handleListCardClick(event, listId, isFavorites) {
-    if (isListLongPress) {
-        event.preventDefault();
-        event.stopPropagation();
-        isListLongPress = false;
-        return;
-    }
-    if (isFavorites) {
-        openListDetailModal(null, true);
-    } else {
-        openListDetailModal(listId);
-    }
-}
-
 // TMDB keeps a whole gallery of posters/backdrops per title (different
 // languages, fan-submitted alternates, different crops) beyond the one
 // "primary" image the app shows by default. include_image_language pulls
@@ -8765,22 +7385,25 @@ async function toggleEntireSeasonWatched(seasonNumber) {
     }
 
     // Only released episodes are ever touched - unaired ones always stay unwatched.
+    // Snapshot before mutating so a failed save can be rolled back instead of
+    // leaving the UI showing "marked" episodes that never actually persisted.
+    const previousStates = releasedEps.map(ep => ({ ep, watched: ep.watched, watchedAt: ep.watchedAt, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt }));
     const anyUnwatched = releasedEps.some(ep => !ep.watched);
-    const prevEpStates = releasedEps.map(ep => ({ ...ep }));
     releasedEps.forEach(ep => {
         setEpisodeWatched(ep, anyUnwatched);
     });
 
     const saved = await saveItem(currentItem);
     if (!saved) {
-        releasedEps.forEach((ep, i) => Object.assign(ep, prevEpStates[i]));
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        previousStates.forEach(({ ep, watched, watchedAt, rewatchCount, rewatchedAt }) => {
+            ep.watched = watched;
+            ep.watchedAt = watchedAt;
+            ep.rewatchCount = rewatchCount;
+            ep.rewatchedAt = rewatchedAt;
+        });
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
-    // Moved to only fire once the save actually succeeded - it used to
-    // fire unconditionally before the save even started, so a failed
-    // save still claimed the season had been marked watched.
     showToast(`Season ${seasonNumber} marked as ${anyUnwatched ? 'Watched' : 'Unwatched'}`, "success");
     updateModalContent();
     refreshActivePage();
@@ -8808,14 +7431,21 @@ async function markAllReleasedEpisodesWatched() {
         return;
     }
 
-    const prevEpStates = toMark.map(ep => ({ ...ep }));
+    // Snapshot before mutating so a failed save can be rolled back instead of
+    // leaving the UI showing episodes as "marked" when they never actually
+    // persisted (same rollback pattern as toggleEntireSeasonWatched above).
+    const previousStates = toMark.map(ep => ({ ep, watched: ep.watched, watchedAt: ep.watchedAt, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt }));
     toMark.forEach(ep => setEpisodeWatched(ep, true));
 
     const saved = await saveItem(currentItem);
     if (!saved) {
-        toMark.forEach((ep, i) => Object.assign(ep, prevEpStates[i]));
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        previousStates.forEach(({ ep, watched, watchedAt, rewatchCount, rewatchedAt }) => {
+            ep.watched = watched;
+            ep.watchedAt = watchedAt;
+            ep.rewatchCount = rewatchCount;
+            ep.rewatchedAt = rewatchedAt;
+        });
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     showToast(`Marked ${toMark.length} episode${toMark.length === 1 ? '' : 's'} watched.`, "success");
@@ -8851,7 +7481,12 @@ function openEpisodeDetails(epId) {
     const btn = document.getElementById("episodeWatchedToggleBtn");
     const isFuture = !isReleased(currentEpisode.releaseDate);
     if (isFuture && !currentEpisode.watched) {
-        btn.textContent = `Releases ${getCountdown(currentEpisode.releaseDate)}`;
+        // getCountdown() returns a standalone-sentence-cased phrase ("In 3
+        // days", "Next week") - de-capitalize it here since it's being
+        // folded into the middle of this button's own sentence instead
+        // ("Releases in 3 days", not "Releases In 3 days").
+        const countdown = getCountdown(currentEpisode.releaseDate);
+        btn.textContent = `Releases ${countdown.charAt(0).toLowerCase()}${countdown.slice(1)}`;
         btn.disabled = true;
     } else {
         btn.textContent = currentEpisode.watched ? "Mark as Unwatched" : "Mark as Watched";
@@ -8882,14 +7517,13 @@ function openEpisodeDetails(epId) {
 // body scroll permanently locked after closing everything.
 function refreshEpisodeModalMeta() {
     if (!currentEpisode) return;
-    const isFuture = !isReleased(currentEpisode.releaseDate);
     document.getElementById("episodeModalMeta").innerHTML = `
         <span>Season ${currentEpisode.season}</span>
         <span>•</span>
         <span>${currentEpisode.runtime || '45 min'}</span>
         ${currentEpisode.releaseDate ? `
             <span>•</span>
-            <span>${escapeHTML(formatDateWithReleaseTime(currentEpisode.releaseDate))}</span>
+            <span>${escapeHTML(formatReleaseDescription(currentEpisode.releaseDate))}</span>
         ` : ''}
         ${(currentEpisode.watched && isCurrentItemInLibrary()) ? `
             <span>•</span>
@@ -8919,15 +7553,19 @@ async function toggleCurrentEpisodeWatched() {
     if (!currentEpisode.watched && !isReleased(currentEpisode.releaseDate)) {
         return;
     }
-    // Snapshot every field setEpisodeWatched can touch, not just the ones
-    // it happens to touch today - a plain object spread restores cleanly
-    // regardless of whether that function's own field list changes later.
-    const prevEpisodeState = { ...currentEpisode };
+    // Snapshot for rollback - see toggleEntireSeasonWatched above for why.
+    const prevWatched = currentEpisode.watched;
+    const prevWatchedAt = currentEpisode.watchedAt;
+    const prevRewatchCount = currentEpisode.rewatchCount;
+    const prevRewatchedAt = currentEpisode.rewatchedAt;
     setEpisodeWatched(currentEpisode, !currentEpisode.watched);
     const saved = await saveItem(currentItem);
     if (!saved) {
-        Object.assign(currentEpisode, prevEpisodeState);
-        showErrorToast("Couldn't save - check your connection and try again.");
+        currentEpisode.watched = prevWatched;
+        currentEpisode.watchedAt = prevWatchedAt;
+        currentEpisode.rewatchCount = prevRewatchCount;
+        currentEpisode.rewatchedAt = prevRewatchedAt;
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     closeEpisodeModal();
@@ -8946,14 +7584,12 @@ async function markWatchedUpToCurrentEpisode() {
     }
 
     let count = 0;
-    const touchedEps = [];
-    const prevEpStates = [];
+    const previousStates = [];
     currentItem.episodes.forEach(ep => {
         if (ep.watched || !isReleased(ep.releaseDate)) return;
         const isUpToHere = ep.season < currentEpisode.season || (ep.season === currentEpisode.season && ep.number <= currentEpisode.number);
         if (isUpToHere) {
-            touchedEps.push(ep);
-            prevEpStates.push({ ...ep });
+            previousStates.push({ ep, watched: ep.watched, watchedAt: ep.watchedAt, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt });
             setEpisodeWatched(ep, true);
             count++;
         }
@@ -8963,9 +7599,13 @@ async function markWatchedUpToCurrentEpisode() {
 
     const saved = await saveItem(currentItem);
     if (!saved) {
-        touchedEps.forEach((ep, i) => Object.assign(ep, prevEpStates[i]));
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        previousStates.forEach(({ ep, watched, watchedAt, rewatchCount, rewatchedAt }) => {
+            ep.watched = watched;
+            ep.watchedAt = watchedAt;
+            ep.rewatchCount = rewatchCount;
+            ep.rewatchedAt = rewatchedAt;
+        });
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     showToast(`Marked ${count} episode${count === 1 ? '' : 's'} as watched.`, "success");
@@ -9129,22 +7769,27 @@ async function addRewatchFromPopup() {
         return;
     }
     const now = new Date().toISOString();
-    let prevState;
 
+    let rollback;
     if (rewatchPopupMode === 'movie') {
-        prevState = { item: { rewatchCount: currentItem.rewatchCount, lastWatchedAt: currentItem.lastWatchedAt } };
+        const prevCount = currentItem.rewatchCount;
+        const prevLastWatchedAt = currentItem.lastWatchedAt;
+        rollback = () => { currentItem.rewatchCount = prevCount; currentItem.lastWatchedAt = prevLastWatchedAt; };
         currentItem.rewatchCount = (currentItem.rewatchCount || 0) + 1;
         currentItem.lastWatchedAt = now;
     } else if (rewatchPopupMode === 'episode') {
         const episode = findEpisodeById(rewatchPopupEpId);
         if (!episode) return;
-        prevState = { eps: [episode], prevEps: [{ ...episode }] };
+        const prevCount = episode.rewatchCount;
+        const prevAt = episode.rewatchedAt;
+        rollback = () => { episode.rewatchCount = prevCount; episode.rewatchedAt = prevAt; if (currentEpisode && currentEpisode.id === episode.id) refreshEpisodeModalMeta(); };
         episode.rewatchCount = (episode.rewatchCount || 0) + 1;
         episode.rewatchedAt = now;
         if (currentEpisode && currentEpisode.id === episode.id) refreshEpisodeModalMeta();
     } else if (rewatchPopupMode === 'season') {
         const eps = getSeasonReleasedEpisodes(rewatchPopupSeasonNumber);
-        prevState = { eps, prevEps: eps.map(ep => ({ ...ep })) };
+        const prev = eps.map(ep => ({ ep, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt }));
+        rollback = () => prev.forEach(({ ep, rewatchCount, rewatchedAt }) => { ep.rewatchCount = rewatchCount; ep.rewatchedAt = rewatchedAt; });
         eps.forEach(ep => {
             ep.rewatchCount = (ep.rewatchCount || 0) + 1;
             ep.rewatchedAt = now;
@@ -9155,10 +7800,8 @@ async function addRewatchFromPopup() {
 
     const saved = await saveItem(currentItem);
     if (!saved) {
-        if (prevState.item) Object.assign(currentItem, prevState.item);
-        if (prevState.eps) prevState.eps.forEach((ep, i) => Object.assign(ep, prevState.prevEps[i]));
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        rollback();
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     renderRewatchPopup();
@@ -9168,22 +7811,26 @@ async function addRewatchFromPopup() {
 
 async function removeRewatchFromPopup() {
     if (!currentItem) return;
-    let prevState;
 
+    let rollback;
     if (rewatchPopupMode === 'movie') {
         if (!currentItem.rewatchCount) return;
-        prevState = { item: { rewatchCount: currentItem.rewatchCount } };
+        const prev = currentItem.rewatchCount;
+        rollback = () => { currentItem.rewatchCount = prev; };
         currentItem.rewatchCount = Math.max(0, currentItem.rewatchCount - 1);
     } else if (rewatchPopupMode === 'episode') {
         const episode = findEpisodeById(rewatchPopupEpId);
         if (!episode || !episode.rewatchCount) return;
-        prevState = { eps: [episode], prevEps: [{ ...episode }] };
+        const prevCount = episode.rewatchCount;
+        const prevAt = episode.rewatchedAt;
+        rollback = () => { episode.rewatchCount = prevCount; episode.rewatchedAt = prevAt; if (currentEpisode && currentEpisode.id === episode.id) refreshEpisodeModalMeta(); };
         episode.rewatchCount = Math.max(0, episode.rewatchCount - 1);
         if (episode.rewatchCount === 0) episode.rewatchedAt = null;
         if (currentEpisode && currentEpisode.id === episode.id) refreshEpisodeModalMeta();
     } else if (rewatchPopupMode === 'season') {
         const eps = getSeasonReleasedEpisodes(rewatchPopupSeasonNumber);
-        prevState = { eps, prevEps: eps.map(ep => ({ ...ep })) };
+        const prev = eps.map(ep => ({ ep, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt }));
+        rollback = () => prev.forEach(({ ep, rewatchCount, rewatchedAt }) => { ep.rewatchCount = rewatchCount; ep.rewatchedAt = rewatchedAt; });
         eps.forEach(ep => {
             if (!ep.rewatchCount) return;
             ep.rewatchCount = Math.max(0, ep.rewatchCount - 1);
@@ -9195,10 +7842,8 @@ async function removeRewatchFromPopup() {
 
     const saved = await saveItem(currentItem);
     if (!saved) {
-        if (prevState.item) Object.assign(currentItem, prevState.item);
-        if (prevState.eps) prevState.eps.forEach((ep, i) => Object.assign(ep, prevState.prevEps[i]));
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        rollback();
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     renderRewatchPopup();
@@ -9213,16 +7858,15 @@ async function removeRewatchFromPopup() {
 async function clearSeasonRewatchesFromPopup() {
     if (!currentItem || rewatchPopupMode !== 'season') return;
     const eps = getSeasonReleasedEpisodes(rewatchPopupSeasonNumber);
-    const prevEps = eps.map(ep => ({ ...ep }));
+    const prev = eps.map(ep => ({ ep, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt }));
     eps.forEach(ep => {
         ep.rewatchCount = 0;
         ep.rewatchedAt = null;
     });
     const saved = await saveItem(currentItem);
     if (!saved) {
-        eps.forEach((ep, i) => Object.assign(ep, prevEps[i]));
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        prev.forEach(({ ep, rewatchCount, rewatchedAt }) => { ep.rewatchCount = rewatchCount; ep.rewatchedAt = rewatchedAt; });
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     renderRewatchPopup();
@@ -9240,7 +7884,7 @@ async function toggleMovieWatched(id) {
         showErrorToast("This movie hasn't been released yet.");
         return;
     }
-    const wasWatched = currentItem.watched;
+    const prevWatched = currentItem.watched;
     const prevLastWatchedAt = currentItem.lastWatchedAt;
     const prevRewatchCount = currentItem.rewatchCount;
     currentItem.watched = !currentItem.watched;
@@ -9248,18 +7892,10 @@ async function toggleMovieWatched(id) {
     if (!currentItem.watched) currentItem.rewatchCount = 0;
     const saved = await saveItem(currentItem);
     if (!saved) {
-        // Same class of bug as the poster picker's own fix (see
-        // saveItem's comment) - found via a full audit repeated across
-        // nearly every watch/rewatch/favorite toggle in the app: the
-        // optimistic UI change proceeded even when the Firestore write
-        // never actually happened, so the "watched" state would silently
-        // revert the next time the library resynced, with no indication
-        // anything had gone wrong.
-        currentItem.watched = wasWatched;
+        currentItem.watched = prevWatched;
         currentItem.lastWatchedAt = prevLastWatchedAt;
         currentItem.rewatchCount = prevRewatchCount;
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     updateModalContent();
@@ -9274,13 +7910,18 @@ async function markNextEpisodeWatched(id) {
     }
     const nextEp = getNextUnwatchedEpisode(currentItem);
     if (nextEp) {
-        const prevEpState = { ...nextEp };
+        const prevWatched = nextEp.watched;
+        const prevWatchedAt = nextEp.watchedAt;
+        const prevRewatchCount = nextEp.rewatchCount;
+        const prevRewatchedAt = nextEp.rewatchedAt;
         setEpisodeWatched(nextEp, true);
         const saved = await saveItem(currentItem);
         if (!saved) {
-            Object.assign(nextEp, prevEpState);
-            updateModalContent();
-            showErrorToast("Couldn't save - check your connection and try again.");
+            nextEp.watched = prevWatched;
+            nextEp.watchedAt = prevWatchedAt;
+            nextEp.rewatchCount = prevRewatchCount;
+            nextEp.rewatchedAt = prevRewatchedAt;
+            showErrorToast("Couldn't save right now. Please try again.");
             return;
         }
         updateModalContent();
@@ -9294,113 +7935,16 @@ async function toggleStopWatching(id) {
         showErrorToast("Add this to your library first.");
         return;
     }
-    const prevIsStopped = currentItem.isStopped;
+    const prevStopped = currentItem.isStopped;
     currentItem.isStopped = !currentItem.isStopped;
     const saved = await saveItem(currentItem);
     if (!saved) {
-        currentItem.isStopped = prevIsStopped;
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
+        currentItem.isStopped = prevStopped;
+        showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
     updateModalContent();
     refreshActivePage();
-}
-
-// Same shape as toggleStopWatching above - a lightweight per-item flag,
-// no separate confirmation needed since it's trivially reversible. The
-// automatic "Favourites" list (see FAVOURITES & LISTS below) is entirely
-// computed from this flag rather than being a real, separately-tracked
-// list - there's nothing else to keep in sync when this changes.
-async function toggleFavoriteCurrentItem() {
-    if (!currentItem) return;
-    if (!isCurrentItemInLibrary()) {
-        showErrorToast("Add this to your library first.");
-        return;
-    }
-    const prevIsFavorite = currentItem.isFavorite;
-    const prevFavoritedAt = currentItem.favoritedAt;
-    currentItem.isFavorite = !currentItem.isFavorite;
-    // Records when, not just whether - the Favourites list card's own
-    // auto-picked backdrop (see createListCard) needs to know which
-    // favorite is the most recent one, not just which items happen to
-    // be favorited, so unfavoriting the current backdrop's source
-    // correctly falls back to whichever favorite is now the most recent
-    // instead of an arbitrary one. Left in place on unfavorite rather
-    // than cleared - harmless once isFavorite is false, and simpler
-    // than deciding whether to erase history that might just get set
-    // again a moment later.
-    if (currentItem.isFavorite) currentItem.favoritedAt = new Date().toISOString();
-    const saved = await saveItem(currentItem);
-    if (!saved) {
-        currentItem.isFavorite = prevIsFavorite;
-        currentItem.favoritedAt = prevFavoritedAt;
-        updateModalContent();
-        showErrorToast("Couldn't save - check your connection and try again.");
-        return;
-    }
-    updateModalContent();
-    refreshActivePage();
-}
-
-/* =========================================================
-   ADD TO LIST PICKER
-========================================================= */
-function openListPickerModal() {
-    if (!currentItem) return;
-    if (!isCurrentItemInLibrary()) {
-        showErrorToast("Add this to your library first.");
-        return;
-    }
-    const modal = document.getElementById("listPickerModal");
-    if (modal.classList.contains("open")) return;
-    const nameEl = document.getElementById("listPickerItemName");
-    if (nameEl) nameEl.textContent = currentItem.title;
-    renderListPickerContent();
-    modal.classList.add("open");
-    lockBodyScroll("listPickerModal");
-}
-
-function closeListPickerModal() {
-    document.getElementById("listPickerModal").classList.remove("open");
-    unlockBodyScroll("listPickerModal");
-}
-
-function closeListPickerModalOutside(event) {
-    if (event.target.id === "listPickerModal") closeListPickerModal();
-}
-
-function renderListPickerContent() {
-    const container = document.getElementById("listPickerRows");
-    if (!container || !currentItem) return;
-
-    if (state.lists.length === 0) {
-        container.innerHTML = emptyState("No Lists Yet", "Create your first list below.");
-        return;
-    }
-
-    container.innerHTML = state.lists.map(list => {
-        const isIn = list.itemIds.includes(currentItem.id);
-        return `
-            <button class="hero-pill-btn ${isIn ? 'pill-on' : 'pill-off'}" style="width: 100%; display: flex; justify-content: space-between; align-items: center;" onclick="toggleItemInListFromPicker('${list.id}')">
-                <span>${escapeHTML(list.name)}</span>
-                <span>${isIn ? 'Added' : 'Add'}</span>
-            </button>
-        `;
-    }).join("");
-}
-
-async function toggleItemInListFromPicker(listId) {
-    if (!currentItem) return;
-    const list = state.lists.find(l => l.id === listId);
-    if (!list) return;
-
-    if (list.itemIds.includes(currentItem.id)) {
-        await removeItemFromList(listId, currentItem.id);
-    } else {
-        await addItemToList(listId, currentItem.id);
-    }
-    renderListPickerContent();
 }
 
 // Generic, id-based versions of stop-watching/remove that don't depend on
