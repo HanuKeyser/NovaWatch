@@ -1031,21 +1031,33 @@
 </div>
 
 <!-- =====================================================
-     ACHIEVEMENT UNLOCKED
-     Shown by showAchievementToast() in app.js, queued from
-     runAchievementsCheck() whenever ACHIEVEMENTS gains a newly-unlocked
-     entry. A top banner (not another bottom one - see .error-toast just
-     above, which already owns that slot) so the two never fight for the
-     same space if both ever needed to show close together.
+     MILESTONE TOAST (achievement unlocked, season/show complete,
+     collection-continuation nudge)
+     Shown by showMilestoneToast() in app.js, queued so several can't
+     overlap or cut each other off - showAchievementToast (unlocking an
+     achievement), announceEpisodeMilestone (finishing a season or a
+     whole show), and announceCollectionContinuation (a movie's
+     collection has another unwatched one) all feed the same queue. A
+     top banner (not another bottom one - see .error-toast just above,
+     which already owns that slot) so this and an unrelated error never
+     fight for the same space if both ever needed to show close
+     together. Tapping navigates to wherever that specific toast is
+     actually about (handleMilestoneToastTap) - Achievements for an
+     unlock, the show/movie itself for the other two - not the same
+     destination for all three. Element ids kept as "achievementToast*"
+     rather than renamed to something more generic - achievements were
+     the first and most frequent thing to use it, and renaming ids
+     purely for naming purity risked more than it was worth.
 ================================================     -->
-<div id="achievementToast" class="achievement-toast" onclick="hideAchievementToast()">
+<div id="achievementToast" class="achievement-toast" onclick="handleMilestoneToastTap()">
     <div class="achievement-toast-icon">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
     </div>
     <div class="achievement-toast-text">
-        <div class="achievement-toast-label">Achievement Unlocked</div>
+        <div id="achievementToastLabel" class="achievement-toast-label">Achievement Unlocked</div>
         <div id="achievementToastTitle" class="achievement-toast-title"></div>
     </div>
+    <svg class="icon achievement-toast-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
 </div>
 
 <!-- =====================================================
