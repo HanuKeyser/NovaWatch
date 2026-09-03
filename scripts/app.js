@@ -603,7 +603,7 @@ function runAchievementsCheck() {
 
     if (changed) {
         saveUserProfile();
-        newlyUnlocked.forEach(ach => showToast(`Achievement Unlocked: ${ach.title}`, 'success'));
+        newlyUnlocked.forEach(ach => showAchievementToast(ach));
     }
     // Moved outside the `if (changed)` guard - the bug reported ("shows no
     // achievements until you open the Achievements screen") happened
@@ -1025,6 +1025,67 @@ function hideErrorToast() {
     const toast = document.getElementById("errorToast");
     if (toast) toast.classList.remove("show");
     clearTimeout(errorToastTimer);
+}
+
+/* =========================================================
+   ACHIEVEMENT TOAST
+   Queued rather than a single slot like showErrorToast above - an
+   achievement unlock isn't a failure to interrupt someone with
+   immediately, and more than one can genuinely unlock from a single
+   action (catching up a big chunk of watch history in one go can clear
+   several thresholds at once - see runAchievementsCheck). Showing them
+   one at a time, each for its own full duration, means every one is
+   actually readable instead of racing each other or overwriting one
+   before it's been seen.
+========================================================= */
+let achievementToastQueue = [];
+let achievementToastTimer = null;
+let achievementToastShowing = false;
+
+function showAchievementToast(achievement) {
+    achievementToastQueue.push(achievement);
+    if (!achievementToastShowing) advanceAchievementToastQueue();
+}
+
+function advanceAchievementToastQueue() {
+    const toast = document.getElementById("achievementToast");
+    if (!toast) {
+        achievementToastQueue = [];
+        achievementToastShowing = false;
+        return;
+    }
+    const next = achievementToastQueue.shift();
+    if (!next) {
+        achievementToastShowing = false;
+        return;
+    }
+    achievementToastShowing = true;
+
+    const iconSvg = toast.querySelector(".achievement-toast-icon .icon");
+    // ach.icon is one of the hardcoded ICON_* constants defined with
+    // ACHIEVEMENTS - trusted static markup this app wrote itself, not
+    // user input, same basis every other raw-SVG injection in the app
+    // (renderAchievementsList itself included) already relies on.
+    if (iconSvg) iconSvg.innerHTML = next.icon;
+    const titleEl = document.getElementById("achievementToastTitle");
+    if (titleEl) titleEl.textContent = next.title;
+
+    toast.classList.add("show");
+    clearTimeout(achievementToastTimer);
+    achievementToastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+        // Let the hide transition actually finish before the next one's
+        // content swaps in and it shows again, rather than changing the
+        // icon/title while the current one is still visibly on screen.
+        setTimeout(advanceAchievementToastQueue, 350);
+    }, 4000);
+}
+
+function hideAchievementToast() {
+    const toast = document.getElementById("achievementToast");
+    if (toast) toast.classList.remove("show");
+    clearTimeout(achievementToastTimer);
+    setTimeout(advanceAchievementToastQueue, 350);
 }
 
 function clearSearch(inputId) {
@@ -5016,6 +5077,19 @@ function getNextUnwatchedEpisode(show) {
     return sortedEps.find(ep => !ep.watched) || null;
 }
 
+// Every released-but-unwatched episode that airs strictly before the given
+// one - what toggleCurrentEpisodeWatched() uses to detect a "jumped ahead"
+// mark-watched (opening S2E6 and marking it watched while S2E1-E5 are
+// still sitting unwatched), so it can offer to catch those up in the same
+// action instead of silently leaving a gap in the watch history.
+function getEarlierUnwatchedEpisodes(show, episode) {
+    if (!show.episodes) return [];
+    return getAvailableEpisodes(show).filter(ep => {
+        if (ep.watched) return false;
+        return ep.season < episode.season || (ep.season === episode.season && ep.number < episode.number);
+    });
+}
+
 // Which season the details modal should land on when a show is opened, so
 // it always reflects where the user actually is in the show rather than
 // whichever season happened to be selected last (which might belong to a
@@ -7553,24 +7627,97 @@ async function toggleCurrentEpisodeWatched() {
     if (!currentEpisode.watched && !isReleased(currentEpisode.releaseDate)) {
         return;
     }
+
+    // Only relevant when marking watched, not un-watching - opening S2E6
+    // and marking it watched while S2E1-E5 are still unwatched is very
+    // likely someone who jumped ahead (or opened a later episode first)
+    // rather than someone who deliberately wants a gap in their watch
+    // history. Ask once instead of silently leaving those earlier
+    // episodes unwatched. Un-watching never asks this - removing a single
+    // episode's watched status is always exactly what it looks like.
+    if (!currentEpisode.watched) {
+        const earlierUnwatched = getEarlierUnwatchedEpisodes(currentItem, currentEpisode);
+        if (earlierUnwatched.length > 0) {
+            openMarkPreviousEpisodesModal(earlierUnwatched.length);
+            return;
+        }
+    }
+
+    await commitCurrentEpisodeWatchedToggle(false);
+}
+
+// The actual mutate+save+UI-refresh for toggleCurrentEpisodeWatched -
+// factored out so both the plain case above and both outcomes of the
+// "mark earlier episodes too?" prompt below share one save path and one
+// rollback-on-failure path, rather than three near-duplicate copies of it.
+// `alsoMarkEarlier` marks every earlier unwatched released episode watched
+// too, in addition to the one currently open - only ever true when marking
+// watched (see the modal's own confirm handler), never when un-watching.
+async function commitCurrentEpisodeWatchedToggle(alsoMarkEarlier) {
+    const markingWatched = !currentEpisode.watched;
+    const targets = [currentEpisode];
+    if (alsoMarkEarlier) targets.push(...getEarlierUnwatchedEpisodes(currentItem, currentEpisode));
+
     // Snapshot for rollback - see toggleEntireSeasonWatched above for why.
-    const prevWatched = currentEpisode.watched;
-    const prevWatchedAt = currentEpisode.watchedAt;
-    const prevRewatchCount = currentEpisode.rewatchCount;
-    const prevRewatchedAt = currentEpisode.rewatchedAt;
-    setEpisodeWatched(currentEpisode, !currentEpisode.watched);
+    const previousStates = targets.map(ep => ({ ep, watched: ep.watched, watchedAt: ep.watchedAt, rewatchCount: ep.rewatchCount, rewatchedAt: ep.rewatchedAt }));
+    targets.forEach(ep => setEpisodeWatched(ep, markingWatched));
+
     const saved = await saveItem(currentItem);
     if (!saved) {
-        currentEpisode.watched = prevWatched;
-        currentEpisode.watchedAt = prevWatchedAt;
-        currentEpisode.rewatchCount = prevRewatchCount;
-        currentEpisode.rewatchedAt = prevRewatchedAt;
+        previousStates.forEach(({ ep, watched, watchedAt, rewatchCount, rewatchedAt }) => {
+            ep.watched = watched;
+            ep.watchedAt = watchedAt;
+            ep.rewatchCount = rewatchCount;
+            ep.rewatchedAt = rewatchedAt;
+        });
         showErrorToast("Couldn't save right now. Please try again.");
         return;
+    }
+    if (alsoMarkEarlier) {
+        showToast(`Marked ${targets.length} episodes watched.`, "success");
     }
     closeEpisodeModal();
     updateModalContent();
     refreshActivePage();
+}
+
+// Themed in-app confirmation instead of a native browser confirm() - see
+// handleDeleteAccount's own comment for why native dialogs are avoided
+// here (unreliable, often silently do nothing in an installed standalone
+// PWA on mobile, this app's primary context).
+function openMarkPreviousEpisodesModal(count) {
+    const modal = document.getElementById("markPreviousEpisodesModal");
+    const msgEl = document.getElementById("markPreviousEpisodesMessage");
+    if (msgEl) {
+        msgEl.textContent = count === 1
+            ? "There's 1 earlier episode you haven't marked watched yet. Mark it watched too?"
+            : `There are ${count} earlier episodes you haven't marked watched yet. Mark them watched too?`;
+    }
+    if (modal.classList.contains("open")) return;
+    modal.classList.add("open");
+    lockBodyScroll("markPreviousEpisodesModal");
+}
+
+function closeMarkPreviousEpisodesModal() {
+    document.getElementById("markPreviousEpisodesModal").classList.remove("open");
+    unlockBodyScroll("markPreviousEpisodesModal");
+}
+
+// Tapping outside the dialog isn't a clear "yes" or "no" - defaults to
+// the smaller, less surprising action (just the one episode that was
+// actually tapped), same as declining explicitly.
+function closeMarkPreviousEpisodesModalOutside(event) {
+    if (event.target.id === "markPreviousEpisodesModal") declineMarkPreviousEpisodes();
+}
+
+async function confirmMarkPreviousEpisodes() {
+    closeMarkPreviousEpisodesModal();
+    await commitCurrentEpisodeWatchedToggle(true);
+}
+
+async function declineMarkPreviousEpisodes() {
+    closeMarkPreviousEpisodesModal();
+    await commitCurrentEpisodeWatchedToggle(false);
 }
 
 // Marks every episode up to and including the currently open one as
