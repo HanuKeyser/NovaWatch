@@ -5995,7 +5995,12 @@ function renderContinueWatching(containerId = "continueWatchingList") {
     // otherwise look identical to a genuinely empty library and read as
     // the app being done loading when it's actually still in flight.
     if (!libraryLoaded) {
-        setInnerHTMLIfChanged(container, skeletonRows(3));
+        // Wrapped in the same .continue-group the real content below uses -
+        // without it, the loading skeleton stays single-column on wide
+        // screens while the real content "pops" into 2-3 columns the
+        // moment it arrives, since the grid CSS is scoped to .continue-
+        // group specifically, not this container itself.
+        setInnerHTMLIfChanged(container, `<div class="continue-group">${skeletonRows(3)}</div>`);
         return;
     }
 
