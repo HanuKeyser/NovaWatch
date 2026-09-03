@@ -3916,6 +3916,15 @@ html[data-theme="dark"] .state-card {
         max-width: 620px;
     }
 
+    /* Same "match the nav bar's own scaling" reasoning as the 1280px
+       block below - kept together with .bottom-nav's own rule here
+       rather than only starting at the next block, so the toasts and
+       the nav are in sync from the very first widening step onward. */
+    .error-toast,
+    .achievement-toast {
+        max-width: 620px;
+    }
+
     /* The two real poster grids (Library/Upcoming's category blocks,
        and the custom-poster picker) - not every 3-column grid in the
        app. .stats (Home's stat tiles), the segmented/three-way toggles,
@@ -3934,19 +3943,33 @@ html[data-theme="dark"] .state-card {
 
     /* .modal is its own fixed, full-viewport overlay (inset: 0) -
        completely separate from .app's own max-width scaling above, and
-       still full-bleed edge to edge here without this. That's fine for
-       the backdrop hero image (a full-width photo is a normal, good-
-       looking pattern at any size), but .modal-content holds the actual
-       reading content underneath it - a synopsis paragraph, or rows of
-       settings/achievements/episodes - and none of that benefits from
-       stretching to match the viewport the way a poster grid does. A
-       paragraph at 100+ characters per line is genuinely harder to
-       read, not easier, and a settings row stretched that wide just
-       leaves its icon and label bunched on the left with empty space
-       trailing off to the right. Capped at a fixed comfortable-reading
-       width here and left exactly there through every wider block below
-       - unlike the poster grids, this shouldn't keep growing just
-       because the monitor does. */
+       still full-bleed edge to edge here without this. That's the right
+       call for .modal-content's own text/rows (a paragraph or a
+       settings row shouldn't stretch just because the monitor does -
+       see the max-width rule for it below), but the backdrop hero image
+       needed its own fix here too: at a fixed 240px tall regardless of
+       width, a full-bleed image goes from a reasonable ~2.5:1 crop on a
+       phone to a much more extreme one as the box gets wider with
+       nothing to compensate - past a certain width, `background-size:
+       cover` was cropping away most of a poster's actual subject (a
+       face, in practice) just to fill an increasingly short, wide strip.
+       Scaling the height up alongside each wider block keeps the crop
+       roughly the same reasonable ratio instead of degrading further. */
+    .modal-backdrop-header {
+        height: 280px;
+    }
+
+    /* .modal-content holds the actual reading content under that
+       header - a synopsis paragraph, or rows of settings/achievements/
+       episodes - and none of that benefits from stretching to match
+       the viewport the way a poster grid does. A paragraph at 100+
+       characters per line is genuinely harder to read, not easier, and
+       a settings row stretched that wide just leaves its icon and
+       label bunched on the left with empty space trailing off to the
+       right. Capped at a fixed comfortable-reading width here and left
+       exactly there through every wider block below - unlike the
+       poster grids, this shouldn't keep growing just because the
+       monitor does. */
     .modal-content {
         max-width: 720px;
         margin: 0 auto;
@@ -4026,6 +4049,22 @@ html[data-theme="dark"] .state-card {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px 12px;
     }
+
+    .modal-backdrop-header {
+        height: 320px;
+    }
+
+    /* Both floating toasts (.error-toast, .achievement-toast) are the
+       same "chrome-tier glass pill" family as the nav bar - kept at a
+       fixed 420px cap while the nav bar itself scaled up through every
+       block above meant the three stopped looking like one consistent
+       set of floating controls the wider the screen got. Matched to
+       .bottom-nav's own max-width exactly at each of these blocks
+       instead, rather than picking new values of their own. */
+    .error-toast,
+    .achievement-toast {
+        max-width: 680px;
+    }
 }
 
 /* =========================================================
@@ -4067,6 +4106,15 @@ html[data-theme="dark"] .state-card {
     .skeleton-grid {
         grid-template-columns: repeat(6, minmax(0, 1fr));
     }
+
+    .modal-backdrop-header {
+        height: 360px;
+    }
+
+    .error-toast,
+    .achievement-toast {
+        max-width: 760px;
+    }
 }
 
 @media (min-width: 2000px) {
@@ -4082,6 +4130,15 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    .modal-backdrop-header {
+        height: 400px;
+    }
+
+    .error-toast,
+    .achievement-toast {
+        max-width: 820px;
     }
 
     /* A third Continue Watching column - two would otherwise widen to
