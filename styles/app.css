@@ -29,28 +29,6 @@
     display: none !important;
 }
 
-/* Mobile-first doesn't mean mobile-only - this app runs in desktop
-   browsers too, where a mouse cursor is the primary pointer and people
-   rely on it to tell what's actually clickable versus just decorative.
-   Native <button>/<a> elements get this automatically; everything else
-   in this app that's clickable is a plain <div>/<span> with an onclick
-   handler instead (cards, list rows, toggle segments), which browsers
-   never cursor:pointer on their own. One rule covering every onclick
-   element at once, rather than needing cursor:pointer remembered
-   individually on every new card/row class as it's added - excluding
-   .modal/.confirm-overlay specifically, since their own onclick is only
-   there to detect a tap on the backdrop itself to close, not something
-   meant to visually read as its own clickable control. Also excludes
-   :disabled - some buttons keep their onclick attribute even while
-   disabled (the handler just no-ops or the button relies on the
-   disabled attribute itself to block the click), and without this
-   exclusion this rule's own specificity would have won out over
-   button:disabled's cursor: not-allowed below, showing a pointer
-   cursor on something that can't actually be clicked. */
-[onclick]:not(.modal):not(.confirm-overlay):not(:disabled) {
-    cursor: pointer;
-}
-
 input,
 textarea {
     -webkit-touch-callout: default;
@@ -66,12 +44,13 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
-    /* Nav bar floats at bottom: 18px with a 70px height (see
-       .bottom-nav) - its top edge sits at 88px from the true bottom.
-       .page's own bottom padding already contributes 20px of its own
-       trailing space; this 76px plus that lands just past the nav's
-       own top edge with a small ~8px breathing gap, instead of
-       double-padding on top of what .page already provides. */
+    /* Nav bar floats at bottom: calc(18px + safe-area) with a 70px
+       height (see .bottom-nav) - its top edge sits at 88px + safe-area
+       from the true bottom. .page's own bottom padding already
+       contributes 20px + safe-area of its own trailing space; this 76px
+       plus that lands just past the nav's own top edge with a small
+       ~8px breathing gap, instead of double-padding on top of what
+       .page already provides. */
     padding-bottom: 76px;
     -webkit-font-smoothing: antialiased;
     /* Stops a vertical drag at the very top/bottom of the page from
@@ -161,14 +140,22 @@ img {
 /* =========================================================
    PAGES
 ========================================================= */
-/* Horizontal padding is the original 18px - two separate attempts at
+/* Top/bottom padding both fold in the real device safe-area inset on
+   top of the existing spacing, rather than replacing it - so content
+   (headers, cards) clears the Dynamic Island/notch/status bar at the
+   top and the home indicator/gesture bar at the bottom, while the
+   background behind it (on body - see above) stays full-bleed since
+   nothing about the background itself is padded, only this content
+   layer. env(...) resolves to 0px on devices/browsers without a safe
+   area (most Android phones, desktop), so this is a no-op there.
+   Horizontal padding is the original 18px - two separate attempts at
    pulling this in (0px, then 12px) both left cards, borders, and
    shadows reading as unfinished rather than intentional once they lost
    the room a floating card actually needs to read as a deliberate
    shape rather than a mistake. */
 .page {
     display: none;
-    padding: 36px 18px 20px;
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .page.active {
@@ -182,11 +169,11 @@ img {
    globally on every tab switch, which would have permanently hidden
    Settings' content (via .page's own display:none default) the next
    time any tab changed while sharing that class. */
-/* Same padding as .page above - Settings is functionally a 5th
-   top-level tab (its own full-height sheet), so it gets the exact same
-   values rather than a separate hardcoded copy. */
+/* Same safe-area treatment as .page above - Settings is functionally a
+   5th top-level tab (its own full-height sheet), so it gets the exact
+   same logic rather than a separate hardcoded copy. */
 .settings-page-content {
-    padding: 36px 18px 20px;
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .tab-content-wrapper {
@@ -238,7 +225,7 @@ img {
     width: 4px;
     height: 14px;
     border-radius: 3px;
-    background: var(--accent-fill);
+    background: var(--blue);
     flex-shrink: 0;
 }
 
@@ -288,7 +275,7 @@ img {
 .stat-icon {
     width: 18px;
     height: 18px;
-    color: var(--accent);
+    color: var(--blue);
     margin-bottom: 2px;
 }
 
@@ -301,7 +288,7 @@ img {
 .stat-value.highlight {
     font-size: 18px;
     font-weight: 800;
-    color: var(--accent);
+    color: var(--blue);
     margin-top: 2px;
     letter-spacing: -0.3px;
 }
@@ -321,12 +308,12 @@ img {
     margin-top: 8px;
     padding: 4px 10px 4px 8px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--warning-fill);
+    background: var(--glass-sheen), var(--orange-gradient);
     color: white;
     font-size: 11.5px;
     font-weight: 800;
     letter-spacing: -0.1px;
-    box-shadow: 0 4px 10px rgba(114, 114, 114, 0.25);
+    box-shadow: 0 4px 10px rgba(255, 149, 0, 0.25);
 }
 
 .streak-badge .icon {
@@ -354,8 +341,8 @@ img {
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius-2xl);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
 }
 
 .state-title {
@@ -374,31 +361,19 @@ img {
 
 .wrapped-hero {
     text-align: center;
-    padding: 20px 0 26px;
+    padding: 8px 0 22px;
 }
 
-/* Was 25px, plain solid color, then a purple/pink/orange gradient, then
-   flattened to grayscale and finally plain black during the monochrome
-   era - back to a real gradient now, the brand's own orange/yellow
-   this time rather than the original purple/pink/orange, tying the
-   landing screen's identity to the same vivid treatment the slideshow
-   itself now uses (see .wrapped-bg-recap and friends above) rather
-   than a plain black heading sitting above a bold gradient button with
-   no visual relationship between them. */
 .wrapped-hero-title {
-    font-size: 34px;
+    font-size: 25px;
     font-weight: 800;
-    letter-spacing: -1px;
-    background: var(--accent-gradient);
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
+    letter-spacing: -0.6px;
 }
 
 .wrapped-hero-sub {
-    font-size: 14px;
+    font-size: 13.5px;
     color: var(--text-secondary);
-    margin-top: 6px;
+    margin-top: 4px;
 }
 
 .wrapped-year-nav {
@@ -449,18 +424,12 @@ img {
     padding: 16px 20px;
     margin-top: 8px;
     border-radius: var(--radius-2xl);
-    /* Was a flat #1f1f1f from the monochrome era - the brand gradient
-       now, matching the hero title just above it (see its own comment)
-       so the two read as one considered identity rather than a plain
-       heading over an unrelated dark button. Text pairs with
-       --on-accent-text, not white, for the same contrast reason every
-       other gradient-filled surface in the app does. */
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), linear-gradient(115deg, #8b5cf6, #ec4899, #f97316);
+    color: white;
     font-size: 15px;
     font-weight: 800;
     letter-spacing: -0.2px;
-    box-shadow: var(--glow-accent), inset 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: 0 10px 28px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.4);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -482,38 +451,29 @@ img {
 ========================================================= */
 .wrapped-progress-row {
     position: fixed;
-    top: 14px;
+    top: calc(14px + env(safe-area-inset-top, 0px));
     left: 16px;
     /* Was right: 16px, the same right edge the modal's own close button
-       sits at (.modal-header-nav, top: 14px; right: 16px) - with this
-       row's own higher z-index (20 vs the close button's 10), the
-       progress segments would render directly over the close button,
-       making it untappable for the entire slideshow. 62px leaves the
-       button (38px wide, starting at right: 16px, so occupying out to
-       right: 54px) clear with a small gap to spare - the same layout
-       Instagram/Snapchat stories use, a progress bar and a close
-       control sharing the same row without overlapping. */
+       sits at (.modal-header-nav, top: 14px + safe-area; right: 16px)
+       - with this row's own higher z-index (20 vs the close button's
+       10), the progress segments would render directly over the close
+       button, making it untappable for the entire slideshow. 62px
+       leaves the button (38px wide, starting at right: 16px, so
+       occupying out to right: 54px) clear with a small gap to spare -
+       the same layout Instagram/Snapchat stories use, a progress bar
+       and a close control sharing the same row without overlapping. */
     right: 62px;
     z-index: 20;
     display: flex;
     gap: 5px;
 }
 
-/* Was 3px - thin enough to look elegant but too thin to reliably tap,
-   now that each segment jumps straight to that slide (see
-   jumpToWrappedSlide in app.js). Padding on the row itself, not
-   overflow tricks on the segment - overflow: hidden here is what keeps
-   the fill bar below correctly clipped to its own rounded shape, so
-   expanding the tap target via a negative-offset pseudo-element would
-   just get clipped away by that same rule. A slightly taller bar is a
-   simpler, more robust fix for the same problem. */
 .wrapped-progress-seg {
     flex: 1;
-    height: 5px;
+    height: 3px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.3);
     overflow: hidden;
-    cursor: pointer;
 }
 
 .wrapped-progress-seg::after {
@@ -557,85 +517,13 @@ img {
     right: 0;
 }
 
-/* Visible, discoverable versions of the invisible tap zones above -
-   see the HTML comment on these buttons in startWrappedSlideshow for
-   the full reasoning. Sit above the tap zones (z-index) but stay out
-   of the way of the actual slide content in the middle, at the
-   vertical center on either edge - a familiar "carousel arrow"
-   position that reads as navigation immediately, even to someone who's
-   never used a tap-to-advance story format before. */
-.wrapped-nav-arrow {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 16;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    color: white;
-    transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.wrapped-nav-arrow:active {
-    transform: translateY(-50%) scale(0.88);
-}
-
-.wrapped-nav-arrow:disabled {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.wrapped-nav-arrow-left {
-    left: 14px;
-}
-
-.wrapped-nav-arrow-right {
-    right: 14px;
-}
-
-.wrapped-nav-arrow .icon {
-    width: 20px;
-    height: 20px;
-}
-
-/* Found during a full audit with zero CSS anywhere, despite being fully
-   wired up in JS (jumpToWrappedSlide/wrappedGoNext etc. already set its
-   real "3 / 7" text) - rendering as unstyled default browser text
-   inside this full-screen overlay. Bottom-center, matching where a
-   story-format slide counter conventionally sits (progress row is
-   already up top, sharing space with the close button) - small and
-   quiet enough not to compete with the slide's own content, but still
-   legible against any of this feature's "vivid gradient" backgrounds
-   via the text-shadow. pointer-events: none since it's purely
-   informational, not a control - the actual tap-to-jump navigation
-   lives on the progress segments above. */
-.wrapped-slide-counter {
-    position: fixed;
-    bottom: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 20;
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-    pointer-events: none;
-}
-
 .wrapped-slide-panel {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 60px 32px 40px;
+    padding: calc(60px + env(safe-area-inset-top, 0px)) 32px calc(40px + env(safe-area-inset-bottom, 0px));
     text-align: center;
     color: white;
     animation: wrappedSlideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
@@ -709,89 +597,49 @@ img {
     text-transform: uppercase;
 }
 
-/* Each slide gets a genuinely distinct warm gradient now, not a flat
-   shade - was 8 hues, then 8 grayscale gradients, then 8 flat grays
-   during the monochrome era; now 8 gradients built from the brand
-   orange/yellow instead, since a flat gray slideshow was exactly the
-   kind of "black and colourless" feel the whole rebrand moved away
-   from. Each still dark enough at its base for white slide text to
-   clear real contrast (verified 4.5:1+ against white, most well past
-   it) - "vibrant" here means a warm gradient wash and glow over a dark
-   base, the same layered-glow language the rest of the app uses now,
-   not a literal bright-orange background white text would fail against.
-   Deliberately building in intensity across the sequence - intro starts
-   moodiest, recap (the shareable finale card) ends on the most vivid
-   treatment, giving the whole slideshow a sense of building toward
-   something rather than 8 interchangeable panels. */
+/* One deliberately vivid, distinct gradient per slide - see the block
+   comment above for why these read as more saturated than the rest of
+   NovaWatch's usual glass palette. */
 .wrapped-bg-intro {
-    background:
-        radial-gradient(ellipse 700px 500px at 50% -10%, rgba(255, 162, 0, 0.16), transparent 60%),
-        #0a0704;
+    background: radial-gradient(circle at 30% 20%, #312e81, #0f0a2e 70%);
 }
 
 .wrapped-bg-time {
-    background:
-        radial-gradient(ellipse 800px 600px at 15% 0%, rgba(255, 162, 0, 0.24), transparent 55%),
-        radial-gradient(ellipse 700px 500px at 100% 100%, rgba(255, 252, 0, 0.08), transparent 55%),
-        #14100a;
+    background: linear-gradient(150deg, #3b82f6, #8b5cf6 55%, #ec4899);
 }
 
 .wrapped-bg-movies {
-    background:
-        linear-gradient(160deg, rgba(255, 90, 0, 0.28) 0%, transparent 45%),
-        radial-gradient(ellipse 700px 600px at 100% 0%, rgba(255, 162, 0, 0.14), transparent 55%),
-        #1a0e05;
+    background: linear-gradient(150deg, #f97316, #ea580c 60%, #b91c1c);
 }
 
 .wrapped-bg-tv {
-    background:
-        linear-gradient(200deg, rgba(255, 200, 0, 0.24) 0%, transparent 45%),
-        radial-gradient(ellipse 700px 600px at 0% 100%, rgba(255, 162, 0, 0.14), transparent 55%),
-        #14110a;
+    background: linear-gradient(150deg, #22c55e, #16a34a 55%, #0e7490);
 }
 
 .wrapped-bg-spotlight {
-    background:
-        radial-gradient(ellipse 900px 700px at 50% 100%, rgba(255, 162, 0, 0.22), transparent 60%),
-        #171008;
+    background: linear-gradient(150deg, #ec4899, #a21caf 60%, #581c87);
 }
 
 .wrapped-bg-month {
-    background:
-        linear-gradient(135deg, rgba(255, 252, 0, 0.12) 0%, rgba(255, 162, 0, 0.22) 55%, transparent 85%),
-        #150e05;
+    background: linear-gradient(150deg, #06b6d4, #0284c7 60%, #1e3a8a);
 }
 
 .wrapped-bg-rewatch {
-    background:
-        radial-gradient(ellipse 750px 550px at 85% 15%, rgba(255, 100, 0, 0.26), transparent 55%),
-        radial-gradient(ellipse 600px 500px at 10% 90%, rgba(255, 200, 0, 0.1), transparent 55%),
-        #170c05;
+    background: linear-gradient(150deg, #a855f7, #7c3aed 55%, #4c1d95);
 }
 
-/* The finale - also the shareable recap card, so this is the one slide
-   most likely to be screenshotted and seen outside the app entirely.
-   Gets the full brand gradient treatment directly, not just a wash -
-   the moment the whole sequence has been building toward. */
 .wrapped-bg-recap {
-    background:
-        linear-gradient(135deg, rgba(255, 162, 0, 0.4) 0%, rgba(255, 252, 0, 0.22) 50%, transparent 85%),
-        radial-gradient(ellipse 800px 600px at 100% 100%, rgba(255, 162, 0, 0.2), transparent 60%),
-        #100a04;
+    background: radial-gradient(circle at 70% 15%, #1e1b4b, #09070f 70%);
 }
 
 /* The top-show spotlight slide layers the actual poster in, blurred and
-   dimmed, behind a dark scrim rather than instead of it - reads as
-   "this show, celebrated" rather than a plain photo, and still works
-   fine (just falls back to the gradient background above) for the
-   rare case a show has no poster cached. A warm-tinted scrim now
-   (a hint of the brand orange in the dark, not neutral black) so a
-   poster-backed slide still carries the same identity as every other
-   slide in the sequence, picked dark enough on its own to keep white
-   text legible everywhere on the slide, not just toward one edge. */
+   dimmed, behind the vivid gradient rather than instead of it - reads
+   as "this show, celebrated" rather than a plain photo, and still works
+   fine (just falls back to the flat gradient) for the rare case a show
+   has no poster cached. */
 .wrapped-slide-panel.has-poster {
     background-image:
-        linear-gradient(rgba(20, 12, 5, 0.74), rgba(20, 12, 5, 0.74)),
+        linear-gradient(180deg, rgba(88, 28, 135, 0.55), rgba(30, 10, 46, 0.85)),
         var(--wrapped-poster-url);
     background-size: cover;
     background-position: center;
@@ -840,7 +688,7 @@ img {
     position: absolute;
     left: 32px;
     right: 32px;
-    bottom: 40px;
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     display: flex;
     gap: 10px;
     z-index: 16;
@@ -893,8 +741,8 @@ img {
        translucent for free via --surface/--glass-border above; this is
        the one value on this rule that wasn't token-driven and needed
        bumping to match by hand. */
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    backdrop-filter: blur(64px) saturate(260%);
+    -webkit-backdrop-filter: blur(64px) saturate(260%);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
     box-shadow: var(--glass-shadow);
@@ -908,26 +756,26 @@ img {
     align-items: center;
     gap: 14px;
     padding-bottom: 14px;
-    border-bottom: 1px solid rgba(255, 140, 0, 0.12);
+    border-bottom: 1px solid rgba(0, 102, 204, 0.12);
 }
 
 .analytics-icon-badge {
     width: 44px;
     height: 44px;
     border-radius: var(--radius-sm);
-    background: var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--blue);
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
     flex-shrink: 0;
 }
 
 .analytics-card .stat-value.highlight {
     font-size: 15px;
     font-weight: 800;
-    color: var(--accent);
+    color: var(--blue);
     margin-top: 2px;
     letter-spacing: -0.2px;
     white-space: nowrap;
@@ -955,12 +803,12 @@ img {
     border-radius: var(--radius-lg);
     background: var(--surface-2);
     border: none;
-    box-shadow: 0 10px 24px rgba(120, 70, 0, 0.14);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
     transition: box-shadow 0.25s ease;
 }
 
 .card:active .poster {
-    box-shadow: 0 4px 12px rgba(120, 70, 0, 0.16);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .poster img {
@@ -1004,8 +852,8 @@ img {
     align-items: center;
     justify-content: center;
     text-align: center;
-    background: rgba(255, 140, 0, 0.1);
-    color: var(--accent);
+    background: linear-gradient(135deg, rgba(0,102,204,0.14), rgba(0,102,204,0.05));
+    color: var(--blue);
 }
 
 .poster-placeholder .icon {
@@ -1047,241 +895,6 @@ img {
 }
 
 /* =========================================================
-   LIBRARY HOME - LISTS ROW
-========================================================= */
-/* Text-only link-style button - the "View All"/"+ New" pattern next to
-   a section title, distinct from a full .action-button since it's a
-   secondary navigation action, not a primary one. */
-.section-view-all-btn {
-    background: none;
-    border: none;
-    padding: 4px 2px;
-    color: var(--accent);
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: -0.1px;
-    cursor: pointer;
-    transition: opacity 0.15s ease;
-}
-
-.section-view-all-btn:active {
-    opacity: 0.6;
-}
-
-/* Horizontal scroll row - same underlying pattern as the horizontally-
-   scrolling recommendation rows elsewhere in the app (fixed-width flex
-   children, native momentum scroll, no visible scrollbar), just with a
-   wider card. */
-.lists-scroll-row {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-}
-
-.lists-scroll-row::-webkit-scrollbar {
-    display: none;
-}
-
-/* ~82% of the row's own width, not a fixed pixel value - leaves a
-   deliberate peek of the next card as a scroll affordance, and scales
-   correctly at every screen width this app supports (a narrow phone,
-   a wide tablet) rather than being tuned for just one. Roughly matches
-   a 3-poster-wide row at any given width, same as the brief asked for,
-   without hardcoding to any single device's specific measurements. */
-.list-card {
-    position: relative;
-    /* Exactly as wide as 3 poster columns plus the 2 gaps between them
-       in .library-grid right below this section - which, worked out
-       mathematically, is simply the grid's own full row width: 3 equal
-       columns with 2 gaps between them always sums to the whole
-       container, regardless of how wide that container actually is.
-       So this is just 100% of the row it scrolls in, matching
-       .library-grid's own width exactly rather than an approximation
-       of it. */
-    flex: 0 0 100%;
-    aspect-ratio: 2 / 1;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    cursor: pointer;
-    background: var(--surface-2);
-    border: 1px solid var(--glass-border-subtle);
-    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.list-card:active {
-    transform: scale(0.97);
-}
-
-/* Fills the card - the auto-picked or custom backdrop (see
-   createListCard) is always this single full-size image now, never a
-   poster collage - a landscape backdrop already matches this card's
-   own 2:1 shape, where a portrait poster never did, and it holds up
-   regardless of how many items are actually in the list (the collage
-   this replaced broke down visibly for anything under 4 items, which
-   was the common case, not a rare one). If nothing in the list has a
-   backdrop at all, this element just isn't rendered - .list-card's own
-   background (--surface-2) shows through as a plain, still-legible
-   fallback instead. */
-.list-card-backdrop {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-/* Same legibility-scrim-over-image pattern already used for the modal
-   backdrop header elsewhere (.modal-backdrop-overlay) - reused here
-   rather than inventing a second version of the same idea. Only
-   rendered at all when the card actually has a backdrop image behind
-   it (see createListCard's own conditional) - with no photo there,
-   there's nothing for a scrim to be protecting text legibility
-   against, and it would just show as an unexplained dark band over the
-   plain fallback background instead. */
-.list-card-scrim {
-    position: absolute;
-    /* Was a top-to-bottom gradient (transparent at top, dark at bottom,
-       where the name/count label actually sits) covering the whole
-       card. A flat tint can't fade the same way, so instead of dimming
-       the entire image uniformly - losing brightness across the whole
-       card just to darken the one third of it where text needs to sit -
-       this scrim itself only covers that bottom third now, leaving the
-       rest of the image at full, undimmed brightness. */
-    inset: auto 0 0 0;
-    height: 42%;
-    background: rgba(0, 0, 0, 0.55);
-}
-
-.list-card-label {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 10px;
-    color: white;
-}
-
-/* White text only makes sense with a dark photo/scrim behind it (the
-   normal case) - without a backdrop image at all, the card falls back
-   to its own plain, light --surface-2 fill (see createListCard), where
-   white-on-light-gray was nearly unreadable. Switches to the app's
-   normal text color for that specific fallback case instead. */
-.list-card.no-backdrop .list-card-label {
-    color: var(--text);
-}
-
-.list-card.no-backdrop .list-card-count {
-    color: var(--text-secondary);
-    opacity: 1;
-}
-
-.list-card-name {
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: -0.3px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-    /* Long custom list names shouldn't be able to push the card's own
-       layout around or overflow past its rounded corners. */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.list-card-count {
-    font-size: 11.5px;
-    font-weight: 700;
-    opacity: 0.85;
-    margin-top: 2px;
-}
-
-/* =========================================================
-   REORDER LISTS
-========================================================= */
-.reorder-list-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: var(--radius-lg);
-    background: var(--surface-2);
-    border: 1px solid var(--glass-border-subtle);
-}
-
-.reorder-list-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.reorder-list-controls {
-    display: flex;
-    flex-shrink: 0;
-    gap: 6px;
-}
-
-.reorder-move-btn {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: var(--surface);
-    border: 1px solid var(--glass-border-subtle);
-    color: var(--text);
-    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.15s ease;
-}
-
-.reorder-move-btn:active {
-    transform: scale(0.9);
-}
-
-/* First list can't move earlier, last can't move later - disabled
-   rather than hidden, so the row's own layout (name left, two controls
-   right) never shifts depending on position in the list. */
-.reorder-move-btn:disabled {
-    opacity: 0.3;
-    pointer-events: none;
-}
-
-/* =========================================================
-   LIST DETAIL - REMOVE BUTTON
-========================================================= */
-.list-detail-remove-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    z-index: 3;
-    width: 26px;
-    height: 26px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: white;
-    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.list-detail-remove-btn .icon {
-    width: 13px;
-    height: 13px;
-}
-
-.list-detail-remove-btn:active {
-    transform: scale(0.85);
-}
-
-/* =========================================================
    CHANGE POSTER / BACKDROP PICKER
 ========================================================= */
 .poster-picker-title {
@@ -1318,7 +931,7 @@ img {
 }
 
 .poster-picker-item.selected {
-    border-color: var(--accent-fill-flat);
+    border-color: var(--flat-blue);
 }
 
 .poster-picker-item::after {
@@ -1331,7 +944,7 @@ img {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(255, 140, 0, 0.15);
+    background: rgba(0, 136, 255, 0.15);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -1364,7 +977,6 @@ img {
     grid-column: 1 / -1;
     background: var(--surface);
     backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius);
     box-shadow: var(--glass-shadow-sm);
@@ -1392,11 +1004,11 @@ img {
     height: 40px;
     padding: 0 22px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
     font-size: 13px;
     font-weight: 700;
-    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s ease;
 }
 
@@ -1407,6 +1019,13 @@ img {
 /* =========================================================
    LIBRARY CONTROLS & SEARCH
 ========================================================= */
+.library-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
 .search-box {
     position: relative;
     width: 100%;
@@ -1456,8 +1075,8 @@ img {
        built to avoid in the first place. Border-color and box-shadow
        alone are enough to read as "focused" without touching the layer
        backdrop-filter operates on at all. */
-    border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(255, 140, 0, 0.15), var(--glass-shadow-sm);
+    border-color: var(--blue);
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.15), var(--glass-shadow-sm);
 }
 
 .search-box input {
@@ -1499,7 +1118,7 @@ img {
     transform: translateY(-50%);
     background: transparent;
     border: none;
-    color: var(--accent);
+    color: var(--blue);
     cursor: pointer;
     display: none;
     align-items: center;
@@ -1512,7 +1131,7 @@ img {
 }
 
 .search-clear-btn:hover {
-    color: var(--accent-dark);
+    color: var(--blue-dark);
     background: var(--surface-2);
 }
 
@@ -1528,7 +1147,6 @@ img {
     grid-template-columns: 1fr 1fr;
     background: var(--surface);
     backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
     padding: 5px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--glass-border);
@@ -1565,9 +1183,9 @@ img {
    without changing the shared .search-type-btn.active style used
    elsewhere (Discover's TV Shows/Movies toggle). */
 #authScreen .search-type-btn.active {
-    background: var(--glass-sheen), var(--accent-fill-flat);
-    color: var(--on-accent-text);
-    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    background: var(--glass-sheen), var(--flat-blue);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .search-type-toggle.three-way {
@@ -1585,81 +1203,6 @@ img {
     border-radius: 999px;
     border: 1px solid var(--glass-border-subtle);
     margin-bottom: 16px;
-}
-
-/* Only the two TV Shows/Movies toggles (Search, Upcoming) get this
-   modifier - a real sliding pill behind the buttons, the same
-   architecture .nav-indicator uses for the bottom nav, rather than each
-   button carrying its own fill directly the way every other
-   .segmented-toggle in the app still does (theme, poster/backdrop -
-   those never needed to match the nav bar's own drag feel, since they
-   were never asked to behave the same way it does).
-   Container itself now on the chrome tier (the same recipe .search-box
-   and .bottom-nav use: sheen + chrome-fill, chrome-blur, chrome-border,
-   chrome-shadow) instead of the plain content-surface tier the base
-   .segmented-toggle still uses - tokens.css's own chrome-tier block
-   comment already named "the active Discover toggle" as one of the
-   things meant to share the nav bar/search bar/toasts' exact language;
-   this was the one spot that never actually got it, just inheriting a
-   flat --surface-2 fill with no blur at all. position: relative so the
-   indicator's own absolute positioning is scoped to this container
-   specifically. */
-.segmented-toggle-sliding {
-    position: relative;
-}
-
-/* Icon + label layout, scoped to just these two toggles (not the base
-   .segmented-btn every other toggle in the app - theme, poster/backdrop
-   - also uses, none of which have icons or need this). Grounded in what
-   this control actually switches between: two visually distinct content
-   types, not an arbitrary pair of settings - a screen glyph and a
-   film-strip glyph let you recognize which side you're on at a glance,
-   the way the source data itself (a poster grid full of show stills vs
-   movie stills) already reads, rather than needing to read the word.
-   44px height (was 40px, inherited from the base .segmented-btn) - a
-   real touch-target bump now that there's an icon+label pair to fit
-   comfortably, not just a label. */
-.segmented-toggle-sliding .segmented-btn {
-    position: relative;
-    z-index: 1;
-    background: none;
-    box-shadow: none;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-
-.segmented-toggle-sliding .segmented-btn-icon {
-    width: 15px;
-    height: 15px;
-    flex-shrink: 0;
-}
-
-/* Was its own background fill (var(--glass-sheen), var(--accent-fill))
-   directly on the button - now just a text color change, the same
-   division of labor .nav-button.active/.nav-indicator use: the pill
-   behind provides the fill, the button itself only needs to change how
-   its own label reads on top of it. */
-.segmented-toggle-sliding .segmented-btn.active {
-    color: white;
-}
-
-.segmented-indicator {
-    position: absolute;
-    top: 5px;
-    left: 5px;
-    height: calc(100% - 10px);
-    width: 0;
-    border-radius: 999px;
-    background: var(--glass-sheen), var(--accent-fill);
-    /* No full-perimeter inset ring (a uniform "inset 0 0 0 1px" reads as
-       a border regardless of what it's built from) - just the elevation
-       shadow plus a soft top highlight, the same "floating, not
-       outlined" language .nav-indicator uses. */
-    box-shadow: 0 8px 18px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-    z-index: 0;
 }
 
 .segmented-toggle.three-way {
@@ -1686,53 +1229,9 @@ img {
 .segmented-btn.active {
     /* Sheen layered over the color fill so the active pill reads as
        tinted glass rather than a flat colored chip. */
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
-    box-shadow: 0 8px 18px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
-}
-
-/* Short, page-level disclaimer for the Upcoming tab specifically - the
-   one place in the app whose entire purpose is showing WHEN something
-   releases, so it's the one place worth being upfront that those dates
-   are TMDB's, not NovaWatch's own. Deliberately not repeated on every
-   individual show/episode's own countdown - one clear note here covers
-   the whole tab without turning every card into a disclaimer.
-   A real quiet chip now (same --surface-2/border/radius recipe as
-   .category-count) rather than bare centered text - sitting right under
-   the toggle's own glass pill, plain text read as an unfinished
-   afterthought next to it rather than a deliberate second element.
-   width: fit-content + margin: 0 auto centers it as a hugging chip, not
-   a full-width bar; align-items: flex-start (not center) so the icon
-   sits at the top of the first line rather than vertically splitting
-   the gap if the text wraps to two lines on a narrow phone, which this
-   sentence is long enough to do. border-radius: var(--radius-sm), not
-   a full 999px pill - a true pill only reads cleanly on a single line,
-   and looks like a stretched, oddly-cut rectangle once wrapped text
-   makes it two lines tall; a soft rounded-rect handles either line
-   count gracefully. */
-.data-source-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    width: fit-content;
-    margin: 10px auto 18px;
-    padding: 8px 14px 8px 12px;
-    background: var(--surface-2);
-    border: 1px solid var(--glass-border-subtle);
-    border-radius: var(--radius-sm);
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: var(--text-muted);
-}
-
-.data-source-note svg {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-    /* Optically aligns the icon with the text's cap-height on the first
-       line rather than its own box's top edge. */
-    margin-top: 1px;
-    opacity: 0.75;
+    background: var(--glass-sheen), var(--blue);
+    color: white;
+    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .library-subview {
@@ -1829,12 +1328,12 @@ img {
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     flex-shrink: 0;
     transition: transform 0.15s ease;
 }
@@ -1846,20 +1345,23 @@ img {
 .search-add-btn.added {
     background: var(--surface-2);
     color: var(--success);
-    border: 1px solid rgba(163, 163, 163, 0.3);
+    border: 1px solid rgba(52, 199, 89, 0.3);
     box-shadow: none;
     cursor: default;
 }
 
-/* .spinner and its @keyframes spin used to live here - a plain rotating
-   ring, the predecessor to the skeleton loaders directly below, which
-   replaced it everywhere a loading state needed showing (a
-   content-shaped placeholder gives a much better sense of "what's
-   arriving" than a generic spinner ever did). Confirmed zero actual
-   uses anywhere in the app - not even in a comment - before removing
-   it now; the word "spinner" appearing once elsewhere in prose,
-   describing what a stuck load could look like, was never a reference
-   to this class at all. */
+.spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(0, 0, 0, 0.08);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
 
 /* =========================================================
    SKELETON LOADERS
@@ -1869,40 +1371,16 @@ img {
    page doesn't jump when content arrives, and it's obvious at a glance
    *what kind* of thing is loading rather than just "wait".
 ========================================================= */
-/* A real shimmer again - a warm highlight sweeping across the
-   placeholder via the gradient's own background-position, animated.
-   Removed once, when the app went fully monochrome (a shimmer is a
-   gradient in motion by definition, and there were no gradients left
-   anywhere) - reintroduced now that the brand palette has a real
-   gradient again, which is exactly the kind of premium, "something is
-   actively loading" cue a shimmer communicates better than a flat
-   opacity pulse alone. Kept as a pulse too, layered underneath - the
-   shimmer is what catches the eye, the pulse is what keeps working at
-   a glance even for someone who can't perceive the moving highlight
-   (e.g. reduced-motion preferences further down turn the sweep off but
-   leave the pulse running). */
-@keyframes skeletonPulse {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 1; }
-}
-
 @keyframes skeletonShimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
 }
 
 .skeleton {
-    background: var(--surface-2);
-    background-image: linear-gradient(100deg, transparent 30%, rgba(255, 162, 0, 0.16) 45%, rgba(255, 252, 0, 0.14) 50%, transparent 65%);
-    background-size: 250% 100%;
-    animation: skeletonPulse 1.4s ease-in-out infinite, skeletonShimmer 1.8s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.6) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
     border-radius: var(--radius-sm);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .skeleton {
-        animation: skeletonPulse 1.4s ease-in-out infinite;
-    }
 }
 
 /* Row skeleton - mirrors the .search-card / .episode layout: a thumbnail
@@ -1969,7 +1447,7 @@ img {
     width: 4px;
     height: 14px;
     border-radius: 3px;
-    background: var(--accent-fill);
+    background: var(--blue);
     flex-shrink: 0;
 }
 
@@ -1996,7 +1474,7 @@ img {
     justify-content: flex-start;
     gap: 8px;
     padding: 0 26px;
-    background: var(--glass-sheen), var(--success-fill);
+    background: var(--glass-sheen), var(--green-gradient);
     color: white;
     font-size: 12.5px;
     font-weight: 800;
@@ -2143,7 +1621,7 @@ img {
 
 .continue-check-btn:hover {
     color: var(--success);
-    border-color: rgba(163, 163, 163, 0.35);
+    border-color: rgba(52, 199, 89, 0.35);
 }
 
 /* UPCOMING TAB - reuses .card/.poster/.category-block/.library-grid
@@ -2155,7 +1633,7 @@ img {
     margin-top: 2px;
     font-size: 11px;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--blue);
     letter-spacing: -0.1px;
     white-space: nowrap;
     overflow: hidden;
@@ -2163,7 +1641,7 @@ img {
 }
 
 html[data-theme="dark"] .upcoming-card-caption {
-    color: var(--accent-light);
+    color: var(--blue-light);
 }
 
 /* =========================================================
@@ -2174,8 +1652,11 @@ html[data-theme="dark"] .upcoming-card-caption {
     left: 50%;
     /* 18px on the bottom, matching the 18px the sides get (width:
        calc(100% - 36px)) - genuinely symmetric margins on all three
-       open sides. */
-    bottom: 18px;
+       open sides. On a device with a home indicator, the real
+       safe-area inset folds in on top of that 18px, since that space
+       exists to keep the bar's tap targets clear of the gesture area -
+       resolves to a flat 18px on devices with no inset. */
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
@@ -2192,47 +1673,58 @@ html[data-theme="dark"] .upcoming-card-caption {
     touch-action: none;
     /* Genuinely see-through - low fill opacity so real color/light from
        whatever's underneath shows through, with heavy blur+saturation to
-       stay legible instead of muddy at that opacity. Was two extra
-       gradient layers on top - a soft radial highlight near the top-left
-       (simulating light catching curved glass) and a top-edge glow
-       fading into the fill - now one flat white tint instead, doing the
-       same basic "lighter near the top" job without any gradient
-       involved, just at a lower, blended-in opacity since a flat layer
-       can't fade out the way those two gradients did. Written as
-       linear-gradient() with identical stops rather than a plain
-       rgba() - a plain color is only valid on the LAST layer of a
-       stacked background; on this, a non-final layer, it's invalid and
-       silently drops the whole declaration (confirmed by actually
-       testing it, not assumed - the nav bar rendered with no background
-       at all). Visually still completely flat either way. */
+       stay legible instead of muddy at that opacity. Layered on top: a
+       soft radial highlight near the top-left (light catching curved
+       glass - a flat panel has no such highlight) and a wide, soft top-
+       edge glow that fades down into the fill (a diffuse glint, not a
+       hard line) - both are background layers, not a shadow ring, so
+       nothing here reads as an outline. */
     background:
-        linear-gradient(135deg, rgba(255, 162, 0, 0.10), rgba(255, 252, 0, 0.06)),
+        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.7), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
         var(--glass-sheen),
-        rgba(255, 255, 255, 0.18);
-    backdrop-filter: blur(80px) saturate(320%);
-    -webkit-backdrop-filter: blur(80px) saturate(320%);
+        rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(72px) saturate(300%);
+    -webkit-backdrop-filter: blur(72px) saturate(300%);
     /* No border, and no full-perimeter inset ring in the shadow either
        (a uniform "inset 0 0 0 1px" reads as a border no matter what it's
-       implemented with) - just an elevation shadow, a soft warm glow
-       underneath (the brand color announcing itself even on the app's
-       most persistent, always-on-screen element), and a diffuse
+       implemented with) - just an elevation shadow plus a soft, diffuse
        under-glow for a lensed/domed feel. */
     border-radius: 999px;
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.05),
         0 30px 60px rgba(0, 0, 0, 0.16),
-        0 12px 32px rgba(255, 162, 0, 0.14),
         inset 0 -14px 22px -16px rgba(255, 255, 255, 0.5);
 }
 
-/* Was a subtle animated shimmer sweep across the nav bar (a moving
-   gradient highlight, purely decorative - unlike the skeleton loaders'
-   own shimmer earlier, this one signaled nothing, it was just a shine
-   effect). A shimmer is a gradient in motion by definition, so with no
-   gradients left in the app at all, there's no non-gradient way to
-   keep the same effect - removed outright rather than force a
-   substitute animation that wouldn't actually read as "glass shimmer"
-   anyway. */
+/* Clips the shimmer/highlight layers to the pill shape via its own
+   radius (inherits the bar's 999px) rather than overflow:hidden on the
+   fixed-position parent above - overflow:hidden + backdrop-filter on a
+   position:fixed element is a known WebKit rendering trap that can make
+   the element vanish or stop repainting, especially mid-scroll. */
+.bottom-nav::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+    background-size: 260% 260%;
+    opacity: 0.16;
+    pointer-events: none;
+    z-index: 2;
+    animation: navGlassShimmer 10s ease-in-out infinite;
+}
+
+@keyframes navGlassShimmer {
+    0%, 100% { background-position: 0% 0%; }
+    50% { background-position: 100% 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bottom-nav::before {
+        animation: none;
+    }
+}
 
 /* Single floating "liquid glass" capsule that glides beneath whichever tab
    is active (JS positions it via transform/width), rather than each button
@@ -2248,17 +1740,18 @@ html[data-theme="dark"] .upcoming-card-caption {
        inset, unlike a fixed radius which would look wrong once the outer
        shape stopped being a rounded-rect. */
     border-radius: 999px;
-    /* Warm gradient tint at low opacity - genuinely translucent, not a
-       flat color chip, with the blur/refraction and glow below doing
-       most of the "glass" work. This is the app's own active-selection
-       indicator, so it's exactly the kind of "selected/active element"
-       the brand's orange/yellow glow treatment is meant for. */
-    background: linear-gradient(135deg, rgba(255, 162, 0, 0.22), rgba(255, 252, 0, 0.14));
+    /* Fully transparent fill - no white tint at all, just the blur/
+       refraction below and the shadow for definition. A hair of alpha
+       (not literal 0) because some WebKit versions silently disable
+       backdrop-filter entirely on a truly zero-alpha background - this
+       keeps the glass distortion reliably active while still reading as
+       fully see-through. */
+    background: rgba(255, 255, 255, 0.04);
     backdrop-filter: blur(20px) saturate(200%);
     -webkit-backdrop-filter: blur(20px) saturate(200%);
     /* No full-perimeter ring here either - a soft top highlight and a
-       warm accent glow underneath, not a hard-edged outline. */
-    box-shadow: 0 4px 16px rgba(255, 162, 0, 0.35), inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -6px 10px -6px rgba(180, 100, 0, 0.15);
+       soft bottom shadow, not a hard-edged outline. */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07), inset 0 1px 2px rgba(255, 255, 255, 0.8), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.06);
     /* Spring/bounce easing (slight overshoot) rather than a plain ease-out
        - reads as a premium, native-feeling snap into place for BOTH a
        normal tap and a drag-release settle, rather than a mechanical
@@ -2274,7 +1767,7 @@ html[data-theme="dark"] .upcoming-card-caption {
    floating slightly above the bar while it's being "held", rather than
    staying visually identical to its normal resting state. */
 .nav-indicator.dragging {
-    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -6px 10px -6px rgba(180, 100, 0, 0.2);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.06);
 }
 
 .nav-button {
@@ -2288,7 +1781,7 @@ html[data-theme="dark"] .upcoming-card-caption {
     background: transparent;
     /* Was --text-muted (a soft gray) - switched to --text so an
        unselected tab reads as a clean black (light mode) / white (dark
-       mode), with --accent still reserved for the active tab below to
+       mode), with --blue still reserved for the active tab below to
        keep that contrast meaningful. */
     color: var(--text);
     font-size: 10.5px;
@@ -2313,16 +1806,16 @@ html[data-theme="dark"] .upcoming-card-caption {
 }
 
 .nav-button.active {
-    color: var(--accent);
+    color: var(--blue);
 }
 
 .nav-button.active .icon {
     stroke-width: 1.9;
     transform: translateY(-1px) scale(1.08);
-    /* A warm orange glow behind the active icon rather than just a
-       color swap - the same "lit from within" quality the rest of the
-       app's primary buttons and the nav indicator itself now share. */
-    filter: drop-shadow(0 3px 8px rgba(255, 140, 0, 0.45));
+    /* Soft colored glow behind the active icon rather than just a color
+       swap - the same "lit from within" quality the rest of the app's
+       primary blue buttons already use. */
+    filter: drop-shadow(0 3px 8px rgba(0, 102, 204, 0.45));
 }
 
 /* =========================================================
@@ -2334,27 +1827,42 @@ html[data-theme="dark"] .upcoming-card-caption {
     z-index: 200;
     display: none;
     align-items: stretch;
-    /* Centers .modal-sheet once it's width-capped below - previously
-       had nothing to do, since the sheet always filled this row's full
-       width regardless of justify-content. */
-    justify-content: center;
     background: rgba(0, 0, 0, 0.26);
     backdrop-filter: blur(26px);
     -webkit-backdrop-filter: blur(26px);
 }
 
-/* A content-sized "compact" modal variant used to exist here (for
-   short-content modals like Episode Details, the avatar grid, the
-   achievements list, rather than forcing a full-screen takeover) - it
-   was fully retired a while back when every modal in the app was
-   converted to the same full-screen treatment for one consistent feel
-   throughout, but the CSS itself was never actually deleted. Confirmed
-   zero elements anywhere reference .modal-compact or
-   .modal-sheet-compact before removing it now - genuinely dead code,
-   not orphaned CSS my usual class-usage check would catch either,
-   since the class names still appeared in comment text describing the
-   (removed) feature, which reads as "used" to a check that just
-   searches for the string anywhere in the file. */
+/* Content-sized variant for modals whose content doesn't need (and
+   shouldn't force) a full-screen takeover - an episode with a short
+   description, a movie with a short description, the avatar grid, the
+   achievements list. Centered card instead of edge-to-edge, height
+   determined by content up to a cap, scrollable within itself if content
+   ever exceeds that cap - same glass-card treatment as .confirm-card
+   rather than the flat full-bleed fill .modal-sheet normally gets. */
+.modal.modal-compact {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.modal-sheet.modal-sheet-compact {
+    width: 100%;
+    max-width: 460px;
+    height: auto;
+    max-height: 85vh;
+    border-radius: var(--radius-2xl);
+    background: var(--glass-sheen), rgba(248, 250, 252, 0.55);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.modal-sheet-compact .modal-backdrop-header {
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+}
+
+html[data-theme="dark"] .modal-sheet-compact {
+    background: var(--glass-sheen), rgba(28, 28, 30, 0.6);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
 
 .modal.open {
     display: flex;
@@ -2380,32 +1888,8 @@ html[data-theme="dark"] .upcoming-card-caption {
 .modal-sheet {
     width: 100%;
     height: 100%;
-    /* Was 100% - .modal itself spans the full raw viewport (position:
-       fixed; inset: 0), with no relationship at all to .app's own
-       responsive width cap (600px on phone, 1024px on tablet - see
-       that media query near the end of this file). On a phone, a raw
-       viewport is almost always narrower than 600px anyway, so this
-       was never visibly a problem there - but on a tablet, or any
-       screen wider than .app's own cap, every full-screen modal
-       (Settings, Details, NovaWrapped, the Full Library "View All"
-       view, every picker) was stretching noticeably wider than the
-       tab content it was opened from, rather than matching it. Same
-       600px here, and the same tablet override further down, so a
-       modal is always sized like the rest of the app around it, not
-       like a separate, wider screen. */
-    max-width: 600px;
+    max-width: 100%;
     max-height: 100%;
-    /* .modal is display:flex, making this a flex item - flex items
-       default to min-height: auto, which means "grow past your own
-       height/max-height if your content is taller than that" rather
-       than actually respecting the constraint above. That default is
-       exactly what was silently defeating overflow-y below: with
-       nothing here overriding it, this element just kept growing to
-       fit everything inside it instead of ever being shorter than its
-       own content, so there was never any real overflow left for
-       overflow-y to actually scroll. This one line is what makes the
-       height/max-height above actually mean something. */
-    min-height: 0;
     margin: 0;
     overflow-y: auto;
     /* Without this, iOS Safari falls back to a much less performant,
@@ -2417,19 +1901,17 @@ html[data-theme="dark"] .upcoming-card-caption {
        details, Achievements, NovaWrapped, the picker modals) scrolls via
        this one shared class, so this single fix covers all of them. */
     -webkit-overflow-scrolling: touch;
-    /* Was a soft top-lit sheen gradient (light "entering" from the top
-       edge) layered over the SAME --bg-mesh every other surface in the
-       app sits on (Home, Discover, etc. via <body>) - now a flat tint
-       instead, still doing the same "reads as part of the same app,
-       not a visually distinct layer" job the original comment
-       described, just without a gradient's fade. Written as a same-
-       color linear-gradient() rather than plain rgba() since this is a
-       non-final layer (--bg-mesh comes after it) - see the .bottom-nav
-       background comment above for why that distinction matters here. */
-    background: linear-gradient(rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.22)), var(--bg-mesh);
+    /* Soft top-lit sheen (light "entering" from the top edge) layered over
+       the SAME --bg-mesh every other surface in the app sits on (Home,
+       Discover, etc. via <body>) - previously this was a flat frosted
+       white/grey fill instead, which is the real reason full-screen
+       sheets like Settings read as a visually distinct "layer" rather
+       than feeling like part of the same app: the glass cards inside
+       them matched, but the surface underneath them didn't. */
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
     background-attachment: fixed;
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    backdrop-filter: blur(70px) saturate(230%);
+    -webkit-backdrop-filter: blur(70px) saturate(230%);
     border-radius: 0;
     border: none;
     position: relative;
@@ -2463,17 +1945,18 @@ html[data-theme="dark"] .upcoming-card-caption {
 .modal-backdrop-overlay {
     position: absolute;
     inset: 0;
-    /* Was a top-to-bottom fade (nearly transparent at top, nearly
-       opaque at bottom, where the title sits) - now one flat, uniform
-       tint across the whole photo instead, dark enough on its own to
-       keep both the title at the bottom and the header buttons at the
-       top legible, not just one end of the image. */
-    background: rgba(250,250,250,0.55);
+    background: linear-gradient(180deg, rgba(248,250,252,0.05) 0%, rgba(248,250,252,0.96) 100%);
 }
 
+/* Full-screen modals (Details, Episode, NovaWrapped, Settings' own
+   entry point elsewhere) sit edge-to-edge, so this floating close/action
+   button needs the real top safe-area inset folded in or it can end up
+   under the Dynamic Island/notch/status bar. Compact modals (below)
+   override this back to the plain value, since those are centered on
+   screen and never actually reach the true top edge. */
 .modal-header-nav {
     position: absolute;
-    top: 14px;
+    top: calc(14px + env(safe-area-inset-top, 0px));
     right: 16px;
     /* Higher than the Wrapped slideshow's own tap zones (z-index: 15)
        and progress bar (z-index: 20) - without this, the invisible
@@ -2485,6 +1968,10 @@ html[data-theme="dark"] .upcoming-card-caption {
     z-index: 25;
     display: flex;
     gap: 10px;
+}
+
+.modal-sheet-compact .modal-header-nav {
+    top: 14px;
 }
 
 .close-button {
@@ -2503,29 +1990,6 @@ html[data-theme="dark"] .upcoming-card-caption {
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* .modal-header-nav's own Close button specifically - always just Close
-   now (Favorite/Add to List/Share/Backdrop/Rename/Delete all moved into
-   labeled rows within each modal's own content - see .modal-action-row)
-   - drops the frosted-glass blur the base .close-button above still has
-   everywhere else (the standalone confirm-dialog close buttons, which
-   sit over a solid card background where blur was never really doing
-   anything meaningful anyway). Over a photo backdrop specifically, that
-   same blur at this button size (24px radius on a 38px circle - a lot
-   of frosting relative to how small the circle actually is) read as a
-   strong haze right where the eye lands first. Solid, more opaque
-   backgrounds take over the legibility job blur was doing instead, so
-   the icon stays clearly readable against any photo without needing to
-   blur what's behind it to do it. */
-.modal-header-nav .close-button {
-    background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-}
-
-html[data-theme="dark"] .modal-header-nav .close-button {
-    background: rgba(30, 30, 30, 0.82);
-}
-
 .close-button:active {
     transform: scale(0.9);
 }
@@ -2539,7 +2003,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     justify-content: center;
     border-radius: 50%;
     background: var(--glass-sheen), var(--surface);
-    color: var(--accent);
+    color: var(--blue);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
@@ -2559,11 +2023,11 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     height: 38px;
     padding: 0 18px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
     font-size: 13.5px;
     font-weight: 700;
-    box-shadow: 0 8px 18px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 18px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
     transition: transform 0.15s ease;
 }
 
@@ -2578,27 +2042,6 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 
 .modal-content {
     padding: 22px;
-}
-
-/* Applied specifically to modals prone to genuinely short/variable
-   content (Add to List, Reorder Lists, the various pickers) - display:
-   flex with min-height: 100% and justify-content: center means short
-   content centers vertically within the modal instead of staying
-   pinned to the top with a large, empty, unexplained void filling the
-   rest of the screen below it, which read as broken rather than like a
-   deliberately full-screen surface. Deliberately a separate modifier
-   rather than added to .modal-content itself - that base class is
-   shared by content-heavy modals too (Details, Settings, NovaWrapped),
-   where flexbox has no reason to touch anything given their content
-   already exceeds the viewport either way, but changing shared,
-   foundational CSS for every modal at once to fix a problem that only
-   actually exists in a handful of them is more risk than the fix is
-   worth. */
-.modal-content-centered {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 100%;
 }
 
 /* Extra top clearance for a compact modal's content, when it goes
@@ -2629,9 +2072,10 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     background: rgba(0, 0, 0, 0.32);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    /* Centered card, so this padding is mostly defensive on a very short
-       viewport, keeping the card clear of the screen edges. */
-    padding: 24px;
+    /* Centered card, so this is mostly defensive the same way #authScreen's
+       is - the backdrop itself (inset: 0 above) is already full-bleed
+       regardless. */
+    padding: calc(24px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
 }
 
 .confirm-overlay.open {
@@ -2643,9 +2087,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     max-width: 340px;
     padding: 28px 24px 24px;
     text-align: center;
-    background: var(--glass-sheen), rgba(250, 250, 250, 0.6);
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    background: var(--glass-sheen), rgba(248, 250, 252, 0.6);
+    backdrop-filter: blur(66px) saturate(270%);
+    -webkit-backdrop-filter: blur(66px) saturate(270%);
     border-radius: var(--radius-2xl);
     box-shadow: 0 30px 70px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     transform: scale(0.92);
@@ -2664,21 +2108,21 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     height: 52px;
     margin: 0 auto 14px;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--danger-fill);
+    background: var(--glass-sheen), var(--red-gradient);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8px 20px rgba(220, 38, 30, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 20px rgba(255, 59, 48, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .rewatch-icon-badge {
-    background: var(--glass-sheen), var(--accent-fill);
-    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    background: var(--glass-sheen), var(--blue-gradient);
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .appearance-icon-tile {
-    background: #333335;
+    background: linear-gradient(135deg, #48484a, #1c1c1e);
 }
 
 .confirm-title {
@@ -2723,9 +2167,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .confirm-btn.danger {
-    background: var(--glass-sheen), var(--danger-fill);
+    background: var(--glass-sheen), var(--red-gradient);
     color: white;
-    box-shadow: 0 6px 16px rgba(220, 38, 30, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .confirm-btn.danger:active {
@@ -2737,9 +2181,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    .cancel/.danger modifier pattern above instead of being the one
    confirm-btn variant that wasn't a real class. */
 .confirm-btn.primary {
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .confirm-btn.primary:active {
@@ -2760,102 +2204,6 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     font-size: 12px;
     margin: 10px 0 16px;
     align-items: center;
-}
-
-/* A labeled row of secondary actions (Favorite/Add to List/Share on
-   Details, Backdrop/Share/Rename/Delete on List Detail, and so on) -
-   lives in the modal's normal content flow now, not floating over a
-   photo as icon-only circles. That floating pattern reads reliably as
-   "tappable icon" on iOS specifically, where it's a familiar system
-   convention, but this app runs everywhere - Android, desktop browsers,
-   anything else a PWA installs on - and a bare icon with no label
-   doesn't carry the same built-in meaning across all of those. A label
-   next to the icon removes the ambiguity entirely, at zero cost to
-   anyone who already recognized the icon anyway. flex-wrap means this
-   holds up correctly at any viewport width without needing horizontal
-   scroll or JS-measured layout - four labeled chips wrap to a second
-   line on a narrow phone exactly as gracefully as they'd sit on one
-   line on a wider screen. */
-.modal-action-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 4px 0 16px;
-}
-
-/* Details modal's own action row specifically (Favorite/Add to List/
-   Share, exactly 3 items) - matches the equal-width 3-column grid
-   directly below it (Watch/Trailer/Remove, .modal-actions-row) exactly,
-   rather than the flex-wrap default every other modal's action row
-   still uses (Episode's single Share chip, List Detail's four) - those
-   don't map cleanly onto a fixed 3-column grid the way exactly 3 items
-   does, so they keep sizing to their own content instead. */
-.modal-action-row-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-}
-
-.modal-action-row-grid .modal-action-chip {
-    justify-content: center;
-    min-height: 46px;
-    height: auto;
-    overflow: hidden;
-}
-
-.modal-action-row-grid .modal-action-chip span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.modal-action-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    /* 40px tall regardless of content - meets the ~40-44px minimum
-       touch-target guidance shared across iOS, Android, and general
-       web accessibility recommendations, rather than shrinking to fit
-       whatever the icon+label happen to need. */
-    height: 40px;
-    padding: 0 14px;
-    border-radius: 999px;
-    background: var(--surface-2);
-    border: 1px solid var(--glass-border-subtle);
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    white-space: nowrap;
-    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.modal-action-chip:active {
-    transform: scale(0.96);
-}
-
-.modal-action-chip .icon-small {
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
-}
-
-/* #modalFavoriteBtn specifically - a filled heart once favorited, using
-   the real --danger red now (was a dark, heavy gray during the
-   monochrome era - no color to call "red" back then, just weight).
-   Border is a translucent step of the same red rather than the old
-   hardcoded gray literal, so the two actually match now instead of a
-   colorful icon sitting inside a leftover gray ring. */
-.modal-action-chip.favorited {
-    color: var(--danger);
-    border-color: rgba(212, 46, 36, 0.35);
-}
-
-/* #listDetailDeleteBtn specifically - a destructive action gets a
-   visually distinct treatment from the other, non-destructive chips in
-   the same row, rather than looking identical to Rename/Share/Backdrop
-   right up until the confirmation dialog appears. */
-.modal-action-chip.danger {
-    color: var(--danger);
-    border-color: rgba(220, 38, 30, 0.3);
-    background: rgba(220, 38, 30, 0.08);
 }
 
 /* Holds whichever of the two secondary info lines actually applies
@@ -2879,7 +2227,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    color: var(--accent);
+    color: var(--blue);
 }
 
 /* The content-rating badge (PG-13, TV-MA, etc.) inside .modal-meta -
@@ -2966,7 +2314,6 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     font-weight: 800;
     color: var(--text-secondary);
     backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
 }
 
 .watch-provider-name {
@@ -2981,17 +2328,17 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .cinema-chip .watch-provider-logo.cinema-icon {
-    background: var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--blue);
+    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     border: none;
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3);
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3);
 }
 
 .cinema-chip .watch-provider-name {
-    color: var(--accent);
+    color: var(--blue);
     font-weight: 750;
     white-space: normal;
 }
@@ -3061,35 +2408,34 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .action-button.primary {
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
     border: none;
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
-/* Same filled-glass treatment as the primary action button, at the
-   flat (non-gradient) accent tone instead - Sign In, Join, and Sign
-   Out all share this exact same look, deliberately a step quieter
-   than the full gradient treatment primary actions get. */
+/* Same filled-glass treatment as the other action buttons (sheen +
+   flat blue + white text + inset highlight). Sign In, Join, and Sign Out
+   all share this exact same look - see --flat-blue. */
 .action-button.trailer {
-    background: var(--glass-sheen), var(--accent-fill-flat);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--flat-blue);
+    color: white;
     border: none;
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.warning {
-    background: var(--glass-sheen), var(--warning-fill);
+    background: var(--glass-sheen), var(--orange-gradient);
     color: white;
     border: none;
-    box-shadow: 0 6px 16px rgba(114, 114, 114, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(255, 149, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.danger {
-    background: var(--glass-sheen), var(--danger-fill);
+    background: var(--glass-sheen), var(--red-gradient);
     color: white;
     border: none;
-    box-shadow: 0 6px 16px rgba(220, 38, 30, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .season-selector-wrapper {
@@ -3195,9 +2541,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
        disappears rather than being left to show through, and no outer
        shadow at all - just a subtle inset top highlight for a touch of
        glass dimension, nothing that reads as a glow or a ring. */
-    background: var(--glass-sheen), var(--accent-fill);
-    border-color: var(--accent);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--blue);
+    border-color: var(--blue);
+    color: white;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
@@ -3219,7 +2565,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .episode-up-next {
-    background: rgba(255, 140, 0, 0.06);
+    background: rgba(0, 102, 204, 0.06);
 }
 
 /* A not-yet-released episode - dimmed so it visually reads as "not here
@@ -3285,10 +2631,10 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 }
 
 .rewatch-count-tap {
-    color: var(--accent-light);
+    color: var(--blue-light);
     font-weight: 700;
     text-decoration: underline;
-    text-decoration-color: rgba(255, 140, 0, 0.4);
+    text-decoration-color: rgba(71, 146, 255, 0.4);
     text-underline-offset: 2px;
     transition: opacity 0.15s ease;
 }
@@ -3304,18 +2650,17 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     padding: 24px 24px 26px;
     /* Lower fill opacity (was 0.92/0.8) - genuinely translucent now,
        matching the rest of the app's shift toward the nav bar's glass
-       language, rather than reading as a near-opaque tinted panel. A
-       real warm gradient wash now, not flat neutral gray-white - this
-       card's own border/shadow had already picked up the brand orange
-       (see below) while the fill itself was left behind during the
-       monochrome era, an inconsistency worth fixing given this is the
-       single most prominent surface on the whole Home tab. */
-    background: linear-gradient(160deg, rgba(255, 162, 0, 0.14), rgba(255, 252, 0, 0.06) 55%, rgba(244, 244, 244, 0.5));
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
-    border: 1px solid rgba(255, 140, 0, 0.14);
+       language, rather than reading as a near-opaque tinted panel. Still
+       keeps its own blue tint (this card's one deliberate departure from
+       the neutral --surface everything else uses) since that's an
+       identity choice, not part of the transparency system being
+       unified here. */
+    background: linear-gradient(150deg, rgba(255,255,255,0.55) 0%, rgba(224,238,255,0.42) 100%);
+    backdrop-filter: blur(64px) saturate(260%);
+    -webkit-backdrop-filter: blur(64px) saturate(260%);
+    border: 1px solid rgba(0, 102, 204, 0.14);
     border-radius: var(--radius-2xl);
-    box-shadow: 0 20px 48px rgba(255, 140, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    box-shadow: 0 20px 48px rgba(0, 102, 204, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .hero-top {
@@ -3349,14 +2694,14 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     width: 15px;
     height: 15px;
     border-radius: 50%;
-    background: var(--success-fill);
+    background: var(--green-gradient);
     /* Same page-background "cutout" ring as .avatar-edit-badge right
        above (was a fixed near-white #fdfdfe before - didn't match that
        sibling badge's own ring color, and stayed that same near-white in
        dark mode too instead of switching to match the dark page
        background the way the edit badge's ring correctly does). */
-    border: 2.5px solid #ececec;
-    box-shadow: 0 2px 6px rgba(163, 163, 163, 0.55);
+    border: 2.5px solid #e8edf4;
+    box-shadow: 0 2px 6px rgba(52, 199, 89, 0.55);
     display: none;
 }
 
@@ -3377,9 +2722,9 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
-    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -3565,12 +2910,12 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     min-width: 112px;
     padding: 0 18px;
     border-radius: 999px;
-    background: var(--glass-sheen), var(--accent-fill);
-    color: var(--on-accent-text);
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: white;
     font-size: 13px;
     font-weight: 700;
     text-align: center;
-    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(0, 102, 204, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     /* Was missing entirely - :active below changes transform with
        nothing to animate it, so the press feedback snapped instead of
        the same smooth scale-down every other pressable pill in the app
@@ -3586,22 +2931,21 @@ html[data-theme="dark"] .modal-header-nav .close-button {
    status is reported as active/enabled (green), off/blocked (red), or
    simply unavailable rather than chosen (neutral) - Library Display's
    category toggles and the notification-permission button both share
-   these rather than each hand-rolling its own weight. Same sheen+
-   gradient layering and glow shadow recipe as the default pill (see
-   .hero-pill-btn above), each one's glow now actually matching its own
-   fill color instead of a shared neutral gray - dropping the sheen
+   these rather than each hand-rolling its own colors. Same sheen+
+   gradient layering and glow shadow recipe as the default blue pill
+   (see .hero-pill-btn above), just recolored - dropping the sheen
    layer here would make these look like a flat color chip sitting next
    to every other genuinely-glass control in the app. */
 .hero-pill-btn.pill-on {
     min-width: 72px;
-    background: var(--glass-sheen), var(--success-fill);
-    box-shadow: 0 8px 20px rgba(33, 181, 115, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    background: var(--glass-sheen), var(--green-gradient);
+    box-shadow: 0 8px 20px rgba(52, 199, 89, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .hero-pill-btn.pill-off {
     min-width: 72px;
-    background: var(--glass-sheen), var(--danger-fill);
-    box-shadow: 0 8px 20px rgba(220, 38, 30, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    background: var(--glass-sheen), var(--red-gradient);
+    box-shadow: 0 8px 20px rgba(255, 59, 48, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .hero-pill-btn.pill-neutral {
@@ -3653,7 +2997,7 @@ html[data-theme="dark"] .modal-header-nav .close-button {
 .region-option-check {
     width: 20px;
     height: 20px;
-    color: var(--accent-fill-flat);
+    color: var(--flat-blue);
     flex-shrink: 0;
     visibility: hidden;
 }
@@ -3711,28 +3055,30 @@ html[data-theme="dark"] .modal-header-nav .close-button {
     width: 22px;
     height: 22px;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--accent-fill);
+    background: var(--glass-sheen), var(--blue-gradient);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--on-accent-text);
-    border: 2px solid #ececec;
-    box-shadow: 0 3px 8px rgba(255, 140, 0, 0.3);
+    color: white;
+    border: 2px solid #e8edf4;
+    box-shadow: 0 3px 8px rgba(0, 102, 204, 0.3);
 }
 
 html[data-theme="dark"] .avatar-edit-badge {
-    border-color: #060606;
+    border-color: #0a0d14;
 }
 
 html[data-theme="dark"] .avatar-status-dot {
-    border-color: #060606;
+    border-color: #0a0d14;
 }
 
-/* Dark-mode counterpart for .large-avatar's own background below - a
-   plain gray fill, same tone family as light mode but stepped since
-   dark mode's own accent runs lighter. */
+/* Dark-mode counterpart for .large-avatar's fill - was previously a
+   3-stop gradient with its own dark-mode-adjusted lightest stop; both
+   are solid --blue now (see that rule's comment), so this override
+   just lets it shift with --blue between light and dark same as
+   everywhere else that token is used. */
 html[data-theme="dark"] .large-avatar {
-    background: #a8a8a8;
+    background: var(--blue);
 }
 
 .avatar-edit-badge .icon-small {
@@ -3774,7 +3120,7 @@ html[data-theme="dark"] .large-avatar {
     position: absolute;
     inset: -3px;
     border-radius: calc(var(--radius-lg) + 3px);
-    border: 3px solid var(--accent);
+    border: 3px solid var(--blue);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -3791,12 +3137,10 @@ html[data-theme="dark"] .large-avatar {
     justify-content: center;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    /* Was a 3-stop gradient (light catching the top, falling off toward
-       the bottom, for some sense of depth on the initials fallback) -
-       now a plain flat fill instead. Only actually visible for the
-       initials fallback now - real avatar images cover it entirely
+    /* Solid fill now (was a 3-stop gradient) - only actually visible for
+       the initials fallback, since real avatar images cover it entirely
        (overflow: hidden clips to the rounded corners either way). */
-    background: #8f8f8f;
+    background: var(--blue);
     color: white;
     font-size: 23px;
     font-weight: 800;
@@ -3815,7 +3159,7 @@ html[data-theme="dark"] .large-avatar {
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--accent);
+    color: var(--blue);
 }
 
 .home-name {
@@ -3836,7 +3180,7 @@ html[data-theme="dark"] .large-avatar {
     height: 42px;
     border-radius: var(--radius-sm);
     background: #ffffff;
-    color: #000000;
+    color: #1f1f1f;
     font-size: 14px;
     font-weight: 700;
     display: flex;
@@ -3878,7 +3222,7 @@ html[data-theme="dark"] .large-avatar {
     width: 17px;
     height: 17px;
     margin-top: 1px;
-    accent-color: var(--accent);
+    accent-color: var(--blue);
 }
 
 .auth-terms-row label {
@@ -3888,7 +3232,7 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-terms-row a {
-    color: var(--accent);
+    color: var(--blue);
     font-weight: 700;
     text-decoration: none;
 }
@@ -3936,7 +3280,6 @@ html[data-theme="dark"] .large-avatar {
     outline: none;
     background: var(--surface-2);
     backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     color: var(--text);
@@ -3945,9 +3288,9 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-input:focus {
-    border-color: var(--accent);
+    border-color: var(--blue);
     background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
 }
 
 .auth-actions {
@@ -3962,9 +3305,9 @@ html[data-theme="dark"] .large-avatar {
     border-radius: var(--radius-sm);
     font-size: 13px;
     font-weight: 700;
-    background: var(--glass-sheen), var(--accent-fill-flat);
-    color: var(--on-accent-text);
-    box-shadow: 0 6px 16px rgba(255, 140, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    background: var(--glass-sheen), var(--flat-blue);
+    color: white;
+    box-shadow: 0 6px 16px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s ease;
 }
 
@@ -3983,7 +3326,7 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-forgot-link {
     background: transparent;
-    color: var(--accent);
+    color: var(--blue);
     font-size: 12px;
     font-weight: 600;
     text-decoration: none;
@@ -4019,10 +3362,11 @@ html[data-theme="dark"] .large-avatar {
     display: none; /* Hidden by default, controlled via JS */
     align-items: center;
     justify-content: center;
-    /* Content is centered, not top/bottom-anchored, so this padding is
-       mostly defensive on a very short viewport, keeping the card
-       clear of the screen edges. */
-    padding: 20px;
+    /* Content is centered, not top/bottom-anchored, so this is mostly
+       defensive (a very short viewport could still push the card close
+       to an edge) - the background itself (inset: 0 above) is already
+       correctly full-bleed regardless of this padding. */
+    padding: calc(20px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
 }
 
 /* Blur backdrop overlay */
@@ -4039,18 +3383,18 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-overlay-card {
     width: 100%;
-    max-width: 420px;
+    max-width: 400px;
     max-height: 100%;
     overflow-y: auto;
     /* Same reasoning as .modal-sheet above. */
     -webkit-overflow-scrolling: touch;
     background: var(--surface);
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
+    backdrop-filter: blur(66px) saturate(270%);
+    -webkit-backdrop-filter: blur(66px) saturate(270%);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
-    padding: 36px 26px 28px;
-    box-shadow: 0 24px 48px rgba(120, 70, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    padding: 18px 22px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
     text-align: center;
     display: flex;
     flex-direction: column;
@@ -4063,36 +3407,25 @@ html[data-theme="dark"] .large-avatar {
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Was 38px - the whole point of this pass was making the sign-in screen
-   read as a deliberate, considered full page rather than a small,
-   compact card, and a barely-there logo was a large part of why it
-   didn't. Now carries a real brand glow too - the one place in the app
-   where the actual logo mark appears at real size, so it's the natural
-   moment to let the orange/yellow identity announce itself directly
-   rather than only through surfaces and accents around it. */
 .auth-logo {
-    width: 88px;
-    height: 88px;
-    margin: 0 auto 16px;
-    border-radius: 26%;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18), var(--glow-accent);
+    width: 38px;
+    height: 38px;
+    margin: 0 auto 2px;
     object-fit: contain;
 }
 
-/* Was 18px. */
 .auth-title {
-    font-size: 27px;
+    font-size: 18px;
     font-weight: 800;
     color: var(--text);
-    letter-spacing: -0.6px;
-    margin-bottom: 6px;
+    letter-spacing: -0.5px;
 }
 
 .auth-subtitle {
-    font-size: 14px;
+    font-size: 12.5px;
     color: var(--text-secondary);
-    margin-bottom: 22px;
-    line-height: 1.4;
+    margin-bottom: 2px;
+    line-height: 1.3;
 }
   
 /* Offline banner - a slim, non-dismissible bar pinned to the very top of
@@ -4118,18 +3451,19 @@ html[data-theme="dark"] .large-avatar {
     justify-content: center;
     gap: 7px;
     padding: 9px 16px;
-    /* var(--warning-fill), not a hand-copied duplicate of it - the
+    padding-top: calc(9px + env(safe-area-inset-top, 0px));
+    /* var(--orange-gradient), not a hand-copied duplicate of it - the
        duplicate had drifted to a slightly different shade of orange
        (#ffb340 vs the token's #ffb15c) and, being hardcoded, never
        switched to the correct darker orange in dark mode the way every
        other orange-gradient surface in the app does. */
-    background: var(--warning-fill);
+    background: var(--orange-gradient);
     color: white;
     font-size: 12.5px;
     font-weight: 700;
     letter-spacing: -0.1px;
     text-align: center;
-    box-shadow: 0 4px 14px rgba(114, 114, 114, 0.35);
+    box-shadow: 0 4px 14px rgba(255, 149, 0, 0.35);
 }
 
 .offline-banner.show {
@@ -4142,11 +3476,11 @@ html[data-theme="dark"] .large-avatar {
 .error-toast {
     position: fixed;
     left: 50%;
-    /* Nav bar's own top edge sits at 88px from the true bottom (18px
-       offset + 70px height - see .bottom-nav) - this clears it with a
-       deliberate ~12px of its own breathing room rather than sitting
-       flush against it. */
-    bottom: 100px;
+    /* Nav bar's own top edge sits at 88px + safe-area from the true
+       bottom (18px offset + 70px height - see .bottom-nav) - this
+       clears it with a deliberate ~12px of its own breathing room
+       rather than sitting flush against it. */
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%) translateY(14px) scale(0.94);
     z-index: 500;
     opacity: 0;
@@ -4190,9 +3524,9 @@ html[data-theme="dark"] .large-avatar {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--danger-fill);
+    background: var(--red-gradient);
     color: white;
-    box-shadow: 0 3px 8px rgba(220, 38, 30, 0.4);
+    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
 }
 
 .error-toast-icon .icon {
@@ -4265,7 +3599,7 @@ html[data-theme="dark"] .large-avatar {
        above - this had no dark-mode override at all, so it stayed the
        light-mode red in dark mode. */
     border: 1px solid var(--danger) !important;
-    box-shadow: 0 0 0 2px rgba(220, 38, 30, 0.12);
+    box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.12);
 }
 /* =========================================================
    DARK MODE
@@ -4289,33 +3623,27 @@ html[data-theme="dark"] .large-avatar {
 /* Targeted fixes for components with a hardcoded light-mode fill layered
    alongside the tokens above (see comment block header). */
 html[data-theme="dark"] .modal-sheet {
-    /* Same flattening as the light-mode .modal-sheet rule - see that
-       comment for the non-final-layer reasoning behind the same-color
-       linear-gradient(). */
-    background: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.03)), var(--bg-mesh);
+    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
     background-attachment: fixed;
 }
 
 html[data-theme="dark"] .modal-backdrop-overlay {
-    /* Same flattening as the light-mode rule above. */
-    background: rgba(8, 8, 10, 0.6);
+    background: linear-gradient(180deg, rgba(18, 18, 20, 0.05) 0%, rgba(18, 18, 20, 0.96) 100%);
 }
 
 html[data-theme="dark"] .confirm-card {
-    background: var(--glass-sheen), rgba(14, 14, 16, 0.62);
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    background: var(--glass-sheen), rgba(28, 28, 30, 0.58);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
 html[data-theme="dark"] .rewatch-icon-badge {
-    box-shadow: 0 8px 20px rgba(255, 140, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 20px rgba(10, 132, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 html[data-theme="dark"] .hero-card {
-    /* Same warm gradient wash as the light-mode rule, tuned for a dark
-       base instead of flat neutral near-black. */
-    background: linear-gradient(160deg, rgba(255, 162, 0, 0.1), rgba(255, 252, 0, 0.04) 55%, rgba(15, 15, 15, 0.5));
-    border-color: rgba(255, 140, 0, 0.18);
-    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    background: linear-gradient(150deg, rgba(40, 44, 56, 0.5) 0%, rgba(20, 30, 48, 0.42) 100%);
+    border-color: rgba(10, 132, 255, 0.18);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
 html[data-theme="dark"] .search-type-btn.active {
@@ -4323,11 +3651,11 @@ html[data-theme="dark"] .search-type-btn.active {
 }
 
 html[data-theme="dark"] #authScreen .search-type-btn.active {
-    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 html[data-theme="dark"] .appearance-icon-tile {
-    background: #b3b3b3;
+    background: linear-gradient(135deg, #d1d1d6, #8e8e93);
 }
 
 html[data-theme="dark"] .appearance-icon-tile .appearance-icon {
@@ -4335,8 +3663,8 @@ html[data-theme="dark"] .appearance-icon-tile .appearance-icon {
 }
 
 html[data-theme="dark"] .auth-overlay-card {
-    background: rgba(14, 14, 16, 0.55);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: rgba(28, 28, 30, 0.5);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme="dark"] .continue-card {
@@ -4352,19 +3680,16 @@ html[data-theme="dark"] .stat {
    .search-box:focus-within comment for why. */
 
 html[data-theme="dark"] .bottom-nav {
-    /* Same flattening as the light-mode .bottom-nav rule above - was a
-       radial highlight + top-edge glow gradient pair, now one flat
-       white tint (written as a same-color linear-gradient() for the
-       same non-final-layer reason explained there). */
     background:
-        linear-gradient(rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.06)),
+        radial-gradient(150px 80px at 18% -10%, rgba(255, 255, 255, 0.14), transparent 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
         var(--glass-sheen),
-        rgba(19, 19, 19, 0.38);
+        rgba(40, 40, 46, 0.32);
     backdrop-filter: blur(72px) saturate(230%);
     -webkit-backdrop-filter: blur(72px) saturate(230%);
     box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.5),
-        0 30px 66px rgba(0, 0, 0, 0.8),
+        0 2px 8px rgba(0, 0, 0, 0.45),
+        0 30px 66px rgba(0, 0, 0, 0.72),
         inset 0 -14px 22px -16px rgba(255, 255, 255, 0.09);
 }
 
@@ -4377,11 +3702,9 @@ html[data-theme="dark"] .nav-indicator.dragging {
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.3), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.15);
 }
 
-/* Was a dark-mode-specific shimmer highlight override - now genuinely
-   unnecessary rather than just redundant: .skeleton's own base rule
-   already resolves through var(--surface-2), which is already
-   theme-aware on its own, so there's nothing left for a separate
-   dark-mode copy to actually override. */
+html[data-theme="dark"] .skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.1) 50%, var(--surface-2) 75%);
+}
 
 html[data-theme="dark"] .state-card {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
@@ -4408,26 +3731,11 @@ html[data-theme="dark"] .state-card {
    buttons read as sparse.
 
    The existing PWA install setup (manifest.json, the apple-mobile-web-
-   app-* meta tags) already works identically on iPadOS's own "Add to
-   Home Screen" - nothing further was needed there specifically for
-   tablets to install and launch standalone the same way they do on
-   iPhone.
+   app-* meta tags, viewport-fit=cover) already works identically on
+   iPadOS's own "Add to Home Screen" - nothing further was needed there
+   specifically for tablets to install and launch standalone the same
+   way they do on iPhone.
 ========================================================= */
-/* A viewport between roughly 600-768px (a foldable phone unfolded, a
-   small tablet in portrait, or just a desktop browser window resized
-   to something in between) fell into a real gap before this - .app's
-   own base max-width (600px) had already capped out, but the tablet
-   breakpoint just below hadn't started yet, leaving visible empty
-   space down both sides that neither rule was actually addressing. A
-   modest bump to 680px, not all the way to the tablet cap - this
-   range is still much closer to a wide phone than an actual tablet,
-   so it shouldn't suddenly jump to a tablet-scale layout. */
-@media (min-width: 600px) and (max-width: 767px) {
-    .app {
-        max-width: 680px;
-    }
-}
-
 @media (min-width: 768px) {
     .app {
         /* Was 900px - iPad Air/Mini portrait widths (~820px/~744px) sit
@@ -4447,35 +3755,6 @@ html[data-theme="dark"] .state-card {
         max-width: 620px;
     }
 
-    /* Was unbounded beyond this point - .list-card matches the width of
-       whatever row it scrolls in exactly (see its own comment), which
-       on mobile keeps it a reasonable, compact size, but at tablet+
-       widths (.app's own cap just widened to 1024px above) that same
-       logic let a single card balloon to nearly 500px tall to hold its
-       2:1 aspect ratio, filling the entire visible row by itself with
-       nothing else in view to even hint that it scrolls. Capped at a
-       size that still reads as a deliberately large "hero" card, not
-       a compact one, while leaving enough of the next card peeking in
-       from the edge to make the row's own horizontal scrolling
-       obvious. Below this breakpoint, nothing changes - the original
-       full-width sizing still applies exactly as before. */
-    .list-card {
-        flex-basis: 640px;
-        max-width: 640px;
-    }
-
-    /* Matches .app's own tablet cap just above - a full-screen modal
-       (Settings, Details, NovaWrapped, Full Library's "View All",
-       every picker) should always be sized like the tab content it
-       was opened from, not wider than it just because .modal itself
-       spans the true, uncapped viewport. Every modal in the app is
-       full-screen now (the old smaller "compact" variant was retired),
-       so this applies uniformly rather than needing to account for a
-       separate, smaller max-width winning out on some of them. */
-    .modal-sheet {
-        max-width: 1024px;
-    }
-
     /* The two real poster grids (Library/Upcoming's category blocks,
        and the custom-poster picker) - not every 3-column grid in the
        app. .stats (Home's stat tiles), the segmented/three-way toggles,
@@ -4485,54 +3764,10 @@ html[data-theme="dark"] .state-card {
        stretch buttons and tiles unnecessarily rather than showing more
        content. .skeleton-grid is included purely so the loading
        placeholder matches .poster-picker-grid's real column count
-       instead of misaligning for a moment while it loads. Library
-       home's own two 9-item preview grids are excluded from this
-       specifically - they're always exactly 9 items (never more,
-       never fewer, capped in pickLibraryPreviewShows/Movies), and 9
-       only divides evenly into rows at 3 columns. At 4 columns it
-       would be 2 full rows plus a sparse single-item row, looking
-       visibly unfinished next to the View All modal's own category
-       grids right next to them, which aren't capped to a fixed count
-       and so don't have this problem - they stay 3 columns here so
-       the "9 items, clean 3x3" look holds at every width, matching
-       what the modal's own grids already looked like. */
-    .library-grid:not(#tvLibraryPreviewGrid):not(#movieLibraryPreviewGrid),
+       instead of misaligning for a moment while it loads. */
+    .library-grid,
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-}
-
-/* =========================================================
-   DESKTOP MOUSE HOVER STATES
-   Mobile-first doesn't mean mobile-only - this same PWA runs in
-   desktop browsers too, where a mouse is the primary pointer rather
-   than a finger, and hovering (not just clicking) is how people expect
-   to get feedback that something is interactive before committing to
-   the click. (hover: hover) and (pointer: fine) together are what
-   scope this to devices that can genuinely, precisely hover - not just
-   (hover: hover) alone, which some touch devices report inconsistently
-   - so none of this risks the classic mobile-web bug where a :hover
-   style gets "stuck" on an element after a tap, since a touch device
-   never matches this query in the first place. Each card's hover lift
-   mirrors its own existing :active press-down (scale 0.96/0.97/0.98)
-   with a proportionally-sized lift the other direction, rather than
-   one flat value slapped on every card type regardless of how
-   pronounced its own press feedback already is. */
-@media (hover: hover) and (pointer: fine) {
-    .card:hover,
-    .continue-card:hover {
-        transform: scale(1.03);
-        transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-    }
-
-    .list-card:hover {
-        transform: scale(1.02);
-        transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-    }
-
-    .search-card:hover {
-        background: var(--surface-2);
-        transition: background 0.15s ease;
     }
 }
