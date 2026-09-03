@@ -73,6 +73,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Achievements and Library Display are full-screen, matching every other settings screen, rather than a centered popup card.
 - Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
 - Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
+- Fixed a real bug where tapping a search box and then switching tabs without typing anything could leave a large empty scrollable gap under a page's content, on any device - worse on whichever tab had the least content.
 
 ## Platform
 
