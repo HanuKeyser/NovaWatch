@@ -7,26 +7,22 @@
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "display_override": [
-    "standalone",
-    "fullscreen",
-    "minimal-ui"
-  ],
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "handle_links": "preferred",
   "launch_handler": {
     "client_mode": "navigate-existing"
   },
-  "background_color": "#ececec",
-  "theme_color": "#ececec",
+  "background_color": "#e8edf4",
+  "theme_color": "#e8edf4",
   "shortcuts": [
     {
-      "name": "Search",
-      "short_name": "Search",
+      "name": "Discover",
+      "short_name": "Discover",
       "description": "Search for new TV shows and movies",
       "url": "/?shortcut=discover",
       "icons": [
         {
-          "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
+          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -39,7 +35,7 @@
       "url": "/?shortcut=library",
       "icons": [
         {
-          "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
+          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -52,7 +48,7 @@
       "url": "/?shortcut=upcoming",
       "icons": [
         {
-          "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
+          "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -61,19 +57,19 @@
   ],
   "icons": [
     {
-      "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
+      "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
+      "src": "https://www.novawatch.site/images/NovaWatch_App_Icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://novawatch.site/images/NovaWatch.AppIcon.png",
+      "src": "https://www.novawatch.site/images/NovaWatch_App_Icon_Maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
