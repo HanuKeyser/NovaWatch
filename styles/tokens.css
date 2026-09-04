@@ -96,6 +96,7 @@
     --orange-gradient: linear-gradient(135deg, #fb923c, #f97316);
     --red-gradient: linear-gradient(135deg, #f87171, #ef4444);
     --green-gradient: linear-gradient(135deg, #4ade80, #22c55e);
+    --violet-gradient: linear-gradient(135deg, #a78bfa, #8b5cf6);
 
     /* A soft near-black rather than pure #000, and near-white rather
        than pure #fff in dark mode below - enough contrast to stay
@@ -182,6 +183,7 @@ html[data-theme="dark"] {
     --orange-gradient: linear-gradient(135deg, #fdba74, #fb923c);
     --red-gradient: linear-gradient(135deg, #fca5a5, #f87171);
     --green-gradient: linear-gradient(135deg, #86efac, #4ade80);
+    --violet-gradient: linear-gradient(135deg, #c4b5fd, #a78bfa);
 
     /* Same near-white rule as light mode's near-black above - #e6e9ef
        here, not a true #fff, for the primary tier, with the same
