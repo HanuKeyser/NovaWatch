@@ -1264,7 +1264,10 @@ img {
 
 .search-type-btn {
     height: 40px;
-    border-radius: 10px;
+    /* Same 10px it always was - just via the token now, since --radius-xs
+       is exactly that value and this was the one control still hardcoding
+       it rather than referencing the scale. */
+    border-radius: var(--radius-xs);
     background: transparent;
     color: var(--text-secondary);
     font-size: 13px;
@@ -1505,7 +1508,11 @@ img {
     flex: 0 0 80px;
     width: 80px;
     height: 116px;
-    border-radius: 16px;
+    /* Matches .continue-poster's own --radius-lg exactly - this skeleton
+       is the placeholder for that element (same 80x116px), so an
+       off-scale 16px here made the corners visibly change shape the
+       moment real content replaced the placeholder. */
+    border-radius: var(--radius-lg);
 }
 
 .skeleton-row-lines {
@@ -3896,6 +3903,17 @@ html[data-theme="dark"] .auth-overlay-card {
 }
 
 html[data-theme="dark"] .continue-card {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.06);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* Same treatment as .continue-card just above - the dormant nudge sits
+   directly among those cards and shares their surface recipe, but its
+   base rule hardcodes a light-mode 46%-white fill and a full-opacity
+   white inner highlight, so without this it rendered as a bright, almost
+   solid card against the dark background while every card around it went
+   translucent. */
+html[data-theme="dark"] .dormant-nudge-card {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.06);
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
