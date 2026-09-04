@@ -3,7 +3,8 @@
   "private": true,
   "description": "Server-side scheduled job for send-release-notifications.js - not part of the client app itself (index.html doesn't load anything from here).",
   "scripts": {
-    "send-notifications": "node send-release-notifications.js"
+    "send-notifications": "node send-release-notifications.js",
+    "test": "node smoke-tests.js"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0"
