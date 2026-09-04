@@ -22,7 +22,7 @@ Live at `https://www.novawatch.site/`. Mobile-first by design — phones get the
 │   │                       source both HTML pages link, so they can't drift apart
 │   └── app.css             index.html's component styles
 ├── scripts/
-│   └── app.js              index.html's application logic (~7,600 lines, classic script —
+│   └── app.js              index.html's application logic (~8,700 lines, classic script —
 │                            not type="module", since the markup calls global functions
 │                            directly via inline onclick="...")
 ├── privacy-terms/
@@ -31,6 +31,9 @@ Live at `https://www.novawatch.site/`. Mobile-first by design — phones get the
 ├── send-release-notifications.js  Server-side scheduled job — not loaded by the app
 │                            itself — that decides what to notify about and sends via
 │                            OneSignal. See PUSH_NOTIFICATIONS_SETUP.md.
+├── smoke-tests.js          Logic tests for the core release/progress/watch rules.
+│                            Lives at the root so `npm test` can find it; reads
+│                            scripts/app.js. Run with `npm test`.
 └── .github/workflows/release-notifications.yml  Optional free daily schedule for the
                              script above, via GitHub Actions
 ```
@@ -73,7 +76,7 @@ Currently on the free **Spark** plan. This is a real constraint on the feature s
 
 **Marking a later episode watched** — if opening an episode directly (say S2E6) and marking it watched would leave earlier released episodes in the same show still unwatched (`getEarlierUnwatchedEpisodes`), a themed confirm dialog offers to mark those watched too in the same action, rather than silently leaving a gap. Only fires when marking watched, never when un-watching one - removing a single episode's watched status is always exactly what it looks like, nothing to ask about. Declining, or tapping outside the dialog, marks just the one episode that was actually tapped.
 
-**Discover → For You** — TMDB `/recommendations` seeded from your library, ranked by cross-seed hit count then TMDB score. Falls back to plain Trending when the library's empty for that content type.
+**Discover → For You** — TMDB `/recommendations` seeded from your library (the 5 highest-rated/most-recently-added items of that type), ranked by cross-seed hit count then TMDB score. Falls back to plain Trending when the library's empty for that content type. A large library can genuinely exhaust its own recommendations - if most of what TMDB would suggest for your top-rated shows is something you've already added, there's only a handful of actually-new picks left, which reads as a mostly-empty page on a wide screen rather than a personalized one. Padded out with current trending titles (deduped against both the library and what's already ranked) up to a minimum of 12 results whenever the real recommendation count falls short - a real fallback, not a relabeling of the results as something they're not.
 
 **Continue Watching** (Home) — the next unwatched episode for every in-progress show, plus any unwatched movies. Swipeable: right reveals "mark watched", left reveals "remove" (or "stop watching" for a TV show with progress already logged, which keeps its watch history instead of deleting it). Marking an episode watched this way also shows how many episodes are left in that show, if any.
 
@@ -85,7 +88,7 @@ Only the calendar DATE this produces is meant to be trusted per viewer timezone 
 
 **Content rating** — PG-13, TV-MA, etc., shown as a badge in the details modal for both movies and TV shows. Fetched from a separate per-region TMDB endpoint (`release_dates` for movies, `content_ratings` for TV), tried in the viewer's own streaming region first, falling back to US.
 
-**Collection/franchise info** — for movies that TMDB has flagged as belonging to a collection (e.g. "Part of The Dark Knight Collection"), shown in the details modal. Movie-only; TV doesn't have an equivalent concept in TMDB. Marking one watched checks the rest of the library for another unwatched movie from that same collection and nudges toward it if there is one (see Milestone toast below).
+**Collection/franchise info** — for movies that TMDB has flagged as belonging to a collection (e.g. "Part of The Dark Knight Collection"), shown in the details modal. Movie-only; TV doesn't have an equivalent concept in TMDB. Informational only - there is no in-app nudge toward the next film in a collection (there briefly was; it went when in-app notifications were removed entirely).
 
 **Viewing Analytics** (Home) — total watch time (including rewatch passes), with a current-streak badge underneath it (consecutive calendar days with at least one watch/rewatch logged - resets to zero the moment a day is missed, distinct from the all-time-record "longest streak" the streak achievements track - lit orange while live, a neutral muted pill when there's no active streak), and counts of watched movies/shows/episodes/rewatches in the tile grid below. Sits below Continue Watching, not above it - the thing you actually act on (what to watch next) leads; stats and streaks are motivating, but secondary to that.
 
@@ -151,6 +154,26 @@ Firebase Auth restores its own signed-in session fast on reload, but the richer 
 
 The three Firebase SDK scripts used to load as plain, render-blocking `<script>` tags positioned even before the stylesheets - the browser couldn't discover the CSS, let alone paint anything, until all three had fully downloaded and executed in sequence from a third-party CDN. All three, and `app.js` itself, now load with `defer` instead - HTML guarantees deferred scripts execute in the order they appear in the document before `DOMContentLoaded`, so the same critical ordering (`app.js` calls `firebase.initializeApp()` at its own top level, so Firebase genuinely has to be ready first) is preserved exactly, while none of the four block the browser from parsing and rendering the rest of the page while they download.
 
+## Data export
+
+**Export My Data** (Settings → Account) downloads the full library - every title, per-episode watched flags, watch dates and rewatch counts - plus account-level settings, as a versioned JSON file (`exportFormatVersion: 1`, so a future importer can tell which shape it's reading). Entirely client-side: `state.library` is already fully in memory via the `onSnapshot` listener, so this costs **zero additional Firestore reads** regardless of library size. Exists because a library of a few thousand tracked episodes is real investment, and until this the only way out was account deletion, which destroys it.
+
+## Notification subscription mirror & the read-quota problem
+
+`state.notificationsEnabled` mirrors OneSignal's own push-subscription state into the Firestore profile doc (`syncNotificationsEnabledFlag`, called from OneSignal's `change` listener and once after sign-in to backfill existing accounts). It is **never** the authority on delivery - OneSignal remains that - and is deliberately best-effort, since a failed write costs one unnecessary library read on the next run and nothing more.
+
+It exists purely to fix the single worst scaling cost in the project. `send-release-notifications.js` previously read *every* account's *entire* library on *every* run, unconditionally, twice daily, just to find the few accounts with something releasing. At a ~120-item library that's ~120 document reads per account per run (~240/day), which exhausts Firestore Spark's 50,000 daily read quota at roughly **200 accounts** - before anyone even opens the app, and app usage itself does a full library read per sign-in. When a Spark project hits that ceiling, reads start failing for everyone until midnight Pacific.
+
+The job now skips any account whose `notificationsEnabled` is explicitly `false`, turning it from O(all accounts) into O(subscribed accounts). Checked against `=== false` specifically, not falsiness: an account whose profile doc predates the field has `undefined` and is still scanned, so nobody silently stops receiving notifications when this ships - those accounts self-correct the next time the app is opened.
+
+## Smoke tests
+
+`smoke-tests.js` (run `npm test`, or `node smoke-tests.js`) covers the pure logic the app's core guarantees rest on: `isReleased`, `getAvailableEpisodes`, `getTVProgress`, `getNextUnwatchedEpisode`, `getEarlierUnwatchedEpisodes`, `isTVUpToDate`/`isTVFinished`, `getCurrentWatchStreak`, and `localDateStringToISO`. 28 assertions; exits non-zero on failure so it works as a pre-deploy gate.
+
+It extracts those functions by source text from the real `app.js` and evaluates them in isolation, rather than importing - `app.js` is a classic browser script that touches `document`/`window` at load, and refactoring 8,500 working lines purely to make them importable would be a large, risky change for a test file. Extraction fails loudly if a function is renamed, rather than silently passing.
+
+This complements the existing structural validation (syntax parse, brace/tag balance, duplicate-symbol scans, handler resolution) rather than replacing it: those prove the file loads and is intact, but cannot catch a logic regression - "marking an episode watched stopped counting toward progress" parses perfectly.
+
 ## Responsive design
 
 Eight breakpoints in `app.css`, each targeting a real device/situation rather than an arbitrary width, plus a separate query matched against input capability rather than screen size. Nothing below 768px is touched by any of the wider-screen blocks, and nothing above 1279px is touched by the compact/short blocks — a phone held normally only ever sees the base styles it always has.
@@ -182,17 +205,6 @@ Not everything here should scale, and a few things deliberately don't, on purpos
 ## Error toast
 
 The one place a floating toast still exists in the app, deliberately narrow in scope: errors only. Success/confirmation messages stay silent, since they usually already come with a visible state change of their own (a screen transition, a button flipping to its done state) - a genuine failure with zero feedback is the actual problem silent toasts create, not a cosmetic one. Positioned above the floating nav bar (not at the bottom edge, not at the top - the offline banner already owns that space), using the same chrome-tier glass recipe as the nav bar and search bars. Its `max-width` is matched to `.bottom-nav`'s own at every one of the four wider breakpoints (620px → 680px → 760px → 820px), rather than staying at its own fixed 420px while the nav bar it's visually paired with kept scaling up without it - the two are meant to read as one consistent family of floating controls regardless of screen size, not one that grows and one that doesn't. Auto-dismisses after 4.5 seconds, or on tap. A new error replaces whatever's currently showing rather than queueing - errors are rare enough now (roughly 40 real failure paths across the whole app, not everything that used to pass through the old toast system) that a queue isn't needed.
-
-## Milestone toast
-
-The one deliberate exception to "success messages stay silent" above (`showMilestoneToast`/`#achievementToast`, a top-anchored banner, not the bottom-anchored error toast's own slot) - each of its three callers computes something entirely in the background with no other visible sign anywhere on screen the way marking an episode watched or saving a display name already does, so silence would mean it never gets noticed at all:
-- **Achievement unlocked** (`showAchievementToast`, called from `runAchievementsCheck`) - the achievement's own icon and title, matching the icon set and orange-gradient badge treatment used in the Achievements list itself.
-- **Season/show milestone** (`announceEpisodeMilestone`, called from every real mark-watched path - the episode modal toggle, the skip-ahead catch-up, "Mark Watched Up to Here", the season/whole-show bulk-watch buttons, and the Continue Watching swipe action) - "Season Complete" if that action just finished a season, "All Caught Up" if it caught an ongoing show up to date, or "Series Finished" if the show itself has ended and is now fully watched. Checked in that priority order and only one is ever shown, since being fully caught up/finished already implies the season is done too.
-- **Collection continuation** (`announceCollectionContinuation`, called after marking a movie watched) - if that movie has a `collectionName` and another unwatched movie from the same collection is already sitting in the library, nudges toward it (picked by earliest `releaseDate` among the unwatched ones - the best ordering signal already stored, since TMDB's own part-numbering for a collection isn't fetched here). Silent if there's no collection, or nothing else from it in the library yet - this only ever points at something already there, never a prompt to go add something new.
-
-Queued rather than single-slot like the error toast - more than one of the above can genuinely fire from a single action (a big catch-up can clear several achievement thresholds and finish a season at once), and each gets its own full 4-second showing rather than racing or overwriting another before it's been read.
-
-Tappable (`handleMilestoneToastTap`), but not to the same destination for all three - each `showMilestoneToast()` call passes its own `onTap`, so an achievement unlock opens Achievements while a season/show milestone or a collection nudge opens the actual show/movie it's about instead. Routing every tap to Achievements regardless of what the toast actually said would defeat the point of the other two - tapping "Up Next in *Collection*" should open that movie, not a badge list with nothing to do with it. A small chevron (`.achievement-toast-chevron`) only appears when the current toast actually has a destination (`.tappable`, toggled per-toast in `advanceAchievementToastQueue`), so it's clear at a glance whether a tap will navigate or just dismiss.
 
 ## Dormant show nudge
 
