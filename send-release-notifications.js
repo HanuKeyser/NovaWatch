@@ -468,6 +468,28 @@ async function run() {
         // that account at all.
         const timeZone = userData.timeZone || 'UTC';
 
+        // THE scaling guard for this whole job. Reading every account's
+        // entire library is by far the most expensive thing here - at a
+        // ~120-item library that's ~120 document reads per account per
+        // run, twice daily, which exhausts Firestore's free-tier 50k
+        // daily read quota at roughly 200 accounts before anyone even
+        // opens the app. Skipping accounts that aren't subscribed turns
+        // this from O(all accounts) into O(subscribed accounts), and an
+        // unsubscribed account could never be sent anything anyway, so
+        // nothing is lost by not looking at it.
+        //
+        // Mirrored from OneSignal's own subscription state by the client
+        // (syncNotificationsEnabledFlag in app.js). Treated as false only
+        // when explicitly false - an account whose profile doc predates
+        // that field has `undefined` here, and is still scanned, so
+        // nobody silently stops receiving notifications the moment this
+        // ships. Those accounts self-correct to a real true/false the
+        // next time the app is opened.
+        if (userData.notificationsEnabled === false) {
+            skipped++;
+            continue;
+        }
+
         const librarySnapshot = await db.collection('users').doc(uid).collection('library').get();
         const libraryItems = librarySnapshot.docs.map(d => d.data());
 
