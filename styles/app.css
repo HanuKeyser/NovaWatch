@@ -45,13 +45,15 @@ body {
     min-height: 100dvh;
     overflow-x: hidden;
     /* Nav bar floats at bottom: calc(18px + safe-area) with a 70px
-       height (see .bottom-nav) - its top edge sits at 88px + safe-area
-       from the true bottom. .page's own bottom padding already
-       contributes 20px + safe-area of its own trailing space; this 76px
-       plus that lands just past the nav's own top edge with a small
-       ~8px breathing gap, instead of double-padding on top of what
-       .page already provides. */
-    padding-bottom: 76px;
+       height (see .bottom-nav) on tablet/desktop; moved closer to the
+       true edge on phones specifically (10px, see the max-width:767px
+       override on .bottom-nav) - its top edge sits at 80px + safe-area
+       from the true bottom there, 88px on tablet/desktop. .page's own
+       bottom padding already contributes 12px + safe-area of its own
+       trailing space; this 60px plus that lands just past the nav's
+       own top edge with a small breathing gap either way, instead of
+       double-padding on top of what .page already provides. */
+    padding-bottom: 60px;
     -webkit-font-smoothing: antialiased;
     /* Stops a vertical drag at the very top/bottom of the page from
        rubber-banding into the browser's own pull-to-refresh/overscroll
@@ -162,7 +164,7 @@ img {
    shape rather than a mistake. */
 .page {
     display: none;
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: calc(26px + env(safe-area-inset-top, 0px)) 18px calc(12px + env(safe-area-inset-bottom, 0px));
 }
 
 .page.active {
@@ -277,8 +279,8 @@ img {
 }
 
 .stat {
-    padding: 16px 10px;
-    text-align: center;
+    padding: 16px 14px;
+    text-align: left;
     /* Was --surface-2 (36% white) on a --surface (58% white) card, so the
        square barely separated from the card it sits in. A brighter, more
        opaque fill plus a firmer border and its own small shadow makes each
@@ -289,8 +291,53 @@ img {
     border-radius: var(--radius-md);
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+/* Icon sits in its own small colored badge (the same "filled glass" recipe
+   as an achievement's icon badge or the analytics hero icon above) rather
+   than a bare colored glyph floating above the number - and each of the
+   four gets its own hue instead of sharing one blue, so all four read as
+   genuinely distinct metrics at a glance rather than four identical tiles
+   that only differ by which number happens to be inside. Colors reuse the
+   app's existing gradient tokens where a fit already existed (blue for
+   the primary "shows" metric, orange for movies, green for rewatches -
+   the same green a completed season already uses); episodes needed a
+   fourth hue with no existing obvious match, so --violet-gradient was
+   added alongside the other three in tokens.css rather than a one-off
+   hardcoded color living only here. */
+.stat-icon-badge {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-xs);
+    display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.stat-icon-badge .icon {
+    width: 17px;
+    height: 17px;
+}
+
+.stat-tv .stat-icon-badge {
+    background: var(--glass-sheen), var(--blue-gradient);
+    box-shadow: 0 4px 10px rgba(0, 106, 255, 0.3);
+}
+.stat-movies .stat-icon-badge {
+    background: var(--glass-sheen), var(--orange-gradient);
+    box-shadow: 0 4px 10px rgba(249, 115, 22, 0.3);
+}
+.stat-episodes .stat-icon-badge {
+    background: var(--glass-sheen), var(--violet-gradient);
+    box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+}
+.stat-rewatches .stat-icon-badge {
+    background: var(--glass-sheen), var(--green-gradient);
+    box-shadow: 0 4px 10px rgba(34, 197, 94, 0.3);
 }
 
 .stat-icon {
@@ -301,7 +348,7 @@ img {
 }
 
 .stat-value {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 800;
     letter-spacing: -0.5px;
 }
@@ -739,7 +786,7 @@ img {
 
 .stat-label {
     color: var(--text-secondary);
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 650;
 }
 
@@ -793,7 +840,15 @@ img {
     width: 44px;
     height: 44px;
     border-radius: var(--radius-sm);
-    background: var(--blue);
+    /* --glass-sheen added on top of the same solid --blue fill (var(
+       --blue-gradient) resolves to plain var(--blue) - flattened
+       app-wide from an actual two-tone gradient a few rounds back, kept
+       as its own token rather than switched to var(--blue) directly at
+       every call site so there's still one place to touch if that ever
+       needs to change again) - matches the same "filled glass" recipe
+       every .stat-icon-badge below now uses too, rather than being the
+       one solid-color badge in this card with no sheen at all. */
+    background: var(--glass-sheen), var(--blue-gradient);
     color: white;
     display: flex;
     align-items: center;
@@ -1137,8 +1192,18 @@ img {
        slightly off from where the text visually sits, on top of the
        backdrop-filter-related horizontal issue fixed above. Same value
        across all 6 search bars in the app, since they all share this
-       one rule. */
+       one rule. Still reported as happening occasionally even with the
+       above two fixes in place, so height is now set explicitly too
+       (padding + line-height's own math, done by hand rather than left
+       to the browser) - some engines position a text input's caret
+       against its own line-box math rather than the effective rendered
+       height once padding is added, and an auto/implicit height is one
+       more place those two can quietly disagree. If this still recurs
+       after this change, it's likely browser/device-specific rather
+       than something more of this same fix will catch - worth reporting
+       back with which browser and OS it happened on next time. */
     line-height: 1.4;
+    height: 50px;
     -webkit-appearance: none;
     appearance: none;
 }
@@ -1765,13 +1830,18 @@ html[data-theme="dark"] .upcoming-card-caption {
 .bottom-nav {
     position: fixed;
     left: 50%;
-    /* 18px on the bottom, matching the 18px the sides get (width:
-       calc(100% - 36px)) - genuinely symmetric margins on all three
-       open sides. On a device with a home indicator, the real
-       safe-area inset folds in on top of that 18px, since that space
-       exists to keep the bar's tap targets clear of the gesture area -
-       resolves to a flat 18px on devices with no inset. */
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    /* 10px on phones specifically (see the tablet-and-up override in the
+       768px block below, which puts this back to 18px there) - moved
+       closer to the true bottom edge than the original flat 18px used
+       everywhere, since a phone's home indicator/gesture area is what
+       that clearance was actually protecting against, and phones are
+       where that safe-area inset is the thing actually in play. On a
+       device with a real safe-area inset, that still folds in on top of
+       this 10px, so it never sits closer to a home indicator than the
+       inset itself requires - only the flat portion of the margin (no
+       inset, most Android phones and any desktop/tablet browser) got
+       smaller. */
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
@@ -2252,6 +2322,41 @@ html[data-theme="dark"] .modal-sheet-compact {
     line-height: 1.5;
     color: var(--text-secondary);
     margin-bottom: 22px;
+}
+
+/* The one native <input type="date"> in the app - deliberately native
+   rather than a custom-built calendar, since every platform already has
+   a good, familiar, fully accessible date picker of its own and a
+   hand-rolled one would be worse on all of them. Styled to match the
+   app's own inputs (glass surface, same radius scale) while leaving the
+   picker itself entirely to the OS. -webkit-appearance: none is NOT set
+   here, unlike the search inputs - on iOS that would strip the native
+   picker affordance this control depends on. */
+.watch-date-input {
+    width: 100%;
+    padding: 13px 14px;
+    margin-bottom: 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.watch-date-input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 4px rgba(0, 106, 255, 0.15);
+}
+
+/* Dark mode leaves the native calendar glyph rendered dark-on-dark
+   otherwise - inverting it is the standard fix, since the control's
+   internal icon isn't styleable directly. */
+html[data-theme="dark"] .watch-date-input::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(0.7);
 }
 
 .confirm-actions {
@@ -3657,110 +3762,6 @@ html[data-theme="dark"] .large-avatar {
     height: 13px;
 }
 
-/* =========================================================
-   ACHIEVEMENT TOAST
-   Same fixed-overlay/glass-chrome recipe as .error-toast above, just
-   anchored to the top instead of sitting just above the nav bar - a
-   deliberately different slot so the two never compete for the same
-   space if an achievement happens to unlock in the same action as an
-   unrelated failure (both are real, if unlikely, at once - e.g. a
-   catch-up save that unlocks something but then fails partway through
-   a later step). Slides down from the top rather than up from the
-   bottom for the same reason: visually distinct motion, not just a
-   different resting position, so the two are never mistaken for each
-   other out of the corner of an eye.
-========================================================= */
-.achievement-toast {
-    position: fixed;
-    left: 50%;
-    top: calc(16px + env(safe-area-inset-top, 0px));
-    transform: translateX(-50%) translateY(-14px) scale(0.94);
-    z-index: 500;
-    opacity: 0;
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: calc(100% - 36px);
-    max-width: 420px;
-    padding: 10px 18px 10px 10px;
-    border-radius: var(--radius-2xl);
-    background: var(--glass-sheen), var(--glass-chrome-fill);
-    backdrop-filter: var(--glass-chrome-blur);
-    -webkit-backdrop-filter: var(--glass-chrome-blur);
-    box-shadow: var(--glass-chrome-shadow);
-    color: var(--text);
-    cursor: pointer;
-    transition: opacity 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.achievement-toast.show {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0) scale(1);
-}
-
-/* Not every toast has somewhere to go (defensively, showMilestoneToast
-   could be called with no onTap) - this chevron only appears when
-   .tappable is set (see advanceAchievementToastQueue), so it's clear at
-   a glance whether tapping this one will navigate somewhere or just
-   dismiss it, rather than the cursor:pointer above silently meaning two
-   different things depending on which toast happens to be showing. */
-.achievement-toast-chevron {
-    display: none;
-    flex-shrink: 0;
-    width: 16px;
-    height: 16px;
-    color: var(--text-muted);
-}
-
-.achievement-toast.tappable .achievement-toast-chevron {
-    display: block;
-}
-
-/* Same orange-gradient + sheen treatment as an unlocked row's own icon
-   badge in the Achievements list (see renderAchievementsList) - the
-   toast and the list entry it corresponds to read as the same "this one
-   is unlocked" visual language, not two unrelated designs. */
-.achievement-toast-icon {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--glass-sheen), var(--orange-gradient);
-    color: white;
-    box-shadow: 0 3px 10px rgba(249, 115, 22, 0.4);
-}
-
-.achievement-toast-icon .icon {
-    width: 20px;
-    height: 20px;
-}
-
-.achievement-toast-text {
-    min-width: 0;
-}
-
-.achievement-toast-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: var(--text-muted);
-}
-
-.achievement-toast-title {
-    font-size: 14.5px;
-    font-weight: 800;
-    letter-spacing: -0.1px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .auth-field {
     width: 100%;
 }
@@ -3970,14 +3971,17 @@ html[data-theme="dark"] .state-card {
        modal sizing). */
     .bottom-nav {
         max-width: 620px;
+        /* Back to the original 18px here and up - the 10px moved-down
+           position in the base rule is specifically for phones (a home
+           indicator/gesture-area concern), not tablets/desktops. */
+        bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     }
 
     /* Same "match the nav bar's own scaling" reasoning as the 1280px
        block below - kept together with .bottom-nav's own rule here
        rather than only starting at the next block, so the toasts and
        the nav are in sync from the very first widening step onward. */
-    .error-toast,
-    .achievement-toast {
+    .error-toast {
         max-width: 620px;
     }
 
@@ -4130,15 +4134,13 @@ html[data-theme="dark"] .state-card {
         height: 320px;
     }
 
-    /* Both floating toasts (.error-toast, .achievement-toast) are the
-       same "chrome-tier glass pill" family as the nav bar - kept at a
-       fixed 420px cap while the nav bar itself scaled up through every
-       block above meant the three stopped looking like one consistent
-       set of floating controls the wider the screen got. Matched to
-       .bottom-nav's own max-width exactly at each of these blocks
-       instead, rather than picking new values of their own. */
-    .error-toast,
-    .achievement-toast {
+    /* The error toast is the same "chrome-tier glass pill" family as
+       the nav bar - kept at a fixed 420px cap while the nav bar itself
+       scaled up through every block above meant the two stopped looking
+       like one consistent set of floating controls the wider the screen
+       got. Matched to .bottom-nav's own max-width exactly at each of
+       these blocks instead, rather than picking a value of its own. */
+    .error-toast {
         max-width: 680px;
     }
 }
@@ -4170,8 +4172,7 @@ html[data-theme="dark"] .state-card {
         height: 360px;
     }
 
-    .error-toast,
-    .achievement-toast {
+    .error-toast {
         max-width: 760px;
     }
 
@@ -4200,8 +4201,7 @@ html[data-theme="dark"] .state-card {
         height: 400px;
     }
 
-    .error-toast,
-    .achievement-toast {
+    .error-toast {
         max-width: 820px;
     }
 }
