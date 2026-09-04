@@ -86,7 +86,14 @@ let state = {
     // ISO 3166-1 country code (e.g. "ZA") used for TMDB/JustWatch "where to
     // watch" lookups. null until detectDefaultRegion() runs on first sign-in
     // or an existing profile doc is loaded - see proceedToApp().
-    region: null
+    region: null,
+    // Whether marking a movie watched asks which date it was actually
+    // watched on, rather than always stamping the moment it was marked.
+    // Defaults true - an existing account whose profile doc predates this
+    // field gets this same default via proceedToApp's `{...state,
+    // ...userData}` merge (a field absent from the saved doc just leaves
+    // this default in place, it's never coerced to false by its absence).
+    askWatchedDate: true
 };
 
 /* =========================================================
@@ -583,7 +590,6 @@ function runAchievementsCheck() {
     if (!profile.unlockedAchievements) profile.unlockedAchievements = [];
     const stats = computeAchievementStats();
 
-    const newlyUnlocked = [];
     let changed = false;
     ACHIEVEMENTS.forEach(ach => {
         const isUnlocked = profile.unlockedAchievements.includes(ach.id);
@@ -591,11 +597,12 @@ function runAchievementsCheck() {
 
         if (!isUnlocked && meetsCondition) {
             profile.unlockedAchievements.push(ach.id);
-            newlyUnlocked.push(ach);
             changed = true;
         } else if (isUnlocked && !meetsCondition) {
-            // Revoked quietly, no toast - losing an achievement isn't a
-            // moment worth interrupting someone for, unlike earning one.
+            // Revoked quietly - losing an achievement isn't a moment worth
+            // interrupting someone for, unlike earning one (which is also
+            // silent now - see the removed showAchievementToast, no in-app
+            // notification exists anymore for either direction).
             profile.unlockedAchievements = profile.unlockedAchievements.filter(id => id !== ach.id);
             changed = true;
         }
@@ -603,7 +610,6 @@ function runAchievementsCheck() {
 
     if (changed) {
         saveUserProfile();
-        newlyUnlocked.forEach(ach => showAchievementToast(ach));
     }
     // Moved outside the `if (changed)` guard - the bug reported ("shows no
     // achievements until you open the Achievements screen") happened
@@ -1025,154 +1031,6 @@ function hideErrorToast() {
     const toast = document.getElementById("errorToast");
     if (toast) toast.classList.remove("show");
     clearTimeout(errorToastTimer);
-}
-
-/* =========================================================
-   MILESTONE TOAST
-   Shared by three genuinely different moments that all deserve a real
-   notification rather than silence (see showToast's own comment for why
-   almost everything else stays silent): unlocking an achievement,
-   finishing a season or a whole show (announceEpisodeMilestone below),
-   and a collection-continuation nudge (announceCollectionContinuation).
-   None of the three has any other visible sign anywhere on screen the
-   way most actions already do. Queued rather than a single slot like
-   showErrorToast - more than one can genuinely fire from a single
-   action (catching up a big chunk of watch history in one go can clear
-   several achievement thresholds and finish a season at the same time),
-   and showing them one at a time, each for its own full duration, means
-   every one is actually readable instead of racing or overwriting
-   another before it's been seen.
-
-   Each one is tappable, but NOT all to the same place - an achievement
-   unlock opens Achievements, but a season/show milestone or a
-   collection nudge opens the actual show/movie it's about instead.
-   Routing every tap to Achievements regardless of what the toast was
-   actually about would be confusing (tapping "Up Next in X" should
-   open that movie, not a list of badges that has nothing to do with
-   it) - the whole point of a non-achievement toast is that it's about
-   a specific piece of content, so tapping it should go to that content.
-========================================================= */
-let achievementToastQueue = [];
-let achievementToastTimer = null;
-let achievementToastShowing = false;
-let currentMilestoneToastAction = null;
-
-function showMilestoneToast(icon, label, title, onTap) {
-    achievementToastQueue.push({ icon, label, title, onTap });
-    if (!achievementToastShowing) advanceAchievementToastQueue();
-}
-
-// Thin wrapper kept around specifically for runAchievementsCheck's own
-// callers - an unlocked ACHIEVEMENTS entry already has icon/title on it.
-// Tapping opens Achievements, the one place that badge actually lives.
-function showAchievementToast(achievement) {
-    showMilestoneToast(achievement.icon, "Achievement Unlocked", achievement.title, () => openAchievementsModal());
-}
-
-function advanceAchievementToastQueue() {
-    const toast = document.getElementById("achievementToast");
-    if (!toast) {
-        achievementToastQueue = [];
-        achievementToastShowing = false;
-        currentMilestoneToastAction = null;
-        return;
-    }
-    const next = achievementToastQueue.shift();
-    if (!next) {
-        achievementToastShowing = false;
-        currentMilestoneToastAction = null;
-        return;
-    }
-    achievementToastShowing = true;
-    currentMilestoneToastAction = next.onTap || null;
-    toast.classList.toggle("tappable", !!next.onTap);
-
-    const iconSvg = toast.querySelector(".achievement-toast-icon .icon");
-    // next.icon is always one of this app's own hardcoded ICON_* markup
-    // constants - trusted static content it wrote itself, not user
-    // input, same basis every other raw-SVG injection in the app
-    // (renderAchievementsList itself included) already relies on.
-    if (iconSvg) iconSvg.innerHTML = next.icon;
-    const labelEl = document.getElementById("achievementToastLabel");
-    if (labelEl) labelEl.textContent = next.label;
-    const titleEl = document.getElementById("achievementToastTitle");
-    if (titleEl) titleEl.textContent = next.title;
-
-    toast.classList.add("show");
-    clearTimeout(achievementToastTimer);
-    achievementToastTimer = setTimeout(() => {
-        toast.classList.remove("show");
-        // Let the hide transition actually finish before the next one's
-        // content swaps in and it shows again, rather than changing the
-        // icon/title while the current one is still visibly on screen.
-        setTimeout(advanceAchievementToastQueue, 350);
-    }, 4000);
-}
-
-function hideAchievementToast() {
-    const toast = document.getElementById("achievementToast");
-    if (toast) toast.classList.remove("show");
-    clearTimeout(achievementToastTimer);
-    setTimeout(advanceAchievementToastQueue, 350);
-}
-
-// A tap on the toast itself - navigates to wherever this specific
-// milestone is about (see the block comment above for why that's not
-// the same place for every toast), then dismisses it the same way a
-// plain tap-to-dismiss would. A toast with no destination (there
-// currently isn't one, but defensively) just dismisses.
-function handleMilestoneToastTap() {
-    const action = currentMilestoneToastAction;
-    hideAchievementToast();
-    if (action) action();
-}
-
-// Called right after an episode-watched action succeeds - checks whether
-// that action just finished a season or the whole show, and announces
-// whichever is true (never both - being fully caught up/finished already
-// implies the season is done too, so that's the more meaningful one to
-// say). Only ever called from a "marking watched" path, never
-// un-watching, and only once per action, so by construction this only
-// fires the moment a milestone actually becomes newly true - no separate
-// "was this already true before?" check needed.
-function announceEpisodeMilestone(show, seasonNumber) {
-    const goToShow = () => openDetails(show.id);
-    if (isTVUpToDate(show)) {
-        showMilestoneToast(ICON_CHECK, "All Caught Up", show.title, goToShow);
-        return;
-    }
-    if (isTVFinished(show)) {
-        showMilestoneToast(ICON_CHECK, "Series Finished", show.title, goToShow);
-        return;
-    }
-    const seasonEps = getAvailableEpisodes(show).filter(ep => ep.season === seasonNumber);
-    if (seasonEps.length > 0 && seasonEps.every(ep => ep.watched)) {
-        showMilestoneToast(ICON_CHECK, "Season Complete", `Season ${seasonNumber} \u00b7 ${show.title}`, goToShow);
-    }
-}
-
-// Called right after a movie is marked watched - if it's part of a
-// collection (TMDB's belongs_to_collection, stored as collectionName -
-// see importMediaData) and another movie from that same collection is
-// already sitting unwatched in the library, nudges toward it. Picked by
-// earliest releaseDate among the unwatched candidates when there's more
-// than one - the best ordering signal already stored, since TMDB's own
-// part-numbering for a collection isn't fetched here. Silent if the
-// movie isn't part of a collection, or nothing else from it is in the
-// library yet (only ever suggests what's already there - never a
-// prompt to go add something new).
-function announceCollectionContinuation(movie) {
-    if (!movie.collectionName) return;
-    const candidates = state.library.filter(item =>
-        item.type === 'movie' &&
-        item.id !== movie.id &&
-        item.collectionName === movie.collectionName &&
-        !item.watched
-    );
-    if (candidates.length === 0) return;
-    candidates.sort((a, b) => new Date(a.releaseDate || 0) - new Date(b.releaseDate || 0));
-    const next = candidates[0];
-    showMilestoneToast(ICON_FILM, `Up Next in ${movie.collectionName}`, next.title, () => openDetails(next.id));
 }
 
 /* =========================================================
@@ -1868,6 +1726,7 @@ async function saveUserProfile() {
             profiles: state.profiles,
             activeProfileId: state.activeProfileId,
             region: state.region,
+            askWatchedDate: state.askWatchedDate,
             // The server-side push job has no browser to infer "today"
             // from the way daysUntil()/getLocalTodayParts() do here - it
             // needs each account's real IANA timezone to compute their
@@ -2802,6 +2661,12 @@ function unlockBodyScroll(modalId) {
 function openSettingsSheet() {
     const modal = document.getElementById("settingsModal");
     if (modal.classList.contains("open")) return;
+    // Sync the toggle's own on/off label to the real stored value before
+    // the sheet is visible - it's rendered as static markup in
+    // index.html (unlike Library Display's rows, which are built fresh
+    // each time they're opened), so without this it would always read
+    // "On" regardless of the actual setting.
+    updateAskWatchedDateButton();
     modal.classList.add("open");
     lockBodyScroll("settingsModal");
 }
@@ -4766,13 +4631,46 @@ async function fetchForYou() {
             }
         }
 
-        const ranked = [...scored.values()]
+        let ranked = [...scored.values()]
             .sort((a, b) => {
                 if (b.hits !== a.hits) return b.hits - a.hits;
                 return (b.item.vote_average || 0) - (a.item.vote_average || 0);
             })
             .map(entry => entry.item)
             .slice(0, 20);
+
+        // A large library can genuinely exhaust its own recommendations -
+        // if most of what TMDB would suggest for your top-rated shows is
+        // already something you've added, there's only a handful of
+        // actually-new picks left, which reads as a mostly-empty page
+        // rather than a personalized one. Padding out with current
+        // trending titles (deduped against both the library and what's
+        // already in `ranked`) keeps the page properly full without
+        // pretending the padding is personalized - it's a real fallback,
+        // the same one already used above when there are no seeds to
+        // recommend from at all, just applied when there aren't ENOUGH
+        // results instead of none.
+        const MIN_FOR_YOU_RESULTS = 12;
+        if (ranked.length > 0 && ranked.length < MIN_FOR_YOU_RESULTS) {
+            try {
+                const trendingEndpoint = currentSearchType === 'movie'
+                    ? `https://api.themoviedb.org/3/trending/movie/week?api_key=${TMDB_API_KEY}`
+                    : `https://api.themoviedb.org/3/trending/tv/week?api_key=${TMDB_API_KEY}`;
+                const trendingRes = await fetch(trendingEndpoint);
+                const trendingData = trendingRes.ok ? await trendingRes.json() : { results: [] };
+                const rankedIds = new Set(ranked.map(item => item.id));
+                const padding = (trendingData.results || []).filter(item =>
+                    !libraryTmdbIds.has(item.id) && !rankedIds.has(item.id)
+                );
+                ranked = ranked.concat(padding.slice(0, MIN_FOR_YOU_RESULTS - ranked.length));
+            } catch (err) {
+                // Padding is a nice-to-have, not essential - the original,
+                // shorter `ranked` list is still a perfectly valid result
+                // on its own, so a failed trending fetch here just means
+                // no padding rather than losing the real recommendations.
+                console.warn("Couldn't pad out For You with trending titles:", err);
+            }
+        }
 
         if (ranked.length === 0) {
             listContainer.innerHTML = emptyState("Nothing New to Suggest Yet", `Add a few more ${mediaLabel.toLowerCase()} you like and check back for personalized picks.`);
@@ -5702,23 +5600,23 @@ function renderHomeTab() {
     document.getElementById("currentStreakBadge").classList.toggle("inactive", streakDays === 0);
 
     document.getElementById("dashboardStats").innerHTML = `
-        <div class="stat">
-            <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>
+        <div class="stat stat-tv">
+            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg></div>
             <div class="stat-value">${totalShows}</div>
             <div class="stat-label">TV Shows</div>
         </div>
-        <div class="stat">
-            <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+        <div class="stat stat-movies">
+            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div>
             <div class="stat-value">${totalMovies}</div>
             <div class="stat-label">Movies</div>
         </div>
-        <div class="stat">
-            <svg class="icon stat-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <div class="stat stat-episodes">
+            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
             <div class="stat-value">${totalWatchedEpisodes}</div>
             <div class="stat-label">Episodes</div>
         </div>
-        <div class="stat">
-            <svg class="icon stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <div class="stat stat-rewatches">
+            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
             <div class="stat-value">${totalRewatches}</div>
             <div class="stat-label">Rewatches</div>
         </div>
@@ -6486,12 +6384,6 @@ async function markContinueItemWatched(type, itemId, epId) {
         return;
     }
     refreshActivePage();
-
-    if (type !== 'movie' && item.episodes) {
-        const ep = item.episodes.find(e => e.id === epId);
-        if (ep) announceEpisodeMilestone(item, ep.season);
-    }
-    if (type === 'movie') announceCollectionContinuation(item);
 
     // How many released-but-unwatched episodes remain for this show,
     // right after marking one watched - a quick, useful "how much is
@@ -7692,7 +7584,6 @@ async function toggleEntireSeasonWatched(seasonNumber) {
         return;
     }
     showToast(`Season ${seasonNumber} marked as ${anyUnwatched ? 'Watched' : 'Unwatched'}`, "success");
-    if (anyUnwatched) announceEpisodeMilestone(currentItem, seasonNumber);
     updateModalContent();
     refreshActivePage();
 }
@@ -7737,8 +7628,6 @@ async function markAllReleasedEpisodesWatched() {
         return;
     }
     showToast(`Marked ${toMark.length} episode${toMark.length === 1 ? '' : 's'} watched.`, "success");
-    const lastMarkedSeason = toMark.reduce((max, ep) => Math.max(max, ep.season), 1);
-    announceEpisodeMilestone(currentItem, lastMarkedSeason);
     updateModalContent();
     refreshActivePage();
 }
@@ -7892,7 +7781,6 @@ async function commitCurrentEpisodeWatchedToggle(alsoMarkEarlier) {
     if (alsoMarkEarlier) {
         showToast(`Marked ${targets.length} episodes watched.`, "success");
     }
-    if (markingWatched) announceEpisodeMilestone(currentItem, currentEpisode.season);
     closeEpisodeModal();
     updateModalContent();
     refreshActivePage();
@@ -7973,7 +7861,6 @@ async function markWatchedUpToCurrentEpisode() {
         return;
     }
     showToast(`Marked ${count} episode${count === 1 ? '' : 's'} as watched.`, "success");
-    announceEpisodeMilestone(currentItem, currentEpisode.season);
     closeEpisodeModal();
     updateModalContent();
     refreshActivePage();
@@ -8249,12 +8136,32 @@ async function toggleMovieWatched(id) {
         showErrorToast("This movie hasn't been released yet.");
         return;
     }
+
+    // Only ask on the way IN to watched, never on un-watching - clearing
+    // a watched flag has no date to record, so a picker there would be a
+    // question with no meaningful answer.
+    if (!currentItem.watched && state.askWatchedDate) {
+        openWatchDateModal(currentItem.id);
+        return;
+    }
+
+    await commitMovieWatchedToggle(null);
+}
+
+// The actual mutate/save/rollback for a movie's watched flag, split out
+// so the plain path above and both outcomes of the date picker share one
+// implementation rather than three near-copies of the same rollback
+// logic. `watchedAtISO` null means "now" (the original behaviour, still
+// what's used when the setting is off or when un-watching).
+async function commitMovieWatchedToggle(watchedAtISO) {
+    if (!currentItem || currentItem.type !== 'movie') return;
     const prevWatched = currentItem.watched;
     const prevLastWatchedAt = currentItem.lastWatchedAt;
     const prevRewatchCount = currentItem.rewatchCount;
-    const markingWatched = !currentItem.watched;
     currentItem.watched = !currentItem.watched;
-    currentItem.lastWatchedAt = currentItem.watched ? new Date().toISOString() : null;
+    currentItem.lastWatchedAt = currentItem.watched
+        ? (watchedAtISO || new Date().toISOString())
+        : null;
     if (!currentItem.watched) currentItem.rewatchCount = 0;
     const saved = await saveItem(currentItem);
     if (!saved) {
@@ -8266,7 +8173,115 @@ async function toggleMovieWatched(id) {
     }
     updateModalContent();
     refreshActivePage();
-    if (markingWatched) announceCollectionContinuation(currentItem);
+}
+
+/* =========================================================
+   WATCH DATE PICKER (movies only)
+   See #watchDateModal in index.html for why this is movies-only and
+   why the date control itself is the platform's native one.
+========================================================= */
+let watchDatePendingItemId = null;
+
+function openWatchDateModal(itemId) {
+    const modal = document.getElementById("watchDateModal");
+    if (!modal) {
+        // Markup missing for some reason - fall straight through to the
+        // normal "watched now" behaviour rather than leaving the button
+        // silently doing nothing at all.
+        commitMovieWatchedToggle(null);
+        return;
+    }
+    watchDatePendingItemId = itemId;
+
+    const input = document.getElementById("watchDateInput");
+    if (input) {
+        const today = getLocalTodayISODate();
+        // Defaults to today and can't be set in the future - a watch date
+        // is a record of something that already happened.
+        input.value = today;
+        input.max = today;
+    }
+
+    modal.classList.add("open");
+    lockBodyScroll("watchDateModal");
+}
+
+function closeWatchDateModal() {
+    document.getElementById("watchDateModal").classList.remove("open");
+    unlockBodyScroll("watchDateModal");
+    watchDatePendingItemId = null;
+}
+
+// Tapping outside cancels outright rather than defaulting to today -
+// unlike the mark-earlier-episodes prompt (where both answers still mark
+// the episode watched and only the scope differs), here one option marks
+// the movie watched and dismissing shouldn't silently do that.
+function closeWatchDateModalOutside(event) {
+    if (event.target.id === "watchDateModal") closeWatchDateModal();
+}
+
+async function confirmWatchDate(useToday) {
+    const input = document.getElementById("watchDateInput");
+    const raw = (!useToday && input && input.value) ? input.value : null;
+    const pendingId = watchDatePendingItemId;
+    closeWatchDateModal();
+
+    // The modal is opened from a specific item, but currentItem could in
+    // principle have moved on by the time this resolves - re-point it at
+    // what was actually being marked rather than trusting it blindly.
+    if (pendingId && (!currentItem || currentItem.id !== pendingId)) {
+        const target = getItem(pendingId);
+        if (!target) return;
+        currentItem = target;
+    }
+
+    await commitMovieWatchedToggle(raw ? localDateStringToISO(raw) : null);
+}
+
+// An <input type="date"> gives back a bare "YYYY-MM-DD" with no time or
+// zone. Stamping that as midnight UTC would land on the previous day for
+// anyone west of UTC, so this anchors it to midday in the viewer's own
+// local time instead - far enough from either midnight boundary that the
+// calendar day survives being read back anywhere, which is what every
+// date-only consumer in the app (streaks, NovaWrapped, achievements)
+// actually slices on.
+function localDateStringToISO(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return new Date().toISOString();
+    return new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
+}
+
+// Today as "YYYY-MM-DD" in local time - not toISOString().slice(0,10),
+// which is UTC and so can be a day off from the viewer's actual today.
+function getLocalTodayISODate() {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+// Settings toggle for the above. Persisted on the profile doc (see
+// saveUserProfile) rather than localStorage, since it's an account-level
+// behaviour preference that should follow someone across devices, unlike
+// the purely display-level Library Display prefs.
+async function toggleAskWatchedDate() {
+    const previous = state.askWatchedDate;
+    state.askWatchedDate = !previous;
+    updateAskWatchedDateButton();
+    const saved = await saveUserProfile();
+    if (!saved) {
+        state.askWatchedDate = previous;
+        updateAskWatchedDateButton();
+        showErrorToast("Couldn't save that setting. Please try again.");
+    }
+}
+
+function updateAskWatchedDateButton() {
+    const btn = document.getElementById("askWatchedDateBtn");
+    if (!btn) return;
+    const isOn = state.askWatchedDate !== false;
+    btn.textContent = isOn ? 'On' : 'Off';
+    btn.classList.toggle('pill-on', isOn);
+    btn.classList.toggle('pill-off', !isOn);
 }
 
 async function markNextEpisodeWatched(id) {
@@ -8293,7 +8308,6 @@ async function markNextEpisodeWatched(id) {
         }
         updateModalContent();
         refreshActivePage();
-        announceEpisodeMilestone(currentItem, nextEp.season);
     }
 }
 
