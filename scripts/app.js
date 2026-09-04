@@ -93,7 +93,13 @@ let state = {
     // field gets this same default via proceedToApp's `{...state,
     // ...userData}` merge (a field absent from the saved doc just leaves
     // this default in place, it's never coerced to false by its absence).
-    askWatchedDate: true
+    askWatchedDate: true,
+    // Mirror of OneSignal's own push-subscription state, kept in Firestore
+    // purely so the nightly server job can skip accounts that would never
+    // be sent anything - see syncNotificationsEnabledFlag(). Never the
+    // authority on delivery; OneSignal remains that. Defaults false so an
+    // account that has genuinely never subscribed isn't scanned.
+    notificationsEnabled: false
 };
 
 /* =========================================================
@@ -842,6 +848,7 @@ function initOneSignal() {
         // device once OneSignal is configured.
         OneSignal.User.PushSubscription.addEventListener("change", () => {
             checkNotificationPermissionState();
+            syncNotificationsEnabledFlag();
         });
 
         // If someone's already signed in by the time this finishes
@@ -849,6 +856,52 @@ function initOneSignal() {
         // account right away rather than waiting for the next sign-in.
         if (auth && auth.currentUser) oneSignalLogin(auth.currentUser.uid);
     });
+}
+
+/* =========================================================
+   NOTIFICATION SUBSCRIPTION MIRROR
+   OneSignal is the real source of truth for whether push can reach a
+   device - but only OneSignal knows it, and the nightly server job
+   (send-release-notifications.js) runs against Firestore, not OneSignal.
+   Without a copy of that state in Firestore, that job has no way to tell
+   a subscribed account from an unsubscribed one, so it had to read EVERY
+   account's ENTIRE library on every run just to find the few that might
+   need a push.
+
+   That is the single biggest scaling cost in the whole project: at a
+   ~120-item library it's ~120 document reads per account per run, twice
+   daily, which exhausts Firestore's free-tier 50k daily read quota at
+   roughly 200 accounts - before anyone even opens the app. Mirroring the
+   flag here turns that job from O(all accounts) into O(subscribed
+   accounts), since it can skip the library read entirely for anyone
+   who'd never be sent anything anyway.
+
+   Deliberately best-effort and non-blocking: this is an optimisation
+   hint for the server, never the thing that decides whether a push
+   actually gets delivered (OneSignal still decides that on its own). A
+   failure here costs an unnecessary library read on the next run, which
+   is exactly the status quo before this existed - so it must never
+   surface an error or block the real subscription flow.
+========================================================= */
+function syncNotificationsEnabledFlag() {
+    if (!isOneSignalConfigured()) return;
+    if (!auth || !auth.currentUser) return;
+    if (!window.OneSignal || !window.OneSignal.User) return;
+
+    let optedIn;
+    try {
+        optedIn = !!window.OneSignal.User.PushSubscription.optedIn;
+    } catch (e) {
+        return;
+    }
+
+    // Nothing changed - skip the write entirely rather than burning a
+    // Firestore write on every subscription-state event (this listener
+    // also fires on ordinary page loads, not just real opt-in changes).
+    if (state.notificationsEnabled === optedIn) return;
+
+    state.notificationsEnabled = optedIn;
+    saveUserProfile().catch(() => {});
 }
 
 // Associates this device's push subscription with the signed-in
@@ -1727,6 +1780,7 @@ async function saveUserProfile() {
             activeProfileId: state.activeProfileId,
             region: state.region,
             askWatchedDate: state.askWatchedDate,
+            notificationsEnabled: state.notificationsEnabled,
             // The server-side push job has no browser to infer "today"
             // from the way daysUntil()/getLocalTodayParts() do here - it
             // needs each account's real IANA timezone to compute their
@@ -2391,6 +2445,68 @@ async function handleSignUp() {
             signUpBtn.disabled = false;
             signUpBtn.textContent = "Join";
         }
+    }
+}
+
+/* =========================================================
+   DATA EXPORT
+   Someone with a few thousand tracked episodes has real investment in
+   this library, and until now there was no way to get any of it back
+   out - only account deletion, which destroys it. Exports the full
+   library (including per-episode watched flags, dates and rewatch
+   counts) plus profile-level settings as a single JSON file.
+
+   Entirely client-side and reads nothing new from Firestore -
+   state.library is already fully in memory (the onSnapshot listener in
+   proceedToApp keeps it there), so this costs zero additional document
+   reads no matter how large the library is.
+========================================================= */
+function exportLibraryData() {
+    if (!state.library || state.library.length === 0) {
+        showErrorToast("There's nothing in your library to export yet.");
+        return;
+    }
+
+    try {
+        const profile = (state.profiles && state.profiles[0]) || {};
+        const payload = {
+            // Versioned from the start so a future importer can tell which
+            // shape it's reading rather than having to guess.
+            exportFormatVersion: 1,
+            exportedAt: new Date().toISOString(),
+            app: "NovaWatch",
+            appVersion: APP_VERSION,
+            account: {
+                username: state.username || null,
+                displayName: profile.name || null,
+                region: state.region || null,
+                // Computed the same way saveUserProfile does rather than
+                // read from state - it's never stored there, so
+                // state.timeZone would silently export null.
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+                askWatchedDate: state.askWatchedDate,
+                unlockedAchievements: profile.unlockedAchievements || []
+            },
+            // The library exactly as stored, not a flattened summary - the
+            // point of an export is that it's complete enough to actually
+            // restore or migrate from, not just readable.
+            library: state.library
+        };
+
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `novawatch-export-${getLocalTodayISODate()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        // Revoking immediately can cancel the download in some browsers -
+        // a short delay lets it start first, then frees the memory.
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+        console.error("Data export failed", err);
+        showErrorToast("Couldn't export your data. Please try again.");
     }
 }
 
@@ -4212,6 +4328,11 @@ if (auth) {
             hideVerifyScreen();
             oneSignalLogin(user.uid);
             await proceedToApp(user, authScreen, mainApp);
+            // Backfill for accounts that subscribed before this flag
+            // existed - runs after proceedToApp so state.notificationsEnabled
+            // holds the saved value first, otherwise this would compare
+            // against the default and write on every single sign-in.
+            syncNotificationsEnabledFlag();
         } else {
             hideVerifyScreen();
             hideChooseUsernameScreen();
