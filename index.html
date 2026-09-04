@@ -21,6 +21,30 @@
 </script>
 <title>NovaWatch | Track What You Watch</title>
 
+<!-- SEO & link-preview metadata. The og:*/twitter:* tags matter more here
+     than on a typical app: NovaWatch generates share deep links
+     (?share_type=...&share_id=..., see shareCurrentItem in app.js) that get
+     pasted into WhatsApp/iMessage/Discord, and without these a shared link
+     unfurls as a bare URL with no title, description or image at all.
+     These are static site-level tags, so every shared link previews as
+     NovaWatch generically rather than as the specific show/movie - making
+     the preview title/image match the shared title would need server-side
+     or edge rendering to inject per-item tags before the crawler sees the
+     HTML, which a static-hosted client-side app can't do. Generic branded
+     preview is still a large improvement over no preview. -->
+<meta name="description" content="Track the TV shows and movies you watch, see what's releasing next, and get alerts on release day. Free, installable, and works offline.">
+<link rel="canonical" href="https://www.novawatch.site/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NovaWatch">
+<meta property="og:url" content="https://www.novawatch.site/">
+<meta property="og:title" content="NovaWatch | Track What You Watch">
+<meta property="og:description" content="Track the TV shows and movies you watch, see what's releasing next, and get alerts on release day.">
+<meta property="og:image" content="https://www.novawatch.site/images/NovaWatch_App_Icon.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="NovaWatch | Track What You Watch">
+<meta name="twitter:description" content="Track the TV shows and movies you watch, see what's releasing next, and get alerts on release day.">
+<meta name="twitter:image" content="https://www.novawatch.site/images/NovaWatch_App_Icon.png">
+
 <!-- Tab Icons & Custom App Icons -->
 <link rel="icon" type="image/png" href="https://www.novawatch.site/images/NovaWatch_Favicon_Icon.png">
 <link rel="apple-touch-icon" href="https://www.novawatch.site/images/NovaWatch_App_Icon.png">
@@ -89,8 +113,8 @@
 
         <div class="auth-form">
             <div class="auth-row">
-                <input type="text" id="authUsername" class="auth-input" placeholder="username" style="display:none;" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" enterkeyhint="next" onkeydown="handleAuthKeydown(event)">
-                <input type="email" id="authEmail" class="auth-input" placeholder="Email address" autocomplete="email" enterkeyhint="next" onkeydown="handleAuthKeydown(event)">
+                <input type="text" id="authUsername" class="auth-input" placeholder="username" style="display:none;" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" enterkeyhint="next" onkeydown="handleAuthKeydown(event)" aria-label="Username">
+                <input type="email" id="authEmail" class="auth-input" placeholder="Email address" autocomplete="email" enterkeyhint="next" onkeydown="handleAuthKeydown(event)" aria-label="Email address">
             </div>
             <div class="auth-field">
 <input
@@ -101,8 +125,7 @@
     autocomplete="current-password"
     enterkeyhint="go"
     oninput="clearPasswordError()"
-    onkeydown="handleAuthKeydown(event)"
->
+    onkeydown="handleAuthKeydown(event)" aria-label="Password">
 <div id="authPasswordError" class="auth-error"></div>
 </div>
             <div class="auth-actions">
@@ -186,8 +209,7 @@
                 spellcheck="false"
                 enterkeyhint="go"
                 onkeydown="handleChooseUsernameKeydown(event)"
-                oninput="clearChooseUsernameError()"
-            >
+                oninput="clearChooseUsernameError()" aria-label="Choose a username">
             <div id="chooseUsernameError" class="auth-error"></div>
             <div id="chooseUsernameStatus" class="username-check-status"></div>
         </div>
@@ -234,7 +256,7 @@
             <circle cx="11" cy="11" r="7"/>
             <path d="M20 20l-4-4"/>
         </svg>
-        <input id="onlineSearchInput" type="text" inputmode="search" placeholder="Search for TV Shows & Movies..." autocomplete="off" enterkeyhint="search">
+        <input id="onlineSearchInput" type="text" inputmode="search" placeholder="Search for TV Shows & Movies..." autocomplete="off" enterkeyhint="search" aria-label="Search for TV shows and movies">
         <button class="search-clear-btn" type="button" onclick="clearSearch('onlineSearchInput')" aria-label="Clear search">
             <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
         </button>
@@ -265,7 +287,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="tvLibrarySearchInput" type="text" inputmode="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search">
+                <input id="tvLibrarySearchInput" type="text" inputmode="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search" aria-label="Search your TV shows library">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -283,7 +305,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="movieLibrarySearchInput" type="text" inputmode="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search">
+                <input id="movieLibrarySearchInput" type="text" inputmode="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search" aria-label="Search your movies library">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -382,7 +404,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="upcomingTVSearchInput" type="text" inputmode="search" placeholder="Search upcoming TV shows..." autocomplete="off" enterkeyhint="search">
+                <input id="upcomingTVSearchInput" type="text" inputmode="search" placeholder="Search upcoming TV shows..." autocomplete="off" enterkeyhint="search" aria-label="Search upcoming TV shows">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingTVSearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -399,7 +421,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="upcomingMovieSearchInput" type="text" inputmode="search" placeholder="Search upcoming movies..." autocomplete="off" enterkeyhint="search">
+                <input id="upcomingMovieSearchInput" type="text" inputmode="search" placeholder="Search upcoming movies..." autocomplete="off" enterkeyhint="search" aria-label="Search upcoming movies">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingMovieSearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -586,7 +608,7 @@
         </div>
         <div class="confirm-title">When Did You Watch It?</div>
         <p class="confirm-message">Pick the day you watched this, or just use today.</p>
-        <input type="date" id="watchDateInput" class="watch-date-input">
+        <input type="date" id="watchDateInput" class="watch-date-input" aria-label="Date you watched this movie">
         <div class="confirm-actions">
             <button class="confirm-btn cancel" onclick="confirmWatchDate(true)">Today</button>
             <button class="confirm-btn primary" onclick="confirmWatchDate(false)">Save</button>
@@ -899,6 +921,16 @@
                 <div>
                     <div class="section-header"><div class="section-title">Account</div></div>
                     <div class="analytics-card settings-card settings-card-list">
+                        <button class="settings-action-row" onclick="exportLibraryData()">
+                            <div class="settings-row-icon" style="background: var(--violet-gradient);">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </div>
+                            <div class="settings-row-text">
+                                <div class="settings-row-title">Export My Data</div>
+                                <div class="settings-row-sub">Download your library and watch history.</div>
+                            </div>
+                            <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
                         <button class="settings-action-row" onclick="handleSignOut()">
                             <div class="settings-row-icon" style="background: var(--flat-blue);">
                                 <svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -970,7 +1002,7 @@
                     <circle cx="11" cy="11" r="7"/>
                     <path d="M20 20l-4-4"/>
                 </svg>
-                <input id="regionSearchInput" type="text" inputmode="search" placeholder="Search countries..." autocomplete="off" enterkeyhint="search">
+                <input id="regionSearchInput" type="text" inputmode="search" placeholder="Search countries..." autocomplete="off" enterkeyhint="search" aria-label="Search countries">
                 <button class="search-clear-btn" type="button" onclick="clearSearch('regionSearchInput')" aria-label="Clear search">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
                 </button>
@@ -1045,7 +1077,7 @@
         <div class="confirm-title">Display Name</div>
         <p class="confirm-message">Shown across the app instead of your username - separate from it, and yours to change anytime.</p>
         <div class="auth-field">
-            <input type="text" id="editDisplayNameInput" class="auth-input" placeholder="Display name" maxlength="30" autocomplete="off" enterkeyhint="done" onkeydown="handleEditDisplayNameKeydown(event)" oninput="clearEditDisplayNameError()">
+            <input type="text" id="editDisplayNameInput" class="auth-input" placeholder="Display name" maxlength="30" autocomplete="off" enterkeyhint="done" onkeydown="handleEditDisplayNameKeydown(event)" oninput="clearEditDisplayNameError()" aria-label="Display name">
             <div id="editDisplayNameError" class="auth-error"></div>
         </div>
         <div class="confirm-actions">
