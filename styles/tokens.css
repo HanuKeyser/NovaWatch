@@ -64,7 +64,16 @@
        bar is the reference implementation this whole tier is built to
        match, not the other way around. */
     --glass-chrome-fill: rgba(255, 255, 255, 0.26);
-    --glass-chrome-blur: blur(72px) saturate(300%);
+    /* saturate() was 300% - that multiplies the saturation of whatever
+       is BEHIND the bar, so scrolling a grid of colourful posters under
+       it pulled strong colour casts through the glass (a wall of warm
+       poster art turned the bar visibly tan/brown, reported across many
+       screens in both themes). The bar should read as one consistent
+       piece of chrome regardless of what's under it, so the saturation
+       is dialled back to a level that still gives the glass life without
+       restating the content's own colour. Blur raised slightly to
+       compensate for the lost "richness" the over-saturation was faking. */
+    --glass-chrome-blur: blur(80px) saturate(150%);
     --glass-chrome-border: rgba(255, 255, 255, 0.5);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
@@ -119,6 +128,20 @@
     --success: #22c55e;
     --danger: #ef4444;
 
+    /* =====================================================
+       TYPOGRAPHY
+       Two roles, deliberately. UI chrome (buttons, labels, nav, stats,
+       settings) stays on the system stack - it should feel native to the
+       device and load instantly. Titles of WORKS - show names, movie
+       names, episode names - use a serif instead. Naming a work is a
+       different job from labelling a control: a serif here reads the way
+       a film-credit block or a criticism byline does, and it's the single
+       cheapest way to give the app a voice rather than looking like every
+       other system-font app. Fallbacks are real serifs, so a failed font
+       load degrades to the right *kind* of type rather than back to sans.
+    ===================================================== */
+    --font-title: 'Newsreader', 'Iowan Old Style', 'Palatino', Georgia, serif;
+
     --radius: 20px;
 
     /* =====================================================
@@ -165,7 +188,10 @@ html[data-theme="dark"] {
     --glass-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
 
     --glass-chrome-fill: rgba(40, 40, 46, 0.5);
-    --glass-chrome-blur: blur(72px) saturate(230%);
+    /* Same over-saturation fix as light mode - see the comment there.
+       Dark mode needs a touch more than light because the fill itself is
+       darker and less is coming through to begin with. */
+    --glass-chrome-blur: blur(80px) saturate(160%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.42), 0 28px 60px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
     --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
