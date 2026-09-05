@@ -66,6 +66,17 @@
 
 <!-- Preconnect for faster API calls -->
 <link rel="preconnect" href="https://api.themoviedb.org">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Newsreader is used ONLY for the titles of works (shows, movies,
+     episodes) - see --font-title in tokens.css. A serif for naming works
+     borrows from film-criticism/poster-credit vernacular and gives the
+     app a voice the system stack alone can't. Deliberately NOT loaded for
+     UI chrome, which stays on the system font: that keeps the added
+     payload to one family and means a slow font load can never delay
+     buttons, labels or navigation. display=swap so titles render in the
+     fallback serif immediately rather than staying invisible. -->
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&display=swap" rel="stylesheet">
 <link rel="preconnect" href="https://image.tmdb.org">
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -113,7 +124,7 @@
 
         <div class="auth-form">
             <div class="auth-row">
-                <input type="text" id="authUsername" class="auth-input" placeholder="username" style="display:none;" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" enterkeyhint="next" onkeydown="handleAuthKeydown(event)" aria-label="Username">
+                <input type="text" id="authUsername" class="auth-input" placeholder="Username" style="display:none;" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="username" enterkeyhint="next" onkeydown="handleAuthKeydown(event)" aria-label="Username">
                 <input type="email" id="authEmail" class="auth-input" placeholder="Email address" autocomplete="email" enterkeyhint="next" onkeydown="handleAuthKeydown(event)" aria-label="Email address">
             </div>
             <div class="auth-field">
@@ -202,7 +213,7 @@
                 type="text"
                 id="chooseUsernameInput"
                 class="auth-input"
-                placeholder="username"
+                placeholder="Username"
                 autocomplete="off"
                 autocapitalize="none"
                 autocorrect="off"
@@ -256,7 +267,7 @@
             <circle cx="11" cy="11" r="7"/>
             <path d="M20 20l-4-4"/>
         </svg>
-        <input id="onlineSearchInput" type="text" inputmode="search" placeholder="Search for TV Shows & Movies..." autocomplete="off" enterkeyhint="search" aria-label="Search for TV shows and movies">
+        <input id="onlineSearchInput" type="text" inputmode="search" placeholder="Search TV shows..." autocomplete="off" enterkeyhint="search" aria-label="Search for TV shows and movies">
         <button class="search-clear-btn" type="button" onclick="clearSearch('onlineSearchInput')" aria-label="Clear search">
             <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
         </button>
@@ -569,7 +580,7 @@
 ================================================     -->
 <div id="markPreviousEpisodesModal" class="confirm-overlay" onclick="closeMarkPreviousEpisodesModalOutside(event)">
     <div class="confirm-card">
-        <div class="confirm-icon-badge">
+        <div class="confirm-icon-badge neutral">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                 <polyline points="22 4 12 14.01 9 11.01"/>
@@ -580,38 +591,6 @@
         <div class="confirm-actions">
             <button class="confirm-btn cancel" onclick="declineMarkPreviousEpisodes()">Just This One</button>
             <button class="confirm-btn primary" onclick="confirmMarkPreviousEpisodes()">Mark Them Too</button>
-        </div>
-    </div>
-</div>
-
-<!-- =====================================================
-     WATCH DATE PICKER (movies)
-     Shown by toggleMovieWatched() in app.js when marking a movie
-     watched, if the "Ask for movie watch date" setting is on (it is by
-     default - state.askWatchedDate). Lets someone record the day they
-     actually watched something rather than always stamping the moment
-     they happened to tap the button, which matters for a library where
-     titles get added and marked in bulk long after the fact. Only
-     movies - a TV episode's own watched date is already implied by the
-     episode it belongs to, and asking per-episode would make catching
-     up on a season unbearable.
-================================================     -->
-<div id="watchDateModal" class="confirm-overlay" onclick="closeWatchDateModalOutside(event)">
-    <div class="confirm-card">
-        <div class="confirm-icon-badge">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-        </div>
-        <div class="confirm-title">When Did You Watch It?</div>
-        <p class="confirm-message">Pick the day you watched this, or just use today.</p>
-        <input type="date" id="watchDateInput" class="watch-date-input" aria-label="Date you watched this movie">
-        <div class="confirm-actions">
-            <button class="confirm-btn cancel" onclick="confirmWatchDate(true)">Today</button>
-            <button class="confirm-btn primary" onclick="confirmWatchDate(false)">Save</button>
         </div>
     </div>
 </div>
@@ -861,26 +840,10 @@
                             </div>
                             <button class="hero-pill-btn" id="notificationBtn" onclick="requestNotificationPermission()">Enable</button>
                         </div>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="section-header"><div class="section-title">Library</div></div>
-                    <div class="analytics-card settings-card">
-                        <div class="settings-row">
-                            <div class="settings-row-icon" style="background: var(--violet-gradient);">
-                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            </div>
-                            <div class="settings-row-text">
-                                <div class="settings-row-title">Ask for movie watch date</div>
-                                <div class="settings-row-sub">Pick the day you actually watched a movie.</div>
-                            </div>
-                            <button class="hero-pill-btn" id="askWatchedDateBtn" onclick="toggleAskWatchedDate()">On</button>
-                        </div>
 
                         <div class="settings-row" style="cursor: pointer;" onclick="openLibraryDisplayModal()">
                             <div class="settings-row-icon" style="background: var(--green-gradient);">
-                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                                <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
                             </div>
                             <div class="settings-row-text">
                                 <div class="settings-row-title">Library Display</div>
