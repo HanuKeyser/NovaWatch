@@ -5769,23 +5769,23 @@ function renderHomeTab() {
     document.getElementById("currentStreakBadge").classList.toggle("inactive", streakDays === 0);
 
     document.getElementById("dashboardStats").innerHTML = `
-        <div class="stat stat-tv">
-            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg></div>
+        <div class="stat">
+            <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>
             <div class="stat-value">${totalShows}</div>
             <div class="stat-label">TV Shows</div>
         </div>
-        <div class="stat stat-movies">
-            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div>
+        <div class="stat">
+            <svg class="icon stat-icon" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M2 7l4-4h3l-4 4H2z"/><path d="M11 7l4-4h3l-4 4h-3z"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
             <div class="stat-value">${totalMovies}</div>
             <div class="stat-label">Movies</div>
         </div>
-        <div class="stat stat-episodes">
-            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+        <div class="stat">
+            <svg class="icon stat-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             <div class="stat-value">${totalWatchedEpisodes}</div>
             <div class="stat-label">Episodes</div>
         </div>
-        <div class="stat stat-rewatches">
-            <div class="stat-icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+        <div class="stat">
+            <svg class="icon stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
             <div class="stat-value">${totalRewatches}</div>
             <div class="stat-label">Rewatches</div>
         </div>
@@ -6048,26 +6048,9 @@ function continuePlaceholderIcon(type) {
 // (its preview image) as the banner with the show's poster badged over the
 // bottom-left corner; movie cards fall back to the movie's backdrop/poster.
 function createContinueCard(type, item, episode) {
-    // Prefer the EPISODE's own still (the actual frame from what you're
-    // about to watch), then the show/movie backdrop, then the poster.
-    // This card is the busiest thing on Home and it was rendering the
-    // show's poster shrunk to 80px - the same portrait thumbnail already
-    // shown all over Library - which used the richest asset the app has
-    // in its least effective form and told you nothing about the specific
-    // episode. A wide still is both more informative and far better
-    // looking. Poster is kept as the final fallback since some episodes
-    // (especially unaired ones) have no still, and some older titles have
-    // no backdrop either.
-    const artSrc = (type === 'tv' && episode && episode.still && episode.still.trim() !== "")
-        ? episode.still
-        : (item.backdrop && item.backdrop.trim() !== "" ? item.backdrop : item.poster);
-    const hasArt = artSrc && artSrc.trim() !== "";
-    // Wide art (a still or backdrop) fills the 16:9 frame; a poster used
-    // as fallback is portrait, so it's contained rather than cropped to
-    // avoid slicing the middle out of it.
-    const isWideArt = artSrc !== item.poster;
-    const posterHTML = hasArt
-        ? `<img src="${tmdbThumb(artSrc, 'w300')}" class="continue-poster${isWideArt ? '' : ' is-poster'}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+    const hasPoster = item.poster && item.poster.trim() !== "";
+    const posterHTML = hasPoster
+        ? `<img src="${tmdbThumb(item.poster, 'w342')}" class="continue-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
         : `<div class="continue-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${continuePlaceholderIcon(type)}</div>`;
 
     // The meta line and description surface the *episode's* own info for TV
