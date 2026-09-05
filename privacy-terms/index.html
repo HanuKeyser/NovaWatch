@@ -68,7 +68,15 @@ body {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: var(--glass-sheen), var(--surface);
+    /* This button is position:fixed over a long scrolling legal
+       document, so body text passes directly underneath it. With
+       var(--surface) (a translucent glass fill) that text stayed
+       partly legible THROUGH the button, which looked like a rendering
+       fault on a page that should read as authoritative. An opaque
+       fill occludes properly; the blur is kept so it still matches the
+       app's glass language at the edges rather than looking like a
+       flat pasted-on circle. */
+    background: var(--glass-sheen), var(--bg-solid-fallback, #eef1f6);
     color: var(--text);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
@@ -180,6 +188,13 @@ html[data-theme="dark"] .hero {
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
+
+html[data-theme="dark"] .overlay-close-button {
+    /* Opaque dark equivalent of the light fill above - same occlusion
+       reason. Matches the dark page background rather than the glass
+       surface token, which is translucent by design. */
+    background: var(--glass-sheen), #1a1f2b;
+}
 </style>
 </head>
 
