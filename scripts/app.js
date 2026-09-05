@@ -87,18 +87,6 @@ let state = {
     // watch" lookups. null until detectDefaultRegion() runs on first sign-in
     // or an existing profile doc is loaded - see proceedToApp().
     region: null,
-    // Whether marking a movie watched asks which date it was actually
-    // watched on, rather than always stamping the moment it was marked.
-    // Defaults true - an existing account whose profile doc predates this
-    // field gets this same default via proceedToApp's `{...state,
-    // ...userData}` merge (a field absent from the saved doc just leaves
-    // this default in place, it's never coerced to false by its absence).
-    askWatchedDate: true,
-    // Mirror of OneSignal's own push-subscription state, kept in Firestore
-    // purely so the nightly server job can skip accounts that would never
-    // be sent anything - see syncNotificationsEnabledFlag(). Never the
-    // authority on delivery; OneSignal remains that. Defaults false so an
-    // account that has genuinely never subscribed isn't scanned.
     notificationsEnabled: false
 };
 
@@ -649,7 +637,21 @@ function renderAchievementsList() {
     const profile = state.profiles && state.profiles[0] ? state.profiles[0] : null;
     const unlocked = profile && profile.unlockedAchievements ? profile.unlockedAchievements : [];
 
-    container.innerHTML = ACHIEVEMENTS.map(ach => {
+    // Unlocked first, then locked - each group keeping ACHIEVEMENTS' own
+    // order internally (so the movie/show/episode tiers still read as
+    // ascending ladders rather than being shuffled). Rendered in
+    // definition order, the list opened on four consecutive locked movie
+    // tiers, so the first screenful was entirely things NOT achieved -
+    // which reads as a to-do list rather than a record of what you've
+    // done. sort() is stable in every engine this targets, so equal
+    // entries keep their relative positions.
+    const ordered = [...ACHIEVEMENTS].sort((a, b) => {
+        const aUnlocked = unlocked.includes(a.id) ? 0 : 1;
+        const bUnlocked = unlocked.includes(b.id) ? 0 : 1;
+        return aUnlocked - bUnlocked;
+    });
+
+    container.innerHTML = ordered.map(ach => {
         const isUnlocked = unlocked.includes(ach.id);
         return `
             <div class="analytics-card settings-card" style="padding: 14px; opacity: ${isUnlocked ? '1' : '0.55'};">
@@ -1779,7 +1781,6 @@ async function saveUserProfile() {
             profiles: state.profiles,
             activeProfileId: state.activeProfileId,
             region: state.region,
-            askWatchedDate: state.askWatchedDate,
             notificationsEnabled: state.notificationsEnabled,
             // The server-side push job has no browser to infer "today"
             // from the way daysUntil()/getLocalTodayParts() do here - it
@@ -2484,7 +2485,6 @@ function exportLibraryData() {
                 // read from state - it's never stored there, so
                 // state.timeZone would silently export null.
                 timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
-                askWatchedDate: state.askWatchedDate,
                 unlockedAchievements: profile.unlockedAchievements || []
             },
             // The library exactly as stored, not a flattened summary - the
@@ -2777,12 +2777,6 @@ function unlockBodyScroll(modalId) {
 function openSettingsSheet() {
     const modal = document.getElementById("settingsModal");
     if (modal.classList.contains("open")) return;
-    // Sync the toggle's own on/off label to the real stored value before
-    // the sheet is visible - it's rendered as static markup in
-    // index.html (unlike Library Display's rows, which are built fresh
-    // each time they're opened), so without this it would always read
-    // "On" regardless of the actual setting.
-    updateAskWatchedDateButton();
     modal.classList.add("open");
     lockBodyScroll("settingsModal");
 }
@@ -3031,7 +3025,28 @@ function renderNovaWrappedYear() {
         return;
     }
 
+    // A small teaser of what's actually inside, above the button. This
+    // screen used to be a title, a year picker and a lone button, leaving
+    // most of the screen empty - which undersold a feature whose whole
+    // point is that it's visually rich, and gave no reason to tap. These
+    // are the same figures the slideshow opens with, so it previews the
+    // real thing rather than inventing a separate summary.
+    const hours = Math.floor(stats.totalMinutes / 60);
+    const preview = [
+        { value: hours > 0 ? `${hours}h` : `${stats.totalMinutes}m`, label: 'Watched' },
+        { value: stats.episodesCount, label: stats.episodesCount === 1 ? 'Episode' : 'Episodes' },
+        { value: stats.moviesCount, label: stats.moviesCount === 1 ? 'Movie' : 'Movies' }
+    ];
+
     body.innerHTML = `
+        <div class="wrapped-preview">
+            ${preview.map(p => `
+                <div class="wrapped-preview-stat">
+                    <div class="wrapped-preview-value">${p.value}</div>
+                    <div class="wrapped-preview-label">${p.label}</div>
+                </div>
+            `).join('')}
+        </div>
         <button class="wrapped-start-btn" onclick="startWrappedSlideshow()">
             View My ${currentNovaWrappedYear} Wrapped
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
@@ -3120,6 +3135,12 @@ function buildWrappedSlides(stats) {
         });
     }
 
+    // floor(), not round() - the hero total slide derives its own hours
+    // with floor (see days/hours in computeNovaWrappedStats), so rounding
+    // here could show a month claiming MORE whole hours than the year
+    // total it's part of (e.g. a 460-minute month rounds to 8h inside a
+    // 480-minute year that floors to 8h). Same rounding on both keeps
+    // the two slides arithmetically coherent with each other.
     if (stats.busiestMonth) {
         slides.push({
             bg: 'wrapped-bg-month',
@@ -3127,7 +3148,7 @@ function buildWrappedSlides(stats) {
                 <div class="wrapped-slide-content">
                     <div class="wrapped-slide-eyebrow">Your biggest month was</div>
                     <div class="wrapped-slide-headline wrapped-slide-headline-big">${stats.busiestMonth.label}</div>
-                    <div class="wrapped-slide-footnote">${Math.round(stats.busiestMonth.minutes / 60)} hours watched that month</div>
+                    <div class="wrapped-slide-footnote">${Math.floor(stats.busiestMonth.minutes / 60)} hours watched that month</div>
                 </div>
             `
         });
@@ -4347,6 +4368,16 @@ if (auth) {
             // this cache exists to feed.
             clearCachedIdentitySnapshot();
 
+            // Both places libraryLoaded is set true live inside
+            // proceedToApp (the signed-in path), so a signed-out session
+            // left it false forever - and every render that gates on it
+            // (Continue Watching, Library, Upcoming) sat on its loading
+            // skeleton permanently instead of showing its real empty
+            // state. There is no library to wait for when nobody is
+            // signed in, so it is "loaded" by definition here.
+            libraryLoaded = true;
+            state.library = [];
+
             // User is logged out: Show Auth Screen, Hide Main App
             authScreen.style.display = "flex";
             mainApp.style.display = "none";
@@ -4593,6 +4624,7 @@ function setSearchType(type) {
     currentSearchType = type;
     document.getElementById("searchTypeTV").classList.toggle("active", type === 'tv');
     document.getElementById("searchTypeMovie").classList.toggle("active", type === 'movie');
+    updateDiscoverSearchPlaceholder();
 
     const searchInput = document.getElementById("onlineSearchInput");
     const query = searchInput ? searchInput.value.trim() : "";
@@ -4604,9 +4636,25 @@ function setSearchType(type) {
     }
 }
 
+// Discover's search is scoped by the TV/Movies toggle above it, but the
+// placeholder used to be a static "Search for TV Shows & Movies...",
+// which was misleading in both toggle states - it implied the search
+// covered both at once when it only ever searches the selected one.
+// Every other search bar in the app already names its own scope
+// ("Search TV shows library...", "Search upcoming movies..."), so this
+// just brings Discover in line with them.
+function updateDiscoverSearchPlaceholder() {
+    const input = document.getElementById("onlineSearchInput");
+    if (!input) return;
+    const isMovies = currentSearchType === 'movie';
+    input.placeholder = isMovies ? "Search movies..." : "Search TV shows...";
+    input.setAttribute("aria-label", isMovies ? "Search movies" : "Search TV shows");
+}
+
 function initSearchPage() {
     const searchInput = document.getElementById("onlineSearchInput");
     if (!searchInput) return;
+    updateDiscoverSearchPlaceholder();
 
     searchInput.addEventListener("input", (e) => {
         clearTimeout(searchDebounceTimer);
@@ -4695,14 +4743,14 @@ async function fetchTrending() {
 
         if (!response.ok) {
             console.warn(`TMDB trending request failed (${response.status}):`, data?.status_message || data);
-            listContainer.innerHTML = emptyState("Couldn't Load Trending", "There was a problem reaching TMDB. Check your connection and try again.");
+            listContainer.innerHTML = emptyState("Couldn't Load Trending", "There was a problem reaching TMDB. Check your connection and try again.", null, 'search');
             return;
         }
 
         renderSearchResults(data.results || []);
     } catch (error) {
         console.error("Error fetching trending media:", error);
-        listContainer.innerHTML = emptyState("Unable to load trending items", "Please check your network connection.");
+        listContainer.innerHTML = emptyState("Unable to load trending items", "Please check your network connection.", null, 'search');
     }
 }
 
@@ -4801,7 +4849,7 @@ async function fetchForYou() {
         renderSearchResults(ranked);
     } catch (error) {
         console.error("Error fetching For You recommendations:", error);
-        listContainer.innerHTML = emptyState("Unable to Load Recommendations", "Please check your network connection.");
+        listContainer.innerHTML = emptyState("Unable to Load Recommendations", "Please check your network connection.", null, 'search');
     }
 }
 
@@ -4822,19 +4870,19 @@ async function performTMDBSearch(query) {
 
         if (!response.ok) {
             console.warn(`TMDB search request failed (${response.status}):`, data?.status_message || data);
-            listContainer.innerHTML = emptyState("Couldn't Load Results", "There was a problem reaching TMDB. Check your connection and try again.");
+            listContainer.innerHTML = emptyState("Couldn't Load Results", "There was a problem reaching TMDB. Check your connection and try again.", null, 'search');
             return;
         }
 
         if (!data.results || data.results.length === 0) {
-            listContainer.innerHTML = emptyState("No Items Found", `No results matching "${escapeHTML(query)}".`);
+            listContainer.innerHTML = emptyState("No Items Found", `No results matching "${escapeHTML(query)}".`, null, 'search');
             return;
         }
 
         renderSearchResults(data.results);
     } catch (error) {
         console.error("Error searching TMDB:", error);
-        listContainer.innerHTML = emptyState("Search Error", "Couldn't reach TMDB. Check your connection and try again.");
+        listContainer.innerHTML = emptyState("Search Error", "Couldn't reach TMDB. Check your connection and try again.", null, 'search');
     }
 }
 
@@ -6000,9 +6048,26 @@ function continuePlaceholderIcon(type) {
 // (its preview image) as the banner with the show's poster badged over the
 // bottom-left corner; movie cards fall back to the movie's backdrop/poster.
 function createContinueCard(type, item, episode) {
-    const hasPoster = item.poster && item.poster.trim() !== "";
-    const posterHTML = hasPoster
-        ? `<img src="${tmdbThumb(item.poster, 'w342')}" class="continue-poster" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
+    // Prefer the EPISODE's own still (the actual frame from what you're
+    // about to watch), then the show/movie backdrop, then the poster.
+    // This card is the busiest thing on Home and it was rendering the
+    // show's poster shrunk to 80px - the same portrait thumbnail already
+    // shown all over Library - which used the richest asset the app has
+    // in its least effective form and told you nothing about the specific
+    // episode. A wide still is both more informative and far better
+    // looking. Poster is kept as the final fallback since some episodes
+    // (especially unaired ones) have no still, and some older titles have
+    // no backdrop either.
+    const artSrc = (type === 'tv' && episode && episode.still && episode.still.trim() !== "")
+        ? episode.still
+        : (item.backdrop && item.backdrop.trim() !== "" ? item.backdrop : item.poster);
+    const hasArt = artSrc && artSrc.trim() !== "";
+    // Wide art (a still or backdrop) fills the 16:9 frame; a poster used
+    // as fallback is portrait, so it's contained rather than cropped to
+    // avoid slicing the middle out of it.
+    const isWideArt = artSrc !== item.poster;
+    const posterHTML = hasArt
+        ? `<img src="${tmdbThumb(artSrc, 'w300')}" class="continue-poster${isWideArt ? '' : ' is-poster'}" alt="${escapeHTML(item.title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">`
         : `<div class="continue-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${continuePlaceholderIcon(type)}</div>`;
 
     // The meta line and description surface the *episode's* own info for TV
@@ -6525,12 +6590,21 @@ async function markContinueItemWatched(type, itemId, epId) {
     }
 }
 
-function emptyState(title, message = "Check back later or search for new shows and movies to add.", cta = null) {
+// `icon` picks which glyph sits above the message. Defaults to the clock
+// (a "nothing here yet / check back later" meaning), but a failed SEARCH
+// is a different situation entirely - a clock there reads as "coming
+// soon", which is actively misleading when the real answer is "that
+// doesn't exist". Callers that are reporting a search miss or an error
+// pass 'search' instead.
+function emptyState(title, message = "Check back later or search for new shows and movies to add.", cta = null, icon = 'clock') {
+    const icons = {
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/>',
+        search: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+    };
     return `
         <div class="empty-state">
             <svg class="icon icon-large" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 8v4l3 3"/>
+                ${icons[icon] || icons.clock}
             </svg>
             <h3>${title}</h3>
             <p>${message}</p>
@@ -6578,11 +6652,26 @@ function updateHomeUI() {
     // for the brief window right after sign-in before the profile doc
     // has actually loaded (or if it's somehow missing), not the main
     // source it used to be.
-    if (state.profiles && state.profiles[0] && state.profiles[0].name) {
-        displayName = state.profiles[0].name;
+    // The seeded default profile is literally named "Guest" (see the
+    // state initialiser - id "profile-guest"), so a signed-in account
+    // whose profile doc hasn't come back from Firestore yet passed the
+    // "has a real name" test below and rendered as "Guest" - with a
+    // time-of-day greeting and a live presence dot beside it, because
+    // those correctly keyed off auth state. Treating the placeholder
+    // profile as "no name yet" rather than a real one makes the
+    // signed-in fallbacks (Auth displayName, then the email's local
+    // part) actually reachable, which is what they were written for.
+    const seededProfile = state.profiles && state.profiles[0]
+        && state.profiles[0].id === "profile-guest";
+    const profileName = (!seededProfile && state.profiles && state.profiles[0])
+        ? state.profiles[0].name
+        : "";
+
+    if (profileName) {
+        displayName = profileName;
     } else if (auth && auth.currentUser) {
         const user = auth.currentUser;
-        displayName = user.displayName || user.email.split('@')[0];
+        displayName = user.displayName || (user.email ? user.email.split('@')[0] : "") || "";
     } else {
         displayName = "Guest";
     }
@@ -7054,16 +7143,19 @@ function closeModalOutside(event) {
 function updateModalContent() {
     if (!currentItem) return;
 
-    // Movies never have more content than a poster/backdrop, meta, and a
-    // description - never enough to justify forcing the full screen, so
-    // they get the same compact/content-sized card treatment as the
-    // episode modal. TV shows keep the full-screen treatment since their
-    // episode list can run long regardless of the show's own description
-    // length.
+    // Movies used to get the compact/content-sized card treatment here
+    // (the reasoning being that a movie never has an episode list, so it
+    // rarely has enough content to justify a full screen). That was a
+    // real inconsistency in practice: opening a TV show filled the
+    // screen while opening a movie produced a floating card, so the same
+    // action produced two different-feeling results depending on what
+    // you tapped. Both are now full-screen. These classes are removed
+    // rather than left unset, since the element is reused across opens
+    // and would otherwise keep whatever it was given last time.
     const detailsModalEl = document.getElementById("detailsModal");
     const detailsSheetEl = detailsModalEl.querySelector(".modal-sheet");
-    detailsModalEl.classList.toggle("modal-compact", currentItem.type === 'movie');
-    detailsSheetEl.classList.toggle("modal-sheet-compact", currentItem.type === 'movie');
+    detailsModalEl.classList.remove("modal-compact");
+    detailsSheetEl.classList.remove("modal-sheet-compact");
 
     const backdropHeader = document.getElementById("modalBackdropHeader");
     const backdropUrl = currentItem.backdrop || currentItem.poster;
@@ -7551,7 +7643,7 @@ function renderPosterPickerGrid() {
 
     if (!images.length) {
         grid.innerHTML = posterPickerImages.failed
-            ? emptyState("Couldn't Load Images", "There was a problem reaching TMDB. Check your connection and try again.")
+            ? emptyState("Couldn't Load Images", "There was a problem reaching TMDB. Check your connection and try again.", null, 'search')
             : emptyState("No Images Found", `TMDB doesn't have any alternate ${posterPickerTab}s for this title.`);
         return;
     }
@@ -8257,32 +8349,11 @@ async function toggleMovieWatched(id) {
         showErrorToast("This movie hasn't been released yet.");
         return;
     }
-
-    // Only ask on the way IN to watched, never on un-watching - clearing
-    // a watched flag has no date to record, so a picker there would be a
-    // question with no meaningful answer.
-    if (!currentItem.watched && state.askWatchedDate) {
-        openWatchDateModal(currentItem.id);
-        return;
-    }
-
-    await commitMovieWatchedToggle(null);
-}
-
-// The actual mutate/save/rollback for a movie's watched flag, split out
-// so the plain path above and both outcomes of the date picker share one
-// implementation rather than three near-copies of the same rollback
-// logic. `watchedAtISO` null means "now" (the original behaviour, still
-// what's used when the setting is off or when un-watching).
-async function commitMovieWatchedToggle(watchedAtISO) {
-    if (!currentItem || currentItem.type !== 'movie') return;
     const prevWatched = currentItem.watched;
     const prevLastWatchedAt = currentItem.lastWatchedAt;
     const prevRewatchCount = currentItem.rewatchCount;
     currentItem.watched = !currentItem.watched;
-    currentItem.lastWatchedAt = currentItem.watched
-        ? (watchedAtISO || new Date().toISOString())
-        : null;
+    currentItem.lastWatchedAt = currentItem.watched ? new Date().toISOString() : null;
     if (!currentItem.watched) currentItem.rewatchCount = 0;
     const saved = await saveItem(currentItem);
     if (!saved) {
@@ -8296,113 +8367,13 @@ async function commitMovieWatchedToggle(watchedAtISO) {
     refreshActivePage();
 }
 
-/* =========================================================
-   WATCH DATE PICKER (movies only)
-   See #watchDateModal in index.html for why this is movies-only and
-   why the date control itself is the platform's native one.
-========================================================= */
-let watchDatePendingItemId = null;
-
-function openWatchDateModal(itemId) {
-    const modal = document.getElementById("watchDateModal");
-    if (!modal) {
-        // Markup missing for some reason - fall straight through to the
-        // normal "watched now" behaviour rather than leaving the button
-        // silently doing nothing at all.
-        commitMovieWatchedToggle(null);
-        return;
-    }
-    watchDatePendingItemId = itemId;
-
-    const input = document.getElementById("watchDateInput");
-    if (input) {
-        const today = getLocalTodayISODate();
-        // Defaults to today and can't be set in the future - a watch date
-        // is a record of something that already happened.
-        input.value = today;
-        input.max = today;
-    }
-
-    modal.classList.add("open");
-    lockBodyScroll("watchDateModal");
-}
-
-function closeWatchDateModal() {
-    document.getElementById("watchDateModal").classList.remove("open");
-    unlockBodyScroll("watchDateModal");
-    watchDatePendingItemId = null;
-}
-
-// Tapping outside cancels outright rather than defaulting to today -
-// unlike the mark-earlier-episodes prompt (where both answers still mark
-// the episode watched and only the scope differs), here one option marks
-// the movie watched and dismissing shouldn't silently do that.
-function closeWatchDateModalOutside(event) {
-    if (event.target.id === "watchDateModal") closeWatchDateModal();
-}
-
-async function confirmWatchDate(useToday) {
-    const input = document.getElementById("watchDateInput");
-    const raw = (!useToday && input && input.value) ? input.value : null;
-    const pendingId = watchDatePendingItemId;
-    closeWatchDateModal();
-
-    // The modal is opened from a specific item, but currentItem could in
-    // principle have moved on by the time this resolves - re-point it at
-    // what was actually being marked rather than trusting it blindly.
-    if (pendingId && (!currentItem || currentItem.id !== pendingId)) {
-        const target = getItem(pendingId);
-        if (!target) return;
-        currentItem = target;
-    }
-
-    await commitMovieWatchedToggle(raw ? localDateStringToISO(raw) : null);
-}
-
-// An <input type="date"> gives back a bare "YYYY-MM-DD" with no time or
-// zone. Stamping that as midnight UTC would land on the previous day for
-// anyone west of UTC, so this anchors it to midday in the viewer's own
-// local time instead - far enough from either midnight boundary that the
-// calendar day survives being read back anywhere, which is what every
-// date-only consumer in the app (streaks, NovaWrapped, achievements)
-// actually slices on.
-function localDateStringToISO(dateStr) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d) return new Date().toISOString();
-    return new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
-}
-
-// Today as "YYYY-MM-DD" in local time - not toISOString().slice(0,10),
-// which is UTC and so can be a day off from the viewer's actual today.
+// Today as "YYYY-MM-DD" in LOCAL time - not toISOString().slice(0,10),
+// which is UTC and so can name a different calendar day than the one the
+// viewer is actually in. Used for the data-export filename.
 function getLocalTodayISODate() {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-// Settings toggle for the above. Persisted on the profile doc (see
-// saveUserProfile) rather than localStorage, since it's an account-level
-// behaviour preference that should follow someone across devices, unlike
-// the purely display-level Library Display prefs.
-async function toggleAskWatchedDate() {
-    const previous = state.askWatchedDate;
-    state.askWatchedDate = !previous;
-    updateAskWatchedDateButton();
-    const saved = await saveUserProfile();
-    if (!saved) {
-        state.askWatchedDate = previous;
-        updateAskWatchedDateButton();
-        showErrorToast("Couldn't save that setting. Please try again.");
-    }
-}
-
-function updateAskWatchedDateButton() {
-    const btn = document.getElementById("askWatchedDateBtn");
-    if (!btn) return;
-    const isOn = state.askWatchedDate !== false;
-    btn.textContent = isOn ? 'On' : 'Off';
-    btn.classList.toggle('pill-on', isOn);
-    btn.classList.toggle('pill-off', !isOn);
 }
 
 async function markNextEpisodeWatched(id) {
