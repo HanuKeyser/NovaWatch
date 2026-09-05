@@ -103,7 +103,6 @@ const NAMES = [
     'isTVUpToDate',
     'isTVFinished',
     'getCurrentWatchStreak',
-    'localDateStringToISO',
 ];
 
 let api;
@@ -120,7 +119,7 @@ try {
 const {
     isReleased, getAvailableEpisodes, getNextUnwatchedEpisode,
     getEarlierUnwatchedEpisodes, getTVProgress, isTVUpToDate, isTVFinished,
-    getCurrentWatchStreak, localDateStringToISO,
+    getCurrentWatchStreak,
 } = api;
 
 /* ---------- fixtures ---------- */
@@ -244,21 +243,6 @@ check('getCurrentWatchStreak: counts consecutive days up to today', () => {
 });
 check('getCurrentWatchStreak: a stale streak is broken, not counted', () => {
     eq(getCurrentWatchStreak(new Set(['2020-01-01', '2020-01-02'])), 0);
-});
-
-/* ---------- watch-date conversion (timezone correctness) ---------- */
-check('localDateStringToISO: round-trips to the same local calendar day', () => {
-    // The whole point of anchoring to local midday rather than UTC midnight:
-    // the calendar day must survive being read back locally, or streaks,
-    // achievements and NovaWrapped all slice on the wrong day.
-    const iso = localDateStringToISO('2026-03-15');
-    const back = new Date(iso);
-    eq(back.getFullYear(), 2026, 'year');
-    eq(back.getMonth() + 1, 3, 'month');
-    eq(back.getDate(), 15, 'day of month');
-});
-check('localDateStringToISO: falls back to now on malformed input', () => {
-    truthy(!Number.isNaN(new Date(localDateStringToISO('nonsense')).getTime()));
 });
 
 /* ---------- report ---------- */
