@@ -276,23 +276,55 @@ img {
    which NovaWrapped still needs. */
 #dashboardStats.stats {
     grid-template-columns: repeat(2, 1fr);
+    /* No gap on THIS grid only - its cells carry their own hairlines
+       (see .stat), and a gap would break those lines into floating
+       segments instead of a continuous grid. Scoped to #dashboardStats
+       rather than .stats because NovaWrapped's recap reuses the same
+       .stats layout and does still want gutters between real tiles. */
+    gap: 0;
 }
 
+/* No card treatment here anymore - no fill, no border, no shadow, no
+   radius. These four numbers used to be cards nested inside the analytics
+   card, which meant the screen was a card, containing a card, containing
+   four more cards, all at near-identical elevation. Depth stops meaning
+   anything when everything has it. The numbers now sit directly on the
+   surface and are separated by hairlines instead, which reads as more
+   deliberate, not less designed: the grid lines do the work the boxes
+   were doing, and the coloured icon badges are left as the only filled
+   elements so they carry the visual weight on their own. */
 .stat {
-    padding: 16px 14px;
+    padding: 18px 4px 18px 16px;
     text-align: left;
-    /* Was --surface-2 (36% white) on a --surface (58% white) card, so the
-       square barely separated from the card it sits in. A brighter, more
-       opaque fill plus a firmer border and its own small shadow makes each
-       stat read as a distinct tile instead of blending into the card. */
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.85);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm);
-    border-radius: var(--radius-md);
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
+    position: relative;
+}
+
+/* Hairlines between the four, not around them. Drawn per-cell (right edge
+   on the left column, bottom edge on the top row) rather than with a
+   border on every cell, so the grid never doubles up a line or draws one
+   along its own outer edge. */
+.stat:nth-child(odd)::after {
+    content: '';
+    position: absolute;
+    top: 14%;
+    bottom: 14%;
+    right: 0;
+    width: 1px;
+    background: var(--border);
+}
+
+.stat:nth-child(-n+2)::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--border);
 }
 
 /* Icon sits in its own small colored badge (the same "filled glass" recipe
@@ -481,6 +513,45 @@ img {
     letter-spacing: -0.5px;
     min-width: 64px;
     text-align: center;
+}
+
+/* Teaser stats above the "View My Wrapped" button - see
+   renderNovaWrappedYear for why this exists. Deliberately quiet: these
+   are a preview, not the payoff, so they use the same card surface as
+   the rest of Settings rather than the slideshow's vivid gradients. */
+.wrapped-preview {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 22px;
+    align-content: start;
+}
+
+.wrapped-preview-stat {
+    padding: 16px 8px;
+    text-align: center;
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.wrapped-preview-value {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+}
+
+.wrapped-preview-label {
+    margin-top: 3px;
+    font-size: 11.5px;
+    font-weight: 650;
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .wrapped-preview-stat {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
 }
 
 .wrapped-start-btn {
@@ -949,8 +1020,13 @@ img {
 
 .card-title {
     margin-top: 8px;
-    font-size: 12px;
-    font-weight: 700;
+    /* Serif for the name of a work - see --font-title. Weight drops from
+       700 to 600 and tracking goes back to normal: the sans needed heavy
+       weight and negative tracking to hold together at this size, a serif
+       does not and looks clotted if given the same treatment. */
+    font-family: var(--font-title);
+    font-size: 13px;
+    font-weight: 600;
     color: var(--text);
     line-height: 1.3;
     white-space: nowrap;
@@ -1176,6 +1252,19 @@ img {
     box-shadow: 0 0 0 4px rgba(0, 106, 255, 0.15), var(--glass-shadow-sm);
 }
 
+/* Dark mode needs a softer focus treatment than light. A 1px border at
+   full-saturation --blue sits against a near-black field here rather
+   than a pale one, so the same value that reads as a subtle accent in
+   light mode reads as a hard, high-contrast outline in dark - closer to
+   a browser default ring than to this app's own language. Dropping the
+   border to a translucent blue lets the field's own edge show through
+   underneath, and widening/strengthening the outer glow slightly keeps
+   the focus state just as obvious without the hard edge doing the work. */
+html[data-theme="dark"] .search-box:focus-within {
+    border-color: rgba(0, 106, 255, 0.55);
+    box-shadow: 0 0 0 5px rgba(0, 106, 255, 0.18), var(--glass-shadow-sm);
+}
+
 .search-box input {
     width: 100%;
     padding: 15px 46px 15px 48px;
@@ -1206,6 +1295,22 @@ img {
     height: 50px;
     -webkit-appearance: none;
     appearance: none;
+    /* ATTEMPT 4 at the caret-position bug, and a different mechanism to
+       the previous three (which removed a forced line-height, swapped
+       type="search" for type="text", then set an explicit height - all
+       real fixes for real issues, none of which was this).
+       Moving backdrop-filter from the input to its wrapper was the right
+       direction but didn't go far enough: an editable element nested
+       INSIDE a backdrop-filtered ancestor can still have its native
+       caret painted against that ancestor's compositing layer rather
+       than its own box, which is what puts the caret below the field
+       instead of in it. Giving the input its own positioned paint layer
+       decouples its caret math from the blurred ancestor entirely.
+       If this still recurs, the guaranteed (if less pretty) fix is to
+       drop backdrop-filter from .search-box and use an opaque fill -
+       the bug cannot occur without a backdrop-filtered ancestor. */
+    position: relative;
+    z-index: 1;
 }
 
 .search-icon {
@@ -1401,10 +1506,11 @@ img {
 }
 
 .search-card-title {
-    font-size: 15.5px;
-    font-weight: 800;
+    font-family: var(--font-title);
+    font-size: 17px;
+    font-weight: 600;
     color: var(--text);
-    letter-spacing: -0.2px;
+    letter-spacing: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1505,14 +1611,16 @@ img {
 }
 
 .skeleton-row-thumb {
-    flex: 0 0 80px;
-    width: 80px;
-    height: 116px;
-    /* Matches .continue-poster's own --radius-lg exactly - this skeleton
-       is the placeholder for that element (same 80x116px), so an
-       off-scale 16px here made the corners visibly change shape the
-       moment real content replaced the placeholder. */
-    border-radius: var(--radius-lg);
+    /* Must track .continue-poster exactly - this is the placeholder for
+       that element, so any mismatch in size, shape or corner radius shows
+       up as a visible jump the moment real content replaces it. Followed
+       .continue-poster from 80x116 portrait to a 150px-wide 16:9 frame
+       when Continue Watching moved to episode stills. */
+    flex: 0 0 150px;
+    width: 150px;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    border-radius: var(--radius-md);
 }
 
 .skeleton-row-lines {
@@ -1712,17 +1820,30 @@ img {
     box-shadow: 0 16px 32px rgba(0, 0, 0, 0.16);
 }
 
+/* Wide 16:9 rather than an 80x116 portrait poster. This holds the
+   episode's own still now (see createContinueCard), so the shape follows
+   the source material: a frame from an episode is 16:9, and cropping it
+   into a portrait sliver threw away most of the image. Wider AND more
+   area than before (150x84 vs 80x116) while taking less vertical space,
+   so the card gets shorter and more of the list fits on screen. */
 .continue-poster {
-    flex: 0 0 80px;
-    width: 80px;
-    height: 116px;
-    /* Unified with the rest of the app's poster thumbnails - see the
-       comment on .search-card-poster above. */
-    border-radius: var(--radius-lg);
+    flex: 0 0 150px;
+    width: 150px;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    border-radius: var(--radius-md);
     object-fit: cover;
     background: var(--surface-2);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
     pointer-events: none;
+}
+
+/* Poster fallback: an episode with no still and a title with no backdrop
+   falls back to the portrait poster, which must not be cropped to 16:9 -
+   contain it in the same frame instead so nothing is sliced out of it. */
+.continue-poster.is-poster {
+    object-fit: contain;
+    background: var(--surface-2);
 }
 
 .continue-body {
@@ -1736,13 +1857,22 @@ img {
 }
 
 .continue-title {
-    font-size: 15.5px;
-    font-weight: 800;
+    font-family: var(--font-title);
+    font-size: 17px;
+    font-weight: 600;
     color: var(--text);
-    letter-spacing: -0.2px;
-    white-space: nowrap;
+    letter-spacing: 0;
+    /* Two lines rather than one hard-truncated line. Single-line
+       nowrap+ellipsis cut real titles short with room to spare beneath
+       them ("Stuart Fails to Save the Universe" became "Stuart Fails to
+       Save the ..."), which is the one piece of text on this card you
+       most need to recognise. Still clamped, so a very long title can't
+       push the card's own height around. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .continue-meta-line {
@@ -1760,9 +1890,14 @@ img {
 }
 
 .continue-episode-name {
-    font-size: 12.5px;
+    /* An episode name is the title of a work too, so it takes the serif -
+       italic, to separate it from the show name above it without needing
+       another size or colour step. */
+    font-family: var(--font-title);
+    font-style: italic;
+    font-size: 13.5px;
     color: var(--text-secondary);
-    font-weight: 700;
+    font-weight: 500;
     text-transform: none;
     letter-spacing: 0;
     margin-top: 1px;
@@ -1827,10 +1962,14 @@ img {
     text-overflow: ellipsis;
 }
 
-html[data-theme="dark"] .upcoming-card-caption {
-    color: var(--blue-light);
-}
-
+/* No dark-mode colour override here anymore. This used to switch to
+   var(--blue-light), back when that token was a genuinely lighter BLUE
+   (#93c5fd) meant to lift against a dark background. --blue-light is now
+   #00faff - a cyan - so this rule was rendering the countdown in a
+   colour nothing else in the app uses, visibly different from the blue
+   in the nav, toggles and links right next to it. var(--blue) (#006aff)
+   is identical in both themes now and already has enough contrast on
+   dark, so the base rule above is correct for both. */
 /* =========================================================
    BOTTOM NAV (Floating Pill)
 ========================================================= */
@@ -1876,8 +2015,14 @@ html[data-theme="dark"] .upcoming-card-caption {
         linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 55%),
         var(--glass-sheen),
         rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(72px) saturate(300%);
-    -webkit-backdrop-filter: blur(72px) saturate(300%);
+    /* Matches --glass-chrome-blur in tokens.css - .bottom-nav restates
+       the value rather than using the token because it also layers its
+       own gradients into `background` above. Kept in sync by hand:
+       saturation was reduced from 300% because multiplying the
+       saturation of poster art scrolling underneath turned the bar
+       visibly tan/brown (see the token's own comment). */
+    backdrop-filter: blur(80px) saturate(150%);
+    -webkit-backdrop-filter: blur(80px) saturate(150%);
     /* No border, and no full-perimeter inset ring in the shadow either
        (a uniform "inset 0 0 0 1px" reads as a border no matter what it's
        implemented with) - just an elevation shadow plus a soft, diffuse
@@ -2102,8 +2247,10 @@ html[data-theme="dark"] .modal-sheet-compact {
        them matched, but the surface underneath them didn't. */
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
     background-attachment: fixed;
-    backdrop-filter: blur(70px) saturate(230%);
-    -webkit-backdrop-filter: blur(70px) saturate(230%);
+    /* Same saturation reduction as the nav bar - a full-screen sheet
+       sitting over a poster grid picked up the same colour cast. */
+    backdrop-filter: blur(80px) saturate(150%);
+    -webkit-backdrop-filter: blur(80px) saturate(150%);
     border-radius: 0;
     border: none;
     position: relative;
@@ -2300,12 +2447,28 @@ html[data-theme="dark"] .modal-sheet-compact {
     height: 52px;
     margin: 0 auto 14px;
     border-radius: 50%;
+    /* Red is the DEFAULT here because this badge started life on the
+       destructive dialogs (Delete Account, Remove) - but it is not
+       inherently a danger badge, and every confirm dialog inherited the
+       red regardless of what it was asking. A neutral question like
+       "when did you watch this?" reading as destructive is wrong, so
+       non-destructive dialogs opt into .confirm-icon-badge.neutral
+       below. Left red-by-default rather than flipped, since the
+       destructive dialogs are the ones where getting the colour wrong
+       actually matters. */
     background: var(--glass-sheen), var(--red-gradient);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow: 0 8px 20px rgba(255, 59, 48, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* For confirm dialogs that ask a question rather than warn about
+   something irreversible - uses the app's primary blue instead. */
+.confirm-icon-badge.neutral {
+    background: var(--glass-sheen), var(--blue-gradient);
+    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .rewatch-icon-badge {
@@ -2329,41 +2492,6 @@ html[data-theme="dark"] .modal-sheet-compact {
     line-height: 1.5;
     color: var(--text-secondary);
     margin-bottom: 22px;
-}
-
-/* The one native <input type="date"> in the app - deliberately native
-   rather than a custom-built calendar, since every platform already has
-   a good, familiar, fully accessible date picker of its own and a
-   hand-rolled one would be worse on all of them. Styled to match the
-   app's own inputs (glass surface, same radius scale) while leaving the
-   picker itself entirely to the OS. -webkit-appearance: none is NOT set
-   here, unlike the search inputs - on iOS that would strip the native
-   picker affordance this control depends on. */
-.watch-date-input {
-    width: 100%;
-    padding: 13px 14px;
-    margin-bottom: 18px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
-    background: var(--surface);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 15px;
-    font-weight: 600;
-    text-align: center;
-}
-
-.watch-date-input:focus {
-    outline: none;
-    border-color: var(--blue);
-    box-shadow: 0 0 0 4px rgba(0, 106, 255, 0.15);
-}
-
-/* Dark mode leaves the native calendar glyph rendered dark-on-dark
-   otherwise - inverting it is the standard fix, since the control's
-   internal icon isn't styleable directly. */
-html[data-theme="dark"] .watch-date-input::-webkit-calendar-picker-indicator {
-    filter: invert(1) opacity(0.7);
 }
 
 .confirm-actions {
@@ -2418,9 +2546,13 @@ html[data-theme="dark"] .watch-date-input::-webkit-calendar-picker-indicator {
 }
 
 .modal-title {
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: -0.7px;
+    /* The single biggest instance of a work's name in the app - this is
+       where the serif earns its keep most. */
+    font-family: var(--font-title);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    line-height: 1.12;
 }
 
 .modal-meta {
@@ -2837,8 +2969,9 @@ html[data-theme="dark"] .watch-date-input::-webkit-calendar-picker-indicator {
 }
 
 .episode-title {
-    font-size: 13px;
-    font-weight: 700;
+    font-family: var(--font-title);
+    font-size: 14.5px;
+    font-weight: 600;
 }
 
 .episode-overview {
@@ -2860,10 +2993,15 @@ html[data-theme="dark"] .watch-date-input::-webkit-calendar-picker-indicator {
 }
 
 .rewatch-count-tap {
-    color: var(--blue-light);
+    /* var(--blue), not var(--blue-light) - same fix as .upcoming-card-
+       caption above. --blue-light became #00faff (cyan) in the colour
+       change, so this was rendering cyan text over a blue underline.
+       The underline colour is a raw rgba because CSS variables can't be
+       used inside rgba()'s channels - kept in sync with --blue by hand. */
+    color: var(--blue);
     font-weight: 700;
     text-decoration: underline;
-    text-decoration-color: rgba(71, 146, 255, 0.4);
+    text-decoration-color: rgba(0, 106, 255, 0.4);
     text-underline-offset: 2px;
     transition: opacity 0.15s ease;
 }
@@ -3918,9 +4056,9 @@ html[data-theme="dark"] .dormant-nudge-card {
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
-html[data-theme="dark"] .stat {
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
-}
+/* No dark-mode background for .stat - it isn't a card in either theme
+   now (see its base rule). The hairlines use var(--border), which already
+   flips per theme, so nothing extra is needed here. */
 
 /* No background override here anymore either - see the light-mode
    .search-box:focus-within comment for why. */
@@ -3931,8 +4069,11 @@ html[data-theme="dark"] .bottom-nav {
         linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
         var(--glass-sheen),
         rgba(40, 40, 46, 0.32);
-    backdrop-filter: blur(72px) saturate(230%);
-    -webkit-backdrop-filter: blur(72px) saturate(230%);
+    /* Matches the dark --glass-chrome-blur token - see the light-mode
+       .bottom-nav rule for why this restates the value by hand, and the
+       token comment for why the saturation came down. */
+    backdrop-filter: blur(80px) saturate(160%);
+    -webkit-backdrop-filter: blur(80px) saturate(160%);
     box-shadow:
         0 2px 8px rgba(0, 0, 0, 0.45),
         0 30px 66px rgba(0, 0, 0, 0.72),
