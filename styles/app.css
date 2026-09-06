@@ -367,41 +367,6 @@ img {
     letter-spacing: -0.3px;
 }
 
-/* A small accent badge under the hero number, not a second hero row -
-   a "current streak" is a lighter, secondary fact next to total watch
-   time, and the app's own badge/pill language (countdown badges,
-   category counts) is already the established way to surface a
-   supporting number without competing with the primary metric next to
-   it. Orange (fire) while a streak is actually live; a muted neutral
-   version when there isn't one, same "not active" treatment already
-   used for the Unsupported notification-permission state. */
-.streak-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-top: 8px;
-    padding: 4px 10px 4px 8px;
-    border-radius: 999px;
-    background: var(--glass-sheen), var(--orange-gradient);
-    color: white;
-    font-size: 11.5px;
-    font-weight: 800;
-    letter-spacing: -0.1px;
-    box-shadow: 0 4px 10px rgba(255, 149, 0, 0.25);
-}
-
-.streak-badge .icon {
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
-}
-
-.streak-badge.inactive {
-    background: var(--glass-sheen), var(--surface-2);
-    color: var(--text-muted);
-    box-shadow: none;
-}
-
 /* =========================================================
    NOVAWRAPPED (migrated in from its own page - see the modal
    #novaWrappedModal in index.html and its open/render functions in
@@ -2051,7 +2016,7 @@ html[data-theme="dark"] .continue-progress {
        safe-area inset folds in on top of that 18px, since that space
        exists to keep the bar's tap targets clear of the gesture area -
        resolves to a flat 18px on devices with no inset. */
-    bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(2px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
