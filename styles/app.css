@@ -2007,6 +2007,19 @@ html[data-theme="dark"] .continue-progress {
    design for this one tab) - the only addition is this caption line
    under the title, since an upcoming item needs its release status
    spelled out in a way an already-added Library item doesn't. */
+/* Episode title inside an Upcoming row. Matches .continue-episode-name's
+   weight and size so the same piece of information reads identically in
+   both places it appears. */
+.upcoming-row-episode {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .upcoming-card-caption {
     margin-top: 2px;
     font-size: 11px;
@@ -2038,7 +2051,7 @@ html[data-theme="dark"] .continue-progress {
        safe-area inset folds in on top of that 18px, since that space
        exists to keep the bar's tap targets clear of the gesture area -
        resolves to a flat 18px on devices with no inset. */
-    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(4px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
