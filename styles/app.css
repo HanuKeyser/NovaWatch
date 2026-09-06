@@ -68,7 +68,15 @@ body {
    left permanently on, so a short page doesn't show a large empty gap
    under its own content the rest of the time. */
 body.keyboard-scroll-safety {
-    padding-bottom: 60vh;
+    /* 30vh, down from 60vh. This exists to guarantee the page has SOMETHING
+       to scroll while the keyboard is up (see the focus/blur listeners in
+       app.js) - it was never meant to be half a screen of blank space.
+       60vh was far more headroom than the workaround needs, and on Discover
+       - the one tab where you routinely focus the search box and then
+       scroll a long results list - it read as a huge empty gap after the
+       content. Paired with the scroll handler in app.js that drops the
+       class entirely once the page is demonstrably scrolling. */
+    padding-bottom: 30vh;
 }
 
 button, input {
@@ -1426,6 +1434,50 @@ html[data-theme="dark"] .search-box:focus-within {
     margin-top: 4px;
 }
 
+/* =========================================================
+   DISCOVER CATEGORY CHIPS
+========================================================= */
+.category-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    overflow-x: auto;
+    /* Bleeds to the page edges so the row reads as scrollable content
+       rather than a clipped box - negative margin cancels .page's own
+       18px side padding, and matching padding puts the first and last
+       chip back in line with everything above them. */
+    margin-left: -18px;
+    margin-right: -18px;
+    padding: 2px 18px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.category-row::-webkit-scrollbar { display: none; }
+
+.category-chip {
+    flex: 0 0 auto;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.category-chip:active { transform: scale(0.95); }
+
+.category-chip.active {
+    background: var(--glass-sheen), var(--blue-gradient);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
 .search-results-grid {
     display: flex;
     flex-direction: column;
@@ -1982,7 +2034,7 @@ html[data-theme="dark"] .continue-progress {
        safe-area inset folds in on top of that 18px, since that space
        exists to keep the bar's tap targets clear of the gesture area -
        resolves to a flat 18px on devices with no inset. */
-    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
@@ -2291,7 +2343,13 @@ html[data-theme="dark"] .modal-sheet-compact {
 .modal-backdrop-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(248,250,252,0.05) 0%, rgba(248,250,252,0.96) 100%);
+    /* Fades into --bg-base, the exact colour the sheet beneath is painted
+       on. This used to end at a hardcoded rgba(248,250,252,0.96) - a paler,
+       cooler grey than the mesh below it - so at the bottom edge of the
+       240px hero the tone stepped abruptly and read as a stray white line
+       across every modal with a backdrop image. Ending on the same colour
+       the content area starts with makes the join invisible. */
+    background: linear-gradient(180deg, rgba(232, 237, 244, 0) 0%, var(--bg-base) 100%);
 }
 
 /* Full-screen modals (Details, Episode, NovaWrapped, Settings' own
@@ -4054,7 +4112,9 @@ html[data-theme="dark"] .modal-sheet {
 }
 
 html[data-theme="dark"] .modal-backdrop-overlay {
-    background: linear-gradient(180deg, rgba(18, 18, 20, 0.05) 0%, rgba(18, 18, 20, 0.96) 100%);
+    /* Same seam fix as light mode - dark had the identical fault, ending
+       on #121214 while the sheet beneath is #0a0d14. */
+    background: linear-gradient(180deg, rgba(10, 13, 20, 0) 0%, var(--bg-base) 100%);
 }
 
 html[data-theme="dark"] .confirm-card {
