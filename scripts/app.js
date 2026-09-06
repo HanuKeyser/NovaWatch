@@ -1266,6 +1266,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Restore the library's saved filter/sort before anything renders, so
+    // the first paint already reflects the person's choice rather than
+    // flashing defaults and then correcting itself.
+    loadLibraryPrefs();
     initSearchPage();
     setAuthMode('signin');
     syncThemeToggleUI();
@@ -5817,6 +5821,7 @@ document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 // subType ('tv'/'movie') when navigating here. There is no view to switch
 // any more, so the argument is ignored and the one combined list renders.
 function setLibraryView() {
+    renderLibraryControls();
     renderLibrarySection();
 }
 
@@ -5910,6 +5915,114 @@ function renderHomeTab() {
     renderContinueWatching();
 }
 
+/* =========================================================
+   LIBRARY FILTER & SORT
+   Both persist to localStorage rather than resetting each visit - the way
+   someone wants their own library ordered is a standing preference, not a
+   per-session one, and having it snap back to defaults on every open is
+   exactly the kind of thing that makes a control feel not worth using.
+   Same storage approach as the Library Display visibility prefs.
+========================================================= */
+const LIBRARY_FILTER_KEY = "novawatch-library-filter";
+const LIBRARY_SORT_KEY = "novawatch-library-sort";
+
+const LIBRARY_FILTERS = [
+    { id: 'all',   label: 'All' },
+    { id: 'tv',    label: 'TV Shows' },
+    { id: 'movie', label: 'Movies' }
+];
+
+const LIBRARY_SORTS = [
+    // Default stays the existing behaviour so nothing changes for anyone
+    // who never touches these controls.
+    { id: 'default', label: 'Default' },
+    { id: 'az',      label: 'A\u2013Z' },
+    { id: 'added',   label: 'Recently Added' },
+    { id: 'watched', label: 'Recently Watched' }
+];
+
+let currentLibraryFilter = 'all';
+let currentLibrarySort = 'default';
+
+function loadLibraryPrefs() {
+    try {
+        const f = localStorage.getItem(LIBRARY_FILTER_KEY);
+        if (f && LIBRARY_FILTERS.some(x => x.id === f)) currentLibraryFilter = f;
+        const so = localStorage.getItem(LIBRARY_SORT_KEY);
+        if (so && LIBRARY_SORTS.some(x => x.id === so)) currentLibrarySort = so;
+    } catch (e) {
+        // Private mode / storage disabled - defaults are fine.
+    }
+}
+
+function renderLibraryControls() {
+    const filterRow = document.getElementById("libraryFilterRow");
+    const sortRow = document.getElementById("librarySortRow");
+    if (filterRow) {
+        filterRow.innerHTML = LIBRARY_FILTERS.map(f => `
+            <button class="category-chip${f.id === currentLibraryFilter ? ' active' : ''}"
+                    onclick="setLibraryFilter('${f.id}')">${f.label}</button>
+        `).join('');
+    }
+    if (sortRow) {
+        sortRow.innerHTML = LIBRARY_SORTS.map(o => `
+            <button class="category-chip chip-quiet${o.id === currentLibrarySort ? ' active' : ''}"
+                    onclick="setLibrarySort('${o.id}')">${o.label}</button>
+        `).join('');
+    }
+}
+
+function setLibraryFilter(id) {
+    currentLibraryFilter = id;
+    try { localStorage.setItem(LIBRARY_FILTER_KEY, id); } catch (e) {}
+    renderLibraryControls();
+    renderLibrarySection();
+}
+
+function setLibrarySort(id) {
+    currentLibrarySort = id;
+    try { localStorage.setItem(LIBRARY_SORT_KEY, id); } catch (e) {}
+    renderLibraryControls();
+    renderLibrarySection();
+}
+
+// Applied AFTER items are bucketed into categories, so sorting reorders
+// within each block rather than flattening the categories away - the
+// buckets are what make a 125-item library readable in the first place.
+function applyLibrarySort(items) {
+    const arr = [...items];
+    switch (currentLibrarySort) {
+        case 'az':
+            // localeCompare with numeric so "Season 2" sorts after
+            // "Season 10" correctly, and so accented titles collate
+            // sensibly rather than being dumped at the end.
+            return arr.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' }));
+        case 'added':
+            return arr.sort((a, b) => new Date(b.addedAt || 0) - new Date(a.addedAt || 0));
+        case 'watched':
+            return arr.sort((a, b) => getLastActivityTime(b) - getLastActivityTime(a));
+        default:
+            return arr;
+    }
+}
+
+// "Last watched" has to mean different things for the two types: a movie
+// records lastWatchedAt directly, a show's most recent activity is the
+// newest watchedAt across its episodes. Without this, sorting by watched
+// would push every show to the bottom regardless of how recently it was
+// actually viewed.
+function getLastActivityTime(item) {
+    if (item.type === 'movie') {
+        return item.lastWatchedAt ? new Date(item.lastWatchedAt).getTime() : 0;
+    }
+    let latest = 0;
+    (item.episodes || []).forEach(ep => {
+        if (ep.watchedAt) latest = Math.max(latest, new Date(ep.watchedAt).getTime());
+        if (ep.rewatchedAt) latest = Math.max(latest, new Date(ep.rewatchedAt).getTime());
+    });
+    return latest;
+}
+
 /* One combined library renderer, replacing the separate TV and movie
    ones. Categories merge by MEANING rather than by media type: a finished
    show and a watched film are the same idea to someone scanning their
@@ -5922,6 +6035,8 @@ function renderLibrarySection(containerId = "libraryCategories", inputId = "libr
     const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
     let items = state.library;
+    if (currentLibraryFilter === 'tv') items = items.filter(i => i.type === 'tv' || !i.type);
+    else if (currentLibraryFilter === 'movie') items = items.filter(i => i.type === 'movie');
     if (query) {
         items = items.filter(item => item.title.toLowerCase().includes(query));
     }
@@ -5937,6 +6052,12 @@ function renderLibrarySection(containerId = "libraryCategories", inputId = "libr
         // ARE titles and the search just didn't match any of them.
         if (query) {
             setInnerHTMLIfChanged(container, emptyState("Nothing Matching", "No titles in your library match your search."));
+        } else if (currentLibraryFilter !== 'all') {
+            // Distinguishes "you have no movies" from "your library is
+            // empty" - claiming the whole library is empty while a filter
+            // is hiding 119 shows would be plainly wrong.
+            const label = currentLibraryFilter === 'movie' ? 'movies' : 'TV shows';
+            setInnerHTMLIfChanged(container, emptyState(`No ${label === 'movies' ? 'Movies' : 'TV Shows'} Yet`, `You haven't added any ${label} to your library.`, { label: "Browse Explore", onclick: "showPage('discover', null, true)" }));
         } else {
             setInnerHTMLIfChanged(container, emptyState("Your Library Is Empty", "Shows and films you add will appear here.", { label: "Browse Explore", onclick: "showPage('discover', null, true)" }));
         }
@@ -5984,12 +6105,13 @@ function renderLibrarySection(containerId = "libraryCategories", inputId = "libr
     const visPrefs = getLibraryVisibilityPrefs();
 
     let html = "";
-    if (inProgress.length > 0) html += renderCategoryBlock("In Progress", inProgress);
-    if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", upToDate);
-    if (unwatched.length > 0 && visPrefs.showUnwatched) html += renderCategoryBlock("Unwatched", unwatched);
-    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
-    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
-    if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", stopped);
+    const S = applyLibrarySort;
+    if (inProgress.length > 0) html += renderCategoryBlock("In Progress", S(inProgress));
+    if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", S(upToDate));
+    if (unwatched.length > 0 && visPrefs.showUnwatched) html += renderCategoryBlock("Unwatched", S(unwatched));
+    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", S(comingSoon));
+    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", S(finished));
+    if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", S(stopped));
 
     if (!html) {
         // Everything the query matched is inside a category the person has
