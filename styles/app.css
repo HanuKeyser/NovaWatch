@@ -2010,13 +2010,14 @@ html[data-theme="dark"] .continue-progress {
 .bottom-nav {
     position: fixed;
     left: 50%;
-    /* 18px on the bottom, matching the 18px the sides get (width:
-       calc(100% - 36px)) - genuinely symmetric margins on all three
-       open sides. On a device with a home indicator, the real
-       safe-area inset folds in on top of that 18px, since that space
-       exists to keep the bar's tap targets clear of the gesture area -
-       resolves to a flat 18px on devices with no inset. */
-    bottom: calc(2px + env(safe-area-inset-bottom, 0px));
+    /* No flat margin - the bar sits directly on the bottom edge. The
+       safe-area inset is still applied on its own, so on a device with a
+       home indicator the bar clears the gesture area rather than sitting
+       underneath it; on a device without one this resolves to a true 0.
+       Dropped from 18px in steps at the request of the person building
+       this, so the sides (18px, via width: calc(100% - 36px)) are
+       deliberately no longer symmetric with the bottom. */
+    bottom: env(safe-area-inset-bottom, 0px);
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
