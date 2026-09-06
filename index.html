@@ -247,21 +247,30 @@
      1. DISCOVER TAB
 ================================================     -->
 <main id="discoverPage" class="page">
-    <div class="segmented-toggle">
-        <button id="searchTypeTV" class="segmented-btn active" onclick="setSearchType('tv')">TV Shows</button>
-        <button id="searchTypeMovie" class="segmented-btn" onclick="setSearchType('movie')">Movies</button>
-    </div>
-
+    <!-- One combined search across TV and movies. The TV/Movies segmented
+         toggle that used to sit here is gone: it forced you to know which
+         kind of thing you were looking for BEFORE you searched, which is
+         backwards - you search for a title, not for a media type. Results
+         now come from TMDB's /search/multi and each row states its own
+         type, so a query like "Fargo" can return both the film and the
+         series together instead of silently hiding one. -->
     <div class="search-box">
         <svg class="icon search-icon" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="7"/>
             <path d="M20 20l-4-4"/>
         </svg>
-        <input id="onlineSearchInput" type="text" inputmode="search" placeholder="Search TV shows..." autocomplete="off" enterkeyhint="search" aria-label="Search for TV shows and movies">
+        <input id="onlineSearchInput" type="text" inputmode="search" placeholder="Search shows and movies..." autocomplete="off" enterkeyhint="search" aria-label="Search shows and movies">
         <button class="search-clear-btn" type="button" onclick="clearSearch('onlineSearchInput')" aria-label="Clear search">
             <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
         </button>
     </div>
+
+    <!-- Category chips. With the type toggle gone there was no way to
+         browse at all - the tab only ever showed "For You" or your own
+         search results. These give it something to do when you arrive
+         with nothing particular in mind. Horizontally scrollable so more
+         can be added without a wrapping row reflowing the page. -->
+    <div class="category-row" id="discoverCategories"></div>
 
     <div style="margin-top: 20px;">
         <div class="section-header">
@@ -400,16 +409,7 @@
     <!-- TV Shows sub-view -->
     <div id="upcomingViewTV" class="library-subview">
         <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="upcomingTVSearchInput" type="text" inputmode="search" placeholder="Search upcoming TV shows..." autocomplete="off" enterkeyhint="search" aria-label="Search upcoming TV shows">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingTVSearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
+            
         </div>
         <div id="upcomingTVCategories"></div>
     </div>
@@ -417,16 +417,7 @@
     <!-- Movies sub-view -->
     <div id="upcomingViewMovies" class="library-subview" style="display: none;">
         <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="upcomingMovieSearchInput" type="text" inputmode="search" placeholder="Search upcoming movies..." autocomplete="off" enterkeyhint="search" aria-label="Search upcoming movies">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('upcomingMovieSearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
+            
         </div>
         <div id="upcomingMovieCategories"></div>
     </div>
