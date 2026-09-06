@@ -66,17 +66,7 @@
 
 <!-- Preconnect for faster API calls -->
 <link rel="preconnect" href="https://api.themoviedb.org">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Newsreader is used ONLY for the titles of works (shows, movies,
-     episodes) - see --font-title in tokens.css. A serif for naming works
-     borrows from film-criticism/poster-credit vernacular and gives the
-     app a voice the system stack alone can't. Deliberately NOT loaded for
-     UI chrome, which stays on the system font: that keeps the added
-     payload to one family and means a slow font load can never delay
-     buttons, labels or navigation. display=swap so titles render in the
-     fallback serif immediately rather than staying invisible. -->
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&display=swap" rel="stylesheet">
+
 <link rel="preconnect" href="https://image.tmdb.org">
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -825,7 +815,7 @@
                             </div>
                             <div class="settings-row-text">
                                 <div class="settings-row-title">Streaming region</div>
-                                <div class="settings-row-sub">Sets which country's "where to watch" info you see.</div>
+                                <div class="settings-row-sub">Where "where to watch" info comes from.</div>
                             </div>
                             <button class="hero-pill-btn region-btn" id="regionPillBtn" onclick="openRegionPicker()">Region</button>
                         </div>
@@ -836,18 +826,30 @@
                             </div>
                             <div class="settings-row-text">
                                 <div class="settings-row-title">Stay in the loop</div>
-                                <div class="settings-row-sub">Get alerts for new episodes & releases.</div>
+                                <div class="settings-row-sub">Alerts for new episodes and releases.</div>
                             </div>
                             <button class="hero-pill-btn" id="notificationBtn" onclick="requestNotificationPermission()">Enable</button>
                         </div>
 
+                    </div>
+                </div>
+
+                <!-- Library-scoped settings live in their OWN section rather than
+                     inside Preferences. They were absorbed into Preferences when
+                     an unrelated row was removed, which left one card carrying five
+                     rows of three different kinds - appearance, region, alerts,
+                     plus two that just open other screens. Splitting them back out
+                     keeps each card to one idea and makes the list scannable. -->
+                <div>
+                    <div class="section-header"><div class="section-title">Library</div></div>
+                    <div class="analytics-card settings-card">
                         <div class="settings-row" style="cursor: pointer;" onclick="openLibraryDisplayModal()">
                             <div class="settings-row-icon" style="background: var(--green-gradient);">
                                 <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
                             </div>
                             <div class="settings-row-text">
                                 <div class="settings-row-title">Library Display</div>
-                                <div class="settings-row-sub">Show or hide Finished, Unwatched & Stopped.</div>
+                                <div class="settings-row-sub">Choose which categories appear.</div>
                             </div>
                             <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
                         </div>
@@ -890,7 +892,7 @@
                             </div>
                             <div class="settings-row-text">
                                 <div class="settings-row-title">Export My Data</div>
-                                <div class="settings-row-sub">Download your library and watch history.</div>
+                                <div class="settings-row-sub">Download your library and history.</div>
                             </div>
                             <svg class="icon icon-small settings-row-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
                         </button>
