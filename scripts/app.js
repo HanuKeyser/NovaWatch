@@ -1171,8 +1171,6 @@ function clearSearch(inputId) {
     if (inputId === "onlineSearchInput") fetchForYou();
     if (inputId === "tvLibrarySearchInput") renderTVLibrarySection();
     if (inputId === "movieLibrarySearchInput") renderMovieLibrarySection();
-    if (inputId === "upcomingTVSearchInput") renderUpcomingTVSection();
-    if (inputId === "upcomingMovieSearchInput") renderUpcomingMovieSection();
     if (inputId === "regionSearchInput") filterRegionOptions("");
 }
 
@@ -1196,7 +1194,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
 
-    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'upcomingTVSearchInput', 'upcomingMovieSearchInput', 'regionSearchInput'];
+    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'regionSearchInput'];
     
     searchInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -4655,29 +4653,99 @@ async function proceedToApp(user, authScreen, mainApp) {
 /* =========================================================
    TMDB SEARCH & DISCOVER
 ========================================================= */
-function setSearchType(type) {
-    currentSearchType = type;
-    document.getElementById("searchTypeTV").classList.toggle("active", type === 'tv');
-    document.getElementById("searchTypeMovie").classList.toggle("active", type === 'movie');
-    updateDiscoverSearchPlaceholder();
+/* =========================================================
+   DISCOVER CATEGORIES
+   With the TV/Movies toggle gone, this tab had nothing to browse - it
+   showed "For You" or your own search results and nothing else. These
+   chips give it a browsing mode. "For You" stays the default and first
+   chip so the tab still opens on personalised recommendations.
 
-    const searchInput = document.getElementById("onlineSearchInput");
-    const query = searchInput ? searchInput.value.trim() : "";
+   Each category is just a TMDB endpoint plus a heading. Mixed-type
+   categories set media_type on their results by hand, because the
+   trending/popular endpoints (unlike /search/multi) don't include it and
+   renderSearchResults needs it to label and route each row correctly.
+========================================================= */
+const DISCOVER_CATEGORIES = [
+    { id: 'foryou',   label: 'For You' },
+    { id: 'trending', label: 'Trending',      path: 'trending/all/week',       mixed: true },
+    { id: 'tv',       label: 'Popular TV',    path: 'tv/popular',              type: 'tv' },
+    { id: 'movies',   label: 'Popular Movies',path: 'movie/popular',           type: 'movie' },
+    { id: 'toptv',    label: 'Top Rated TV',  path: 'tv/top_rated',            type: 'tv' },
+    { id: 'topmovies',label: 'Top Rated Films',path: 'movie/top_rated',        type: 'movie' }
+];
 
-    if (query) {
-        performTMDBSearch(query);
-    } else {
+let currentDiscoverCategory = 'foryou';
+
+function renderDiscoverCategories() {
+    const row = document.getElementById("discoverCategories");
+    if (!row) return;
+    row.innerHTML = DISCOVER_CATEGORIES.map(c => `
+        <button class="category-chip${c.id === currentDiscoverCategory ? ' active' : ''}"
+                data-category="${c.id}"
+                onclick="selectDiscoverCategory('${c.id}')">${c.label}</button>
+    `).join('');
+}
+
+async function selectDiscoverCategory(id) {
+    const cat = DISCOVER_CATEGORIES.find(c => c.id === id);
+    if (!cat) return;
+    currentDiscoverCategory = id;
+    renderDiscoverCategories();
+
+    // Picking a category is a browse action, so it clears any active
+    // query - otherwise the heading would say "Popular TV" while the list
+    // still showed search results, and the search box would still be full.
+    const input = document.getElementById("onlineSearchInput");
+    if (input && input.value) {
+        input.value = "";
+        input.parentElement.classList.remove("has-text");
+    }
+
+    if (id === 'foryou') {
         fetchForYou();
+        return;
+    }
+    fetchDiscoverCategory(cat);
+}
+
+async function fetchDiscoverCategory(cat) {
+    const listContainer = document.getElementById("searchResultsList");
+    const heading = document.getElementById("searchResultsHeading");
+    if (!listContainer) return;
+
+    if (heading) heading.textContent = cat.label;
+    listContainer.innerHTML = skeletonRows();
+
+    try {
+        const response = await fetch(`https://api.themoviedb.org/3/${cat.path}?api_key=${TMDB_API_KEY}`);
+        const data = await response.json();
+        if (!response.ok) {
+            listContainer.innerHTML = emptyState("Couldn't Load " + cat.label, "There was a problem reaching TMDB. Check your connection and try again.", null, 'search');
+            return;
+        }
+
+        let results = data.results || [];
+        if (cat.mixed) {
+            // trending/all returns people too - drop them, and keep the
+            // media_type TMDB already supplied.
+            results = results.filter(r => r.media_type === 'tv' || r.media_type === 'movie');
+        } else {
+            // Single-type endpoints omit media_type entirely; stamp it so
+            // each card knows what it is without relying on a global.
+            results = results.map(r => ({ ...r, media_type: cat.type }));
+        }
+
+        if (results.length === 0) {
+            listContainer.innerHTML = emptyState("Nothing Here", "TMDB returned no titles for this category.", null, 'search');
+            return;
+        }
+        renderSearchResults(results);
+    } catch (error) {
+        console.error("Error fetching category:", error);
+        listContainer.innerHTML = emptyState("Couldn't Load " + cat.label, "Please check your network connection.", null, 'search');
     }
 }
 
-// Discover's search is scoped by the TV/Movies toggle above it, but the
-// placeholder used to be a static "Search for TV Shows & Movies...",
-// which was misleading in both toggle states - it implied the search
-// covered both at once when it only ever searches the selected one.
-// Every other search bar in the app already names its own scope
-// ("Search TV shows library...", "Search upcoming movies..."), so this
-// just brings Discover in line with them.
 function updateDiscoverSearchPlaceholder() {
     const input = document.getElementById("onlineSearchInput");
     if (!input) return;
@@ -4895,9 +4963,9 @@ async function performTMDBSearch(query) {
     if (heading) heading.textContent = `Results for "${query}"`;
     listContainer.innerHTML = skeletonRows();
 
-    const endpoint = currentSearchType === 'movie'
-        ? `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`
-        : `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`;
+    // /search/multi rather than /search/tv or /search/movie - one query
+    // across both, which is the whole point of the combined tab.
+    const endpoint = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}`;
 
     try {
         const response = await fetch(endpoint);
@@ -4909,12 +4977,18 @@ async function performTMDBSearch(query) {
             return;
         }
 
-        if (!data.results || data.results.length === 0) {
+        // /search/multi also returns `person` results, which nothing in
+        // this list can render or add - filtered out before the empty
+        // check so a query matching only actors reports "no results"
+        // rather than rendering a row of blanks.
+        const usable = (data.results || []).filter(r => r.media_type === 'tv' || r.media_type === 'movie');
+
+        if (usable.length === 0) {
             listContainer.innerHTML = emptyState("No Items Found", `No results matching "${escapeHTML(query)}".`, null, 'search');
             return;
         }
 
-        renderSearchResults(data.results);
+        renderSearchResults(usable);
     } catch (error) {
         console.error("Error searching TMDB:", error);
         listContainer.innerHTML = emptyState("Search Error", "Couldn't reach TMDB. Check your connection and try again.", null, 'search');
@@ -4930,7 +5004,18 @@ function renderSearchResults(results) {
     }
 
     listContainer.innerHTML = results.map(item => {
-        const isMovie = currentSearchType === 'movie';
+        // Type comes from the ITEM now, not from a global toggle. Combined
+        // search returns TV and movies in one list (TMDB tags each result
+        // with media_type), so a single global type would mislabel half of
+        // them - and, worse, feed the wrong type into openSearchResultDetails
+        // and importMediaData, which would fetch the wrong record entirely.
+        // Falls back to currentSearchType for callers that still pass a
+        // single-type list (trending and the recommendation endpoints,
+        // which don't set media_type).
+        const itemType = item.media_type === 'movie' || item.media_type === 'tv'
+            ? item.media_type
+            : currentSearchType;
+        const isMovie = itemType === 'movie';
         const title = isMovie ? item.title : item.name;
         const posterUrl = item.poster_path ? `https://image.tmdb.org/t/p/w200${item.poster_path}` : '';
         const airDate = isMovie ? item.release_date : item.first_air_date;
@@ -4940,7 +5025,7 @@ function renderSearchResults(results) {
         const isAdded = state.library.some(s => s.id === slug || s.tmdbId === item.id);
 
         return `
-            <div class="search-card" onclick="openSearchResultDetails(${item.id}, '${currentSearchType}')">
+            <div class="search-card" onclick="openSearchResultDetails(${item.id}, '${itemType}')">
                 ${posterUrl ? 
                     `<img src="${posterUrl}" class="search-card-poster" alt="${escapeHTML(title)}" draggable="false" loading="lazy" decoding="async" onerror="this.style.display='none'">` :
                     `<div class="search-card-poster" style="display:flex; align-items:center; justify-content:center; text-align:center; font-size:10px; color:var(--text-muted); padding:5px;">${escapeHTML(title)}</div>`
@@ -4959,7 +5044,7 @@ function renderSearchResults(results) {
                             <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>
                         </button>
                     ` : `
-                        <button class="search-add-btn" onclick="event.stopPropagation(); importMediaData(${item.id}, '${currentSearchType}', this)" aria-label="Add to library" title="Add to library">
+                        <button class="search-add-btn" onclick="event.stopPropagation(); importMediaData(${item.id}, '${itemType}', this)" aria-label="Add to library" title="Add to library">
                             <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
                         </button>
                     `}
@@ -5480,6 +5565,17 @@ function showPage(page, subType = null, focusSearch = false) {
     }
     document.body.classList.remove("keyboard-scroll-safety");
 
+// If the page is actually scrolling, the scroll-safety padding has already
+// done its job and is now just empty space at the bottom of the list - the
+// whole reason it exists is to give a SHORT page something to scroll. Drop
+// it as soon as there's real scrolling, which is exactly when the leftover
+// gap would otherwise become visible.
+window.addEventListener("scroll", () => {
+    if (window.scrollY > 40 && document.body.classList.contains("keyboard-scroll-safety")) {
+        document.body.classList.remove("keyboard-scroll-safety");
+    }
+}, { passive: true });
+
     document.querySelectorAll(".page").forEach(element => element.classList.remove("active"));
 
     const target = document.getElementById(`${page}Page`);
@@ -5499,11 +5595,17 @@ function showPage(page, subType = null, focusSearch = false) {
 
     if (page === "library") setLibraryView(subType || currentLibraryView);
     if (page === "discover") {
-        if (subType) {
-            setSearchType(subType);
-        } else {
-            const query = document.getElementById("onlineSearchInput").value.trim();
-            if (!query) fetchForYou();
+        // subType used to pick TV vs Movies here; the combined tab has no
+        // type to pick, so every entry point behaves the same - keep any
+        // active query, otherwise show the current category. Callers still
+        // pass 'tv'/'movie' (from Library's empty-state CTAs) and it's now
+        // harmlessly ignored rather than needing every call site changed.
+        renderDiscoverCategories();
+        const query = document.getElementById("onlineSearchInput").value.trim();
+        if (!query) {
+            const cat = DISCOVER_CATEGORIES.find(c => c.id === currentDiscoverCategory);
+            if (!cat || cat.id === 'foryou') fetchForYou();
+            else fetchDiscoverCategory(cat);
         }
 
         // Only auto-focus when the person actually tapped their way to
