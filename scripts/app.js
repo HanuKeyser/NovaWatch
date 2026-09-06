@@ -87,7 +87,13 @@ let state = {
     // watch" lookups. null until detectDefaultRegion() runs on first sign-in
     // or an existing profile doc is loaded - see proceedToApp().
     region: null,
-    notificationsEnabled: false
+    notificationsEnabled: false,
+    // Current consecutive-days-watched run. Computed by renderDashboard
+    // and no longer displayed anywhere (the Home streak badge was
+    // removed) - kept because it is real tracked data and ships in the
+    // data export. Achievements use longestStreak instead, which
+    // computeAchievementStats derives separately.
+    currentStreak: 0
 };
 
 /* =========================================================
@@ -693,7 +699,7 @@ function closeAchievementsModalOutside(event) {
    LIBRARY DISPLAY PREFERENCES (show/hide Finished & Stopped)
    Same device-level storage pattern as notification preferences and
    the theme setting - purely a display filter on the TV Library's
-   category blocks (see renderTVLibrarySection), never touches the
+   category blocks (see renderLibrarySection), never touches the
    underlying watched/stopped data itself.
 ========================================================= */
 const LIBRARY_VISIBILITY_KEY = "novawatch-libraryVisibility";
@@ -722,7 +728,7 @@ function setLibraryVisibilityPref(key, value) {
     // toggling this actually shows/hides the category right away instead
     // of waiting for the next unrelated refresh.
     if (document.getElementById("libraryPage").classList.contains("active")) {
-        renderTVLibrarySection();
+        renderLibrarySection();
     }
 }
 
@@ -1169,8 +1175,7 @@ function clearSearch(inputId) {
     input.value = "";
     input.parentElement.classList.remove("has-text");
     if (inputId === "onlineSearchInput") fetchForYou();
-    if (inputId === "tvLibrarySearchInput") renderTVLibrarySection();
-    if (inputId === "movieLibrarySearchInput") renderMovieLibrarySection();
+    if (inputId === "librarySearchInput") renderLibrarySection();
     if (inputId === "regionSearchInput") filterRegionOptions("");
 }
 
@@ -1194,7 +1199,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const versionLabel = document.getElementById("appVersionLabel");
     if (versionLabel) versionLabel.textContent = `v${APP_VERSION}`;
 
-    const searchInputs = ['onlineSearchInput', 'tvLibrarySearchInput', 'movieLibrarySearchInput', 'regionSearchInput'];
+    const searchInputs = ['onlineSearchInput', 'librarySearchInput', 'regionSearchInput'];
     
     searchInputs.forEach(id => {
         const input = document.getElementById(id);
@@ -2483,7 +2488,8 @@ function exportLibraryData() {
                 // read from state - it's never stored there, so
                 // state.timeZone would silently export null.
                 timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
-                unlockedAchievements: profile.unlockedAchievements || []
+                unlockedAchievements: profile.unlockedAchievements || [],
+                currentStreak: state.currentStreak || 0
             },
             // The library exactly as stored, not a flattened summary - the
             // point of an export is that it's complete enough to actually
@@ -3463,8 +3469,7 @@ function setInnerHTMLIfChanged(el, html) {
 
 function refreshActivePage() {
     if (document.getElementById("libraryPage").classList.contains("active")) {
-        if (currentLibraryView === 'tv') renderTVLibrarySection();
-        if (currentLibraryView === 'movies') renderMovieLibrarySection();
+        renderLibrarySection();
     }
     if (document.getElementById("homePage").classList.contains("active")) renderHomeTab();
     if (document.getElementById("upcomingPage").classList.contains("active")) {
@@ -4772,20 +4777,12 @@ function initSearchPage() {
         }, 200);
     });
 
-    const tvLibInput = document.getElementById("tvLibrarySearchInput");
-    if (tvLibInput) {
-        tvLibInput.addEventListener("input", () => {
-            debounceLibraryFilter("tvLib", () => renderTVLibrarySection());
+    const libInput = document.getElementById("librarySearchInput");
+    if (libInput) {
+        libInput.addEventListener("input", () => {
+            debounceLibraryFilter("library", () => renderLibrarySection());
         });
     }
-
-    const movieLibInput = document.getElementById("movieLibrarySearchInput");
-    if (movieLibInput) {
-        movieLibInput.addEventListener("input", () => {
-            debounceLibraryFilter("movieLib", () => renderMovieLibrarySection());
-        });
-    }
-
     fetchForYou();
 }
 
@@ -5816,18 +5813,13 @@ document.addEventListener("DOMContentLoaded", initNavBarDragToSwitch);
 // Switches between the TV Shows / Movies sub-views inside the Library
 // tab, toggling the segmented control and showing/hiding each sub-view's
 // container rather than re-rendering the whole page.
-function setLibraryView(view) {
-    currentLibraryView = view;
-
-    document.getElementById("libraryTabTV").classList.toggle("active", view === 'tv');
-    document.getElementById("libraryTabMovies").classList.toggle("active", view === 'movies');
-
-    document.getElementById("libraryViewTV").style.display = view === 'tv' ? 'block' : 'none';
-    document.getElementById("libraryViewMovies").style.display = view === 'movies' ? 'block' : 'none';
-
-    if (view === 'tv') renderTVLibrarySection();
-    if (view === 'movies') renderMovieLibrarySection();
+// Kept because showPage() and several empty-state CTAs still pass a
+// subType ('tv'/'movie') when navigating here. There is no view to switch
+// any more, so the argument is ignored and the one combined list renders.
+function setLibraryView() {
+    renderLibrarySection();
 }
+
 
 /* =========================================================
    HOME TAB RENDER
@@ -5884,11 +5876,13 @@ function renderHomeTab() {
     
     document.getElementById("totalWatchTime").textContent = `${days} days, ${hours} hours, ${minutes} minutes`;
 
-    const streakDays = getCurrentWatchStreak(watchedDates);
-    document.getElementById("currentStreak").textContent = streakDays > 0
-        ? `${streakDays} Day${streakDays === 1 ? '' : 's'} Streak`
-        : "No Active Streak";
-    document.getElementById("currentStreakBadge").classList.toggle("inactive", streakDays === 0);
+    // Still computed and kept on state, just no longer shown anywhere. The
+    // badge was removed from Home, but the streak itself is real tracked
+    // data: the 7-day and 30-day achievements read longestStreak out of
+    // computeAchievementStats (which derives it independently), and this
+    // current-run figure stays available for the data export and for
+    // anything that wants it later without having to recompute it.
+    state.currentStreak = getCurrentWatchStreak(watchedDates);
 
     document.getElementById("dashboardStats").innerHTML = `
         <div class="stat">
@@ -5916,13 +5910,18 @@ function renderHomeTab() {
     renderContinueWatching();
 }
 
-function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "tvLibrarySearchInput") {
+/* One combined library renderer, replacing the separate TV and movie
+   ones. Categories merge by MEANING rather than by media type: a finished
+   show and a watched film are the same idea to someone scanning their
+   library, so they share a block. TV-only concepts (In Progress, Up to
+   Date, Stopped Watching) simply have no movie members, which is fine -
+   empty blocks are never rendered. */
+function renderLibrarySection(containerId = "libraryCategories", inputId = "librarySearchInput") {
     const container = document.getElementById(containerId);
     const searchInput = document.getElementById(inputId);
     const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
-    let items = state.library.filter(i => i.type === 'tv' || !i.type);
-
+    let items = state.library;
     if (query) {
         items = items.filter(item => item.title.toLowerCase().includes(query));
     }
@@ -5934,99 +5933,69 @@ function renderTVLibrarySection(containerId = "tvLibraryCategories", inputId = "
     }
 
     if (!items.length) {
-        // Query-aware: if a search actually filtered everything out, say
-        // that - "your library is empty" is simply false when there ARE
-        // shows in the library and the search just didn't match any of
-        // them. This branch used to always claim the whole library was
-        // empty regardless of why the filtered list came up empty.
+        // Query-aware: "your library is empty" is simply false when there
+        // ARE titles and the search just didn't match any of them.
         if (query) {
-            setInnerHTMLIfChanged(container, emptyState("No TV Shows Matching", "No TV shows match your search query."));
+            setInnerHTMLIfChanged(container, emptyState("Nothing Matching", "No titles in your library match your search."));
         } else {
-            setInnerHTMLIfChanged(container, emptyState("No TV Shows Found", "Your TV show library is empty.", { label: "Browse Explore", onclick: "showPage('discover', 'tv')" }));
+            setInnerHTMLIfChanged(container, emptyState("Your Library Is Empty", "Shows and films you add will appear here.", { label: "Browse Explore", onclick: "showPage('discover', null, true)" }));
         }
         return;
     }
 
-    const inProgress = sortTVShowsByLatestAired(items.filter(item => {
+    const shows = items.filter(i => i.type === 'tv' || !i.type);
+    const movies = items.filter(i => i.type === 'movie');
+
+    const inProgress = sortTVShowsByLatestAired(shows.filter(item => {
         if (item.isStopped) return false;
         const p = getTVProgress(item);
         return p.watched > 0 && p.watched < p.total;
     }));
 
-    const upToDate = sortTVShowsByLatestAired(items.filter(item => !item.isStopped && isTVUpToDate(item)));
-    const finished = sortTVShowsByLatestAired(items.filter(item => !item.isStopped && isTVFinished(item)));
-    const unwatched = sortTVShowsByLatestAired(items.filter(item => {
-        if (item.isStopped) return false;
-        const p = getTVProgress(item);
-        return p.total > 0 && p.watched === 0;
-    }));
-    // Shows with no episodes at all yet.
-    const comingSoon = sortTVShowsByLatestAired(items.filter(item => {
-        if (item.isStopped) return false;
-        const p = getTVProgress(item);
-        return p.total === 0;
-    }));
-    const stopped = sortTVShowsByLatestAired(items.filter(item => item.isStopped));
+    const upToDate = sortTVShowsByLatestAired(shows.filter(item => !item.isStopped && isTVUpToDate(item)));
+
+    // Finished shows and watched films - the same idea, one block.
+    const finished = [
+        ...sortTVShowsByLatestAired(shows.filter(item => !item.isStopped && isTVFinished(item))),
+        ...sortMoviesByWatchedDate(movies.filter(item => item.watched))
+    ];
+
+    // Nothing watched yet, and available to watch.
+    const unwatched = [
+        ...sortTVShowsByLatestAired(shows.filter(item => {
+            if (item.isStopped) return false;
+            const p = getTVProgress(item);
+            return p.total > 0 && p.watched === 0;
+        })),
+        ...movies.filter(item => !item.watched && isReleased(item.releaseDate))
+    ];
+
+    // Nothing to watch yet - a show with no aired episodes, or an unreleased film.
+    const comingSoon = [
+        ...sortTVShowsByLatestAired(shows.filter(item => {
+            if (item.isStopped) return false;
+            return getTVProgress(item).total === 0;
+        })),
+        ...movies.filter(item => !item.watched && !isReleased(item.releaseDate))
+    ];
+
+    const stopped = sortTVShowsByLatestAired(shows.filter(item => item.isStopped));
 
     const visPrefs = getLibraryVisibilityPrefs();
 
     let html = "";
-
     if (inProgress.length > 0) html += renderCategoryBlock("In Progress", inProgress);
     if (upToDate.length > 0) html += renderCategoryBlock("Up to Date", upToDate);
-    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
     if (unwatched.length > 0 && visPrefs.showUnwatched) html += renderCategoryBlock("Unwatched", unwatched);
     if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
+    if (finished.length > 0 && visPrefs.showFinished) html += renderCategoryBlock("Finished", finished);
     if (stopped.length > 0 && visPrefs.showStopped) html += renderCategoryBlock("Stopped Watching", stopped);
 
     if (!html) {
-        html = emptyState("No TV Shows Matching", "No TV shows match your search query.");
-    }
-
-    setInnerHTMLIfChanged(container, html);
-}
-
-function renderMovieLibrarySection(containerId = "movieLibraryCategories", inputId = "movieLibrarySearchInput") {
-    const container = document.getElementById(containerId);
-    const searchInput = document.getElementById(inputId);
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
-
-    let items = state.library.filter(i => i.type === 'movie');
-
-    if (query) {
-        items = items.filter(item => item.title.toLowerCase().includes(query));
-    }
-
-    // Same "still loading, not actually empty" guard as renderContinueWatching.
-    if (!items.length && !libraryLoaded) {
-        setInnerHTMLIfChanged(container, skeletonRows());
-        return;
-    }
-
-    if (!items.length) {
-        // Same query-aware fix as renderTVLibrarySection - "your library
-        // is empty" is false when the library has movies and the search
-        // just didn't match any of them.
-        if (query) {
-            setInnerHTMLIfChanged(container, emptyState("No Movies Matching", "No movies match your search query."));
-        } else {
-            setInnerHTMLIfChanged(container, emptyState("No Movies Found", "Your movie library is empty.", { label: "Browse Explore", onclick: "showPage('discover', 'movie')" }));
-        }
-        return;
-    }
-
-    const unwatched = items.filter(item => !item.watched && isReleased(item.releaseDate));
-    const comingSoon = items.filter(item => !item.watched && !isReleased(item.releaseDate));
-    const watched = sortMoviesByWatchedDate(items.filter(item => item.watched));
-
-    let html = "";
-
-    if (unwatched.length > 0) html += renderCategoryBlock("Unwatched", unwatched);
-    if (comingSoon.length > 0) html += renderCategoryBlock("Coming Soon", comingSoon);
-    if (watched.length > 0) html += renderCategoryBlock("Watched", watched);
-
-    if (!html) {
-        html = emptyState("No Movies Matching", "No movies match your search query.");
+        // Everything the query matched is inside a category the person has
+        // hidden in Library Display - so say that, rather than "nothing
+        // matched", which would send them looking for a typo.
+        html = emptyState("Nothing to Show", "Everything matching is in a category you've hidden. Check Library Display in Settings.");
     }
 
     setInnerHTMLIfChanged(container, html);
