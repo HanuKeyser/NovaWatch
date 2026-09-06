@@ -1836,6 +1836,26 @@ html[data-theme="dark"] .search-box:focus-within {
     text-overflow: ellipsis;
 }
 
+/* THE fix for Continue Watching text overflowing its card.
+   This element had no rule at all - it was a bare flex child of
+   .continue-card. A flex item defaults to `min-width: auto`, which means
+   it refuses to shrink below the intrinsic width of its content, so a
+   long show title or episode name pushed this column wider than the card
+   and the text ran out past the right edge and underneath the check
+   button. It also silently disabled the ellipsis on .continue-title:
+   text-overflow only engages once an element is actually constrained,
+   and this one never was.
+
+   min-width: 0 opts out of that default and lets the column take the
+   space that's actually left over after the poster and check button,
+   which is what makes every child clamp and ellipsise correctly. It only
+   showed on cards whose text happened to be long enough to overflow,
+   which is why most cards looked fine. */
+.continue-body {
+    flex: 1;
+    min-width: 0;
+}
+
 /* Thin progress bar at the foot of a Continue Watching card. Deliberately
    understated - it's context, not the point of the card, so it reads as a
    hairline rather than competing with the title and episode name above it.
