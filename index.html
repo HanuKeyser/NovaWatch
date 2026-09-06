@@ -394,33 +394,21 @@
 
 <!-- =====================================================
      4. UPCOMING TAB
-     Not-yet-released movies and TV episodes from the library - same
-     structure as the Library tab (a TV Shows/Movies segmented toggle,
-     the same category-block/poster-grid cards) so the two tabs read as
-     one consistent system rather than two different designs. See
-     setUpcomingView() in app.js.
+     Not-yet-released movies and TV episodes from the library, combined
+     into one chronological list and rendered as rows in the same shape
+     Explore uses. See renderUpcomingSection() in app.js.
 ================================================     -->
 <main id="upcomingPage" class="page">
-    <div class="segmented-toggle">
-        <button id="upcomingTabTV" class="segmented-btn active" onclick="setUpcomingView('tv')">TV Shows</button>
-        <button id="upcomingTabMovies" class="segmented-btn" onclick="setUpcomingView('movies')">Movies</button>
-    </div>
-
-    <!-- TV Shows sub-view -->
-    <div id="upcomingViewTV" class="library-subview">
-        <div class="library-toolbar">
-            
-        </div>
-        <div id="upcomingTVCategories"></div>
-    </div>
-
-    <!-- Movies sub-view -->
-    <div id="upcomingViewMovies" class="library-subview" style="display: none;">
-        <div class="library-toolbar">
-            
-        </div>
-        <div id="upcomingMovieCategories"></div>
-    </div>
+    <!-- One combined list, TV and movies together. The TV/Movies toggle
+         that used to sit here split a feed that is fundamentally
+         chronological: what you care about is what lands NEXT, not
+         whether it happens to be an episode or a film. getUpcomingItems()
+         already returned both types merged and date-sorted - the tabs
+         were filtering that back apart. Laid out as rows (the same
+         .search-card shape Explore uses) rather than a poster grid,
+         because each entry needs a date and an episode number beside it,
+         which a caption under a poster can't carry legibly. -->
+    <div id="upcomingCategories"></div>
 </main>
 
 <!-- =====================================================
