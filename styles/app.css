@@ -391,7 +391,7 @@ img {
     text-align: center;
     background: var(--glass-sheen), var(--surface);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
+    box-shadow: var(--glass-shadow), var(--glass-edge);
     border-radius: var(--radius-2xl);
     backdrop-filter: blur(30px) saturate(180%);
     -webkit-backdrop-filter: blur(30px) saturate(180%);
@@ -446,7 +446,7 @@ img {
     background: var(--glass-sheen), var(--surface);
     color: var(--text);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
@@ -485,7 +485,7 @@ img {
     background: var(--glass-sheen), var(--surface);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
 }
 
 .wrapped-preview-value {
@@ -542,7 +542,10 @@ html[data-theme="dark"] .wrapped-preview-stat {
 ========================================================= */
 .wrapped-progress-row {
     position: fixed;
-    top: calc(14px + env(safe-area-inset-top, 0px));
+    /* 7px less than the header's own 14px, to cancel the 7px of vertical
+       padding each segment now carries as its tap target - so the visible
+       bar sits exactly where it did before the segments became buttons. */
+    top: calc(7px + env(safe-area-inset-top, 0px));
     left: 16px;
     /* Was right: 16px, the same right edge the modal's own close button
        sits at (.modal-header-nav, top: 14px + safe-area; right: 16px)
@@ -561,10 +564,19 @@ html[data-theme="dark"] .wrapped-preview-stat {
 
 .wrapped-progress-seg {
     flex: 1;
+    /* The bar itself stays 3px, but it's a real tap target now (see
+       wrappedGoTo) - a 3px-tall button is unhittable, so vertical padding
+       extends the hit area to a usable ~17px while background-clip keeps
+       the visible bar exactly as thin as it was. */
     height: 3px;
-    border-radius: 999px;
+    box-sizing: content-box;
+    padding: 7px 0;
     background: rgba(255, 255, 255, 0.3);
+    background-clip: content-box;
+    border: 0;
+    border-radius: 999px;
     overflow: hidden;
+    cursor: pointer;
 }
 
 .wrapped-progress-seg::after {
@@ -837,7 +849,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
     -webkit-backdrop-filter: blur(64px) saturate(260%);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-2xl);
-    box-shadow: var(--glass-shadow);
+    box-shadow: var(--glass-shadow), var(--glass-edge);
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -964,13 +976,8 @@ html[data-theme="dark"] .wrapped-preview-stat {
 
 .card-title {
     margin-top: 8px;
-    /* Serif for the name of a work - see --font-title. Weight drops from
-       700 to 600 and tracking goes back to normal: the sans needed heavy
-       weight and negative tracking to hold together at this size, a serif
-       does not and looks clotted if given the same treatment. */
-    font-family: var(--font-title);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--text);
     line-height: 1.3;
     white-space: nowrap;
@@ -1004,9 +1011,14 @@ html[data-theme="dark"] .wrapped-preview-stat {
    CHANGE POSTER / BACKDROP PICKER
 ========================================================= */
 .poster-picker-title {
-    font-size: 20px;
+    /* Matched to .section-title exactly (21px / -0.6px). Both are
+       screen-level headings - one on a page, one at the top of a
+       full-screen modal - and they sat 1px and 0.2px apart, which reads
+       as sloppy rather than as a deliberate distinction when you move
+       between them. */
+    font-size: 21px;
     font-weight: 800;
-    letter-spacing: -0.4px;
+    letter-spacing: -0.6px;
     margin-bottom: 16px;
 }
 
@@ -1029,7 +1041,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
     cursor: pointer;
     background: var(--surface-2);
     border: 2px solid transparent;
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     transition: transform 0.15s ease, border-color 0.2s ease;
 }
 
@@ -1086,7 +1098,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
     backdrop-filter: blur(30px);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     /* grid-column: 1/-1 above means this spans however many columns its
        parent grid currently has - harmless on a phone (already narrower
        than this cap), but on any of the wider screen tiers it would
@@ -1307,7 +1319,7 @@ html[data-theme="dark"] .search-box:focus-within {
     border-radius: var(--radius-sm);
     border: 1px solid var(--glass-border);
     margin-bottom: 16px;
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     align-content: start;
 }
 
@@ -1450,11 +1462,10 @@ html[data-theme="dark"] .search-box:focus-within {
 }
 
 .search-card-title {
-    font-family: var(--font-title);
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 15.5px;
+    font-weight: 800;
     color: var(--text);
-    letter-spacing: 0;
+    letter-spacing: -0.2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1775,22 +1786,13 @@ html[data-theme="dark"] .search-box:focus-within {
 }
 
 .continue-title {
-    font-family: var(--font-title);
-    font-size: 17px;
-    font-weight: 600;
+    font-size: 15.5px;
+    font-weight: 800;
     color: var(--text);
-    letter-spacing: 0;
-    /* Two lines rather than one hard-truncated line. Single-line
-       nowrap+ellipsis cut real titles short with room to spare beneath
-       them ("Stuart Fails to Save the Universe" became "Stuart Fails to
-       Save the ..."), which is the one piece of text on this card you
-       most need to recognise. Still clamped, so a very long title can't
-       push the card's own height around. */
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .continue-meta-line {
@@ -1808,14 +1810,9 @@ html[data-theme="dark"] .search-box:focus-within {
 }
 
 .continue-episode-name {
-    /* An episode name is the title of a work too, so it takes the serif -
-       italic, to separate it from the show name above it without needing
-       another size or colour step. */
-    font-family: var(--font-title);
-    font-style: italic;
-    font-size: 13.5px;
+    font-size: 12.5px;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 700;
     text-transform: none;
     letter-spacing: 0;
     margin-top: 1px;
@@ -1850,7 +1847,7 @@ html[data-theme="dark"] .search-box:focus-within {
     justify-content: center;
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     flex-shrink: 0;
     transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
@@ -2159,7 +2156,19 @@ html[data-theme="dark"] .modal-sheet-compact {
        than feeling like part of the same app: the glass cards inside
        them matched, but the surface underneath them didn't. */
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
-    background-attachment: fixed;
+    /* NOT background-attachment: fixed, which is what this used to be.
+       `fixed` sizes a background to the VIEWPORT rather than the element,
+       which is fine on <body> but wrong here: .modal-sheet is its own
+       scrolling container (overflow-y: auto), so as soon as its content
+       ran taller than one screen the background simply stopped at the
+       viewport edge and left a hard horizontal seam across the sheet
+       with flat colour below it. Scrolling with the element instead,
+       sized to cover its full scrollable height, keeps it continuous.
+       (`fixed` is also widely unreliable inside scrolling containers on
+       iOS specifically, so this is the safer behaviour regardless.) */
+    background-attachment: scroll;
+    background-size: cover;
+    background-repeat: no-repeat;
     /* Same saturation reduction as the nav bar - a full-screen sheet
        sitting over a poster grid picked up the same colour cast. */
     backdrop-filter: blur(80px) saturate(150%);
@@ -2238,12 +2247,48 @@ html[data-theme="dark"] .modal-sheet-compact {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm);
+    /* A soft dark halo in addition to the normal glass shadow. Two of the
+       twelve close buttons (details and episode modals) sit directly on
+       top of backdrop ARTWORK rather than an app surface - uncontrolled
+       images that can be any brightness. With only --glass-shadow-sm the
+       translucent circle had nothing to separate it from a light or busy
+       backdrop and could visually dissolve into it. The halo costs
+       nothing on the buttons that sit on plain surfaces and guarantees
+       the ones over images always read as a distinct control. */
+    box-shadow: var(--glass-shadow-sm), 0 2px 10px rgba(0, 0, 0, 0.18);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Explicit, rather than inheriting .icon's 22px. At 22px inside a 38px
+   circle the X filled ~58% of the button and left only 8px of breathing
+   room each side, noticeably tighter than the 42px settings button whose
+   icon is explicitly 20px (~48%). 19px here matches that proportion, so
+   the two round buttons that appear in the same top-right position read
+   as the same family instead of one looking cramped. */
+.close-button .icon {
+    width: 19px;
+    height: 19px;
 }
 
 .close-button:active {
     transform: scale(0.9);
+}
+
+/* NovaWrapped's slides are always dark, in BOTH themes - it's deliberately
+   dramatic rather than theme-adaptive (see the .wrapped-* rules). The
+   close button, though, was inheriting theme tokens like every other
+   modal's: in light mode that put a pale 45%-white circle with a DARK X
+   on top of a vivid dark slide, which is poor contrast and also let the
+   slide's own colour bleed through the glass so the button changed hue
+   from slide to slide - purple on the intro, green on the episodes
+   slide, blue on the month slide. Pinning it to the dark treatment in
+   both themes gives it one consistent appearance and a light X that
+   stays legible over every slide background. Raw rgba rather than
+   tokens precisely because it must NOT follow the theme here. */
+#novaWrappedModal .close-button {
+    background: var(--glass-sheen), rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.24);
 }
 
 .season-rewatch-button {
@@ -2259,7 +2304,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -2304,7 +2349,16 @@ html[data-theme="dark"] .modal-sheet-compact {
    into one class both for easier upkeep and so this value only ever
    needs to change in one place. */
 .modal-content-top-clear {
-    padding-top: 60px;
+    /* MUST include the same env(safe-area-inset-top) term .modal-header-nav
+       uses for its own `top`, or the two disagree by exactly the inset:
+       on a notched device the floating Done/close buttons shift down by
+       ~47-59px while this clearance stays put, so the header lands on top
+       of whatever content starts here (reported as the Done button
+       overlapping the Poster/Backdrop toggle in Change Poster). The 60px
+       is the clearance itself - header top offset (14px) plus its 38px
+       button plus a small gap - and the inset is added on top rather than
+       baked in, since it's 0 on devices without a notch. */
+    padding-top: calc(60px + env(safe-area-inset-top, 0px));
 }
 
 /* =========================================================
@@ -2427,7 +2481,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     color: var(--text);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
 }
 
 .confirm-btn.cancel:active {
@@ -2459,13 +2513,9 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 .modal-title {
-    /* The single biggest instance of a work's name in the app - this is
-       where the serif earns its keep most. */
-    font-family: var(--font-title);
-    font-size: 30px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-    line-height: 1.12;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.7px;
 }
 
 .modal-meta {
@@ -2575,7 +2625,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     object-fit: cover;
     background: var(--surface);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
 }
 
 .watch-provider-fallback {
@@ -2673,7 +2723,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     align-items: center;
     justify-content: center;
     text-align: center;
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     transition: transform 0.15s ease;
 }
 
@@ -2882,9 +2932,8 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 .episode-title {
-    font-family: var(--font-title);
-    font-size: 14.5px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .episode-overview {
@@ -3607,7 +3656,7 @@ html[data-theme="dark"] .large-avatar {
     -webkit-backdrop-filter: var(--glass-blur);
     color: var(--text-secondary);
     border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm);
+    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
 }
 
 .auth-forgot-link {
@@ -3910,7 +3959,13 @@ html[data-theme="dark"] .large-avatar {
    alongside the tokens above (see comment block header). */
 html[data-theme="dark"] .modal-sheet {
     background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 32%), var(--bg-mesh);
-    background-attachment: fixed;
+    /* Same seam fix as the light-mode rule - see the long comment there.
+       This override restates `background`, so without restating the
+       attachment/size alongside it the dark theme would keep the broken
+       `fixed` behaviour and the hard horizontal line with it. */
+    background-attachment: scroll;
+    background-size: cover;
+    background-repeat: no-repeat;
 }
 
 html[data-theme="dark"] .modal-backdrop-overlay {
