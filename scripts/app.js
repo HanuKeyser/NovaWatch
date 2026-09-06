@@ -3089,7 +3089,9 @@ function buildWrappedSlides(stats) {
                 <div class="wrapped-slide-eyebrow">You spent</div>
                 <div class="wrapped-slide-number">${stats.days}<span class="wrapped-slide-unit">d</span> ${stats.hours}<span class="wrapped-slide-unit">h</span></div>
                 <div class="wrapped-slide-headline">watching in ${stats.year}.</div>
-                ${stats.equivalentFullDays > 0 ? `<div class="wrapped-slide-footnote">That's ${stats.equivalentFullDays} full ${stats.equivalentFullDays === 1 ? 'day' : 'days'} straight.</div>` : ''}
+                ${stats.equivalentFullDays > 0
+                    ? `<div class="wrapped-slide-footnote">That's ${stats.equivalentFullDays} full ${stats.equivalentFullDays === 1 ? 'day' : 'days'} straight \u2014 about ${stats.equivalentWorkWeeks} working ${stats.equivalentWorkWeeks === 1 ? 'week' : 'weeks'}.</div>`
+                    : (stats.equivalentMovies > 0 ? `<div class="wrapped-slide-footnote">About ${stats.equivalentMovies} ${stats.equivalentMovies === 1 ? 'movie' : 'movies'} back to back.</div>` : '')}
             </div>
         `
     });
@@ -3116,6 +3118,23 @@ function buildWrappedSlides(stats) {
                     <div class="wrapped-slide-eyebrow">Binged and watched</div>
                     <div class="wrapped-slide-number">${stats.episodesCount}</div>
                     <div class="wrapped-slide-headline">episodes across ${stats.showsCount} ${stats.showsCount === 1 ? 'show' : 'shows'}.</div>
+                </div>
+            `
+        });
+    }
+
+    // rewatchCount was computed in the stats object but never surfaced on
+    // any slide - a whole dimension of someone's year (the things they
+    // liked enough to go back to) was being calculated and thrown away.
+    if (stats.rewatchCount > 0) {
+        slides.push({
+            bg: 'wrapped-bg-rewatch',
+            html: `
+                <div class="wrapped-slide-content">
+                    <div class="wrapped-slide-eyebrow">Worth a second look</div>
+                    <div class="wrapped-slide-number">${stats.rewatchCount}</div>
+                    <div class="wrapped-slide-headline">${stats.rewatchCount === 1 ? 'rewatch' : 'rewatches'} logged.</div>
+                    <div class="wrapped-slide-footnote">Some things are better the second time.</div>
                 </div>
             `
         });
@@ -3200,8 +3219,17 @@ function startWrappedSlideshow() {
             <div class="wrapped-tap-zone wrapped-tap-zone-right" onclick="wrappedGoNext()"></div>
         </div>
     `;
+    // Segments are tappable, not just an indicator. Previously the only
+    // way through was tapping forward one slide at a time (or back via the
+    // left half), so re-reading a slide you'd passed meant walking the
+    // whole sequence again and there was no way to see how much was left
+    // beyond counting bars. stopPropagation because the whole stage sits
+    // under the left/right advance zones - without it a segment tap would
+    // also fire the zone underneath and skip an extra slide.
     document.getElementById("wrappedProgressRow").innerHTML =
-        wrappedSlides.map((_, i) => `<div class="wrapped-progress-seg" id="wrappedSeg${i}"></div>`).join('');
+        wrappedSlides.map((_, i) =>
+            `<button class="wrapped-progress-seg" id="wrappedSeg${i}" aria-label="Go to slide ${i + 1}" onclick="event.stopPropagation(); wrappedGoTo(${i})"></button>`
+        ).join('');
 
     renderWrappedSlideAt(0);
 }
@@ -3234,6 +3262,13 @@ function renderWrappedSlideAt(index) {
         </div>
     ` : '');
     stage.insertBefore(panel, stage.firstChild);
+}
+
+// Jump straight to a slide from the progress bar.
+function wrappedGoTo(index) {
+    if (index < 0 || index >= wrappedSlides.length) return;
+    wrappedSlideIndex = index;
+    renderWrappedSlideAt(index);
 }
 
 function wrappedGoNext() {
