@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- viewport-fit=cover is REQUIRED for env(safe-area-inset-*) to resolve
+     to anything other than 0. Without it this page drew inside the safe
+     area instead of under it, and its own close button - which offsets
+     itself by env(safe-area-inset-top) - got 0 and sat too close to the
+     notch. index.html already had this; this page had drifted. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#e8edf4" id="metaThemeColor">
 <script>
 // Same shared localStorage key as the main app, so this page (opened
