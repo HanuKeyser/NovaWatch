@@ -1435,6 +1435,80 @@ html[data-theme="dark"] .search-box:focus-within {
 }
 
 /* =========================================================
+   MOVIE CAST LIST
+   Portrait on the left, name and role beside it - a row per person rather
+   than a horizontal carousel, so names never truncate and the list reads
+   at a glance in the same left-to-right direction as everything else in
+   the modal.
+========================================================= */
+.modal-cast {
+    margin-top: 22px;
+}
+
+.cast-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.cast-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-border-subtle);
+}
+
+.cast-photo {
+    flex: 0 0 48px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    /* Faces sit high in a TMDB portrait, so centre-cropping a square out
+       of a 2:3 image cuts the top of the head off. */
+    object-position: top center;
+    background: var(--surface-2);
+}
+
+.cast-photo-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-muted);
+}
+
+.cast-info {
+    /* Same flex guard as .continue-body - without it a long character name
+       refuses to shrink and pushes out of the row. */
+    flex: 1;
+    min-width: 0;
+}
+
+.cast-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cast-role {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* =========================================================
    DISCOVER CATEGORY CHIPS
 ========================================================= */
 .category-row {
@@ -1475,7 +1549,11 @@ html[data-theme="dark"] .search-box:focus-within {
     background: var(--glass-sheen), var(--blue-gradient);
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    /* No coloured outer glow - just the inner top highlight. A blue halo
+       around a small chip reads as a focus ring or an error state rather
+       than a selected filter, and with six chips in a row the glows
+       bleed into each other. */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .search-results-grid {
@@ -2034,7 +2112,7 @@ html[data-theme="dark"] .continue-progress {
        safe-area inset folds in on top of that 18px, since that space
        exists to keep the bar's tap targets clear of the gesture area -
        resolves to a flat 18px on devices with no inset. */
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 100;
     width: calc(100% - 36px);
