@@ -1399,6 +1399,29 @@ html[data-theme="dark"] .search-box:focus-within {
     margin-top: 4px;
 }
 
+/* Library filter + sort rows. Two rows rather than one: they answer
+   different questions ("which kind of thing" vs "in what order"), and
+   mixing them into a single scrolling strip would make it look like one
+   set of mutually exclusive options. */
+.library-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.library-controls .category-row {
+    margin-top: 0;
+}
+
+/* Sort is secondary to filter - smaller and lighter, so the eye lands on
+   the type filter first and the row below reads as a refinement of it
+   rather than a competing choice. */
+.category-chip.chip-quiet {
+    padding: 7px 13px;
+    font-size: 12px;
+}
+
 /* =========================================================
    DISCOVER CATEGORY CHIPS
 ========================================================= */
