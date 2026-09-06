@@ -5924,7 +5924,6 @@ function renderHomeTab() {
    Same storage approach as the Library Display visibility prefs.
 ========================================================= */
 const LIBRARY_FILTER_KEY = "novawatch-library-filter";
-const LIBRARY_SORT_KEY = "novawatch-library-sort";
 
 const LIBRARY_FILTERS = [
     { id: 'all',   label: 'All' },
@@ -5932,44 +5931,24 @@ const LIBRARY_FILTERS = [
     { id: 'movie', label: 'Movies' }
 ];
 
-const LIBRARY_SORTS = [
-    // Default stays the existing behaviour so nothing changes for anyone
-    // who never touches these controls.
-    { id: 'default', label: 'Default' },
-    { id: 'az',      label: 'A\u2013Z' },
-    { id: 'added',   label: 'Recently Added' },
-    { id: 'watched', label: 'Recently Watched' }
-];
-
 let currentLibraryFilter = 'all';
-let currentLibrarySort = 'default';
 
 function loadLibraryPrefs() {
     try {
         const f = localStorage.getItem(LIBRARY_FILTER_KEY);
         if (f && LIBRARY_FILTERS.some(x => x.id === f)) currentLibraryFilter = f;
-        const so = localStorage.getItem(LIBRARY_SORT_KEY);
-        if (so && LIBRARY_SORTS.some(x => x.id === so)) currentLibrarySort = so;
     } catch (e) {
-        // Private mode / storage disabled - defaults are fine.
+        // Private mode / storage disabled - the default is fine.
     }
 }
 
 function renderLibraryControls() {
     const filterRow = document.getElementById("libraryFilterRow");
-    const sortRow = document.getElementById("librarySortRow");
-    if (filterRow) {
-        filterRow.innerHTML = LIBRARY_FILTERS.map(f => `
-            <button class="category-chip${f.id === currentLibraryFilter ? ' active' : ''}"
-                    onclick="setLibraryFilter('${f.id}')">${f.label}</button>
-        `).join('');
-    }
-    if (sortRow) {
-        sortRow.innerHTML = LIBRARY_SORTS.map(o => `
-            <button class="category-chip chip-quiet${o.id === currentLibrarySort ? ' active' : ''}"
-                    onclick="setLibrarySort('${o.id}')">${o.label}</button>
-        `).join('');
-    }
+    if (!filterRow) return;
+    filterRow.innerHTML = LIBRARY_FILTERS.map(f => `
+        <button class="category-chip${f.id === currentLibraryFilter ? ' active' : ''}"
+                onclick="setLibraryFilter('${f.id}')">${f.label}</button>
+    `).join('');
 }
 
 function setLibraryFilter(id) {
@@ -5979,49 +5958,25 @@ function setLibraryFilter(id) {
     renderLibrarySection();
 }
 
-function setLibrarySort(id) {
-    currentLibrarySort = id;
-    try { localStorage.setItem(LIBRARY_SORT_KEY, id); } catch (e) {}
-    renderLibraryControls();
-    renderLibrarySection();
-}
 
-// Applied AFTER items are bucketed into categories, so sorting reorders
-// within each block rather than flattening the categories away - the
-// buckets are what make a 125-item library readable in the first place.
+// Applied AFTER items are bucketed into categories, so it reorders within
+// each block rather than flattening the categories away - the buckets are
+// what make a large library readable in the first place.
+//
+// Always A-Z. The previous default (latest-aired for shows, last-watched
+// for films) is a meaningful order for a feed but a useless one for
+// LOOKING SOMETHING UP, which is what a library with a hundred-plus items
+// is mostly used for - and it differed between the two types, so a
+// combined block had no coherent order at all.
 function applyLibrarySort(items) {
-    const arr = [...items];
-    switch (currentLibrarySort) {
-        case 'az':
-            // localeCompare with numeric so "Season 2" sorts after
-            // "Season 10" correctly, and so accented titles collate
-            // sensibly rather than being dumped at the end.
-            return arr.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' }));
-        case 'added':
-            return arr.sort((a, b) => new Date(b.addedAt || 0) - new Date(a.addedAt || 0));
-        case 'watched':
-            return arr.sort((a, b) => getLastActivityTime(b) - getLastActivityTime(a));
-        default:
-            return arr;
-    }
+    // numeric so "Season 2" precedes "Season 10"; sensitivity 'base' so
+    // accented and cased titles collate naturally instead of being pushed
+    // to the end of the list.
+    return [...items].sort((a, b) =>
+        (a.title || '').localeCompare(b.title || '', undefined, { numeric: true, sensitivity: 'base' })
+    );
 }
 
-// "Last watched" has to mean different things for the two types: a movie
-// records lastWatchedAt directly, a show's most recent activity is the
-// newest watchedAt across its episodes. Without this, sorting by watched
-// would push every show to the bottom regardless of how recently it was
-// actually viewed.
-function getLastActivityTime(item) {
-    if (item.type === 'movie') {
-        return item.lastWatchedAt ? new Date(item.lastWatchedAt).getTime() : 0;
-    }
-    let latest = 0;
-    (item.episodes || []).forEach(ep => {
-        if (ep.watchedAt) latest = Math.max(latest, new Date(ep.watchedAt).getTime());
-        if (ep.rewatchedAt) latest = Math.max(latest, new Date(ep.rewatchedAt).getTime());
-    });
-    return latest;
-}
 
 /* One combined library renderer, replacing the separate TV and movie
    ones. Categories merge by MEANING rather than by media type: a finished
