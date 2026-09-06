@@ -86,8 +86,13 @@ body {
 }
 
 .overlay-close-button .icon {
-    width: 22px;
-    height: 22px;
+    /* 19px to match .close-button .icon in app.css - this button is a
+       standalone copy of that control (this page is served separately and
+       doesn't load app.css), so the two have to be kept in sync by hand
+       or the same visual control ends up two different weights depending
+       on which page you're on. */
+    width: 19px;
+    height: 19px;
 }
 
 .overlay-close-button:active {
