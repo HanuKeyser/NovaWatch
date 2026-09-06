@@ -52,9 +52,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Account deletion available directly in the app, and fully removes all associated data — your library, watch history, and saved notification state.
 ## Design
 
-- Show, movie and episode titles are now set in a serif typeface, distinct from the interface text around them - naming a work is a different job from labelling a button.
 - Viewing Analytics no longer nests cards inside cards; the four numbers sit on the surface separated by fine rules, with the coloured icons carrying the weight.
-- Continue Watching leads with a still from the actual episode you're about to watch, at a wider 16:9 shape, instead of a small poster repeated from your Library. Cards are shorter, so more fits on screen.
 
 
 - A consistent "Liquid Glass" visual language across cards, sheets, buttons, and the floating navigation bar — translucent, blurred surfaces with a soft sheen, sharing one shared set of color and glass tokens rather than each surface inventing its own treatment.
