@@ -39,10 +39,29 @@
        outline. Not dropped to zero: a hairline is still useful for edge
        definition at rounded corners over similarly-toned backgrounds
        (dark-on-dark especially), just far softer than before. */
-    --glass-border: rgba(255, 255, 255, 0.6);
-    --glass-border-subtle: rgba(255, 255, 255, 0.32);
-    --glass-shadow: 0 8px 32px rgba(31, 41, 55, 0.08);
-    --glass-shadow-sm: 0 4px 16px rgba(31, 41, 55, 0.06);
+    /* Borders pulled back from 0.6. A uniform 60%-white outline traced
+       the whole shape at equal strength, which reads as a drawn stroke
+       rather than a lit edge - real glass catches light on its TOP edge
+       and almost nothing on its bottom. The edge lighting is now done by
+       --glass-edge below (an inset top highlight) instead, so the border
+       only has to hint at the boundary rather than draw it. */
+    --glass-border: rgba(255, 255, 255, 0.42);
+    --glass-border-subtle: rgba(255, 255, 255, 0.24);
+
+    /* Two shadows, not one. A single wide diffuse shadow makes an element
+       hover vaguely somewhere above the page; depth reads as real when a
+       tight CONTACT shadow (small offset, small blur) grounds the element
+       and a wide AMBIENT one carries the sense of height. This is the
+       main thing separating "a card with a drop shadow" from something
+       that looks physically placed. */
+    --glass-shadow: 0 1px 2px rgba(31, 41, 55, 0.06), 0 12px 32px -8px rgba(31, 41, 55, 0.14);
+    --glass-shadow-sm: 0 1px 2px rgba(31, 41, 55, 0.05), 0 6px 16px -6px rgba(31, 41, 55, 0.10);
+
+    /* The lit top edge, applied as an inset highlight. Several rules were
+       already doing this by hand with their own hardcoded
+       `inset 0 1px 0 rgba(255,255,255,...)`; this makes it one value so
+       every glass surface catches light from the same direction. */
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.7);
     /* The general content-surface glass recipe (cards, sheets, modals) -
        genuinely see-through with just enough blur/saturation to stay
        legible. Deliberately one full step lighter than the chrome tier
@@ -76,7 +95,12 @@
     --glass-chrome-blur: blur(80px) saturate(150%);
     --glass-chrome-border: rgba(255, 255, 255, 0.5);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 28px 56px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.06) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.28) 100%);
+    /* Softened from a 0.5 white hotspot to 0.34, and the falloff moved
+       earlier. At full strength the diagonal streak read as polished
+       plastic catching a studio light rather than as glass - the giveaway
+       being that it was the brightest thing on the surface, brighter than
+       any actual content sitting on it. */
+    --glass-sheen: linear-gradient(118deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.05) 26%, rgba(255, 255, 255, 0) 58%, rgba(255, 255, 255, 0) 80%, rgba(255, 255, 255, 0.16) 100%);
 
     --blue: #006aff;
     --blue-light: #00faff;
@@ -128,20 +152,6 @@
     --success: #22c55e;
     --danger: #ef4444;
 
-    /* =====================================================
-       TYPOGRAPHY
-       Two roles, deliberately. UI chrome (buttons, labels, nav, stats,
-       settings) stays on the system stack - it should feel native to the
-       device and load instantly. Titles of WORKS - show names, movie
-       names, episode names - use a serif instead. Naming a work is a
-       different job from labelling a control: a serif here reads the way
-       a film-credit block or a criticism byline does, and it's the single
-       cheapest way to give the app a voice rather than looking like every
-       other system-font app. Fallbacks are real serifs, so a failed font
-       load degrades to the right *kind* of type rather than back to sans.
-    ===================================================== */
-    --font-title: 'Newsreader', 'Iowan Old Style', 'Palatino', Georgia, serif;
-
     --radius: 20px;
 
     /* =====================================================
@@ -182,10 +192,21 @@ html[data-theme="dark"] {
     --surface: rgba(255, 255, 255, 0.06);
     --surface-2: rgba(255, 255, 255, 0.04);
 
-    --glass-border: rgba(255, 255, 255, 0.12);
-    --glass-border-subtle: rgba(255, 255, 255, 0.06);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-    --glass-shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.35);
+    /* Dark glass needs the OPPOSITE adjustment to light. On a dark
+       background a surface can't separate itself with a shadow (a dark
+       shadow on a dark ground is invisible), so the border does more of
+       the work here, not less - nudged up rather than down. */
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-border-subtle: rgba(255, 255, 255, 0.08);
+
+    /* Same contact + ambient pairing as light mode, but deeper: shadows
+       have to be considerably stronger on dark to register at all. */
+    --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 14px 36px -8px rgba(0, 0, 0, 0.65);
+    --glass-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+
+    /* Dimmer than light mode's 0.7 - a bright white top edge on a dark
+       surface reads as a hard outline rather than a catch of light. */
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 
     --glass-chrome-fill: rgba(40, 40, 46, 0.5);
     /* Same over-saturation fix as light mode - see the comment there.
@@ -194,7 +215,7 @@ html[data-theme="dark"] {
     --glass-chrome-blur: blur(80px) saturate(160%);
     --glass-chrome-border: rgba(255, 255, 255, 0.14);
     --glass-chrome-shadow: 0 2px 8px rgba(0, 0, 0, 0.42), 0 28px 60px rgba(0, 0, 0, 0.68), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-    --glass-sheen: linear-gradient(112deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, 0.07) 100%);
+    --glass-sheen: linear-gradient(118deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 26%, rgba(255, 255, 255, 0) 58%, rgba(255, 255, 255, 0) 80%, rgba(255, 255, 255, 0.05) 100%);
 
     /* Same exact blues as light mode now, not a separate lighter-for-
        dark-backgrounds set - both #006aff and #00faff already have
