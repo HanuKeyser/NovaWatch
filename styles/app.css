@@ -1399,27 +1399,24 @@ html[data-theme="dark"] .search-box:focus-within {
     margin-top: 4px;
 }
 
-/* Library filter + sort rows. Two rows rather than one: they answer
-   different questions ("which kind of thing" vs "in what order"), and
-   mixing them into a single scrolling strip would make it look like one
-   set of mutually exclusive options. */
-.library-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 12px;
-}
+/* The library's type filter row. Uses the same .category-row scroller as
+   Explore, so the two tabs' chip strips sit at the same rhythm - but with
+   a little more space beneath it, because what follows here is a category
+   heading rather than a results list and needs room to read as a new
+   section rather than as part of the control. */
+#libraryFilterRow {
+    /* No top margin of its own - .library-toolbar above already carries
+       margin-bottom: 18px, and adjacent margins collapse to the larger of
+       the two, so adding 14px here just did nothing while looking like it
+       set the gap. Zero makes the single source of that spacing obvious.
 
-.library-controls .category-row {
+       20px below, NOT the 4px this started at: .category-block has no top
+       margin at all, so whatever is set here is the entire separation
+       between the chips and the first category heading - and at 4px the
+       heading sat almost against the chips with nothing marking the shift
+       from control to content. */
     margin-top: 0;
-}
-
-/* Sort is secondary to filter - smaller and lighter, so the eye lands on
-   the type filter first and the row below reads as a refinement of it
-   rather than a competing choice. */
-.category-chip.chip-quiet {
-    padding: 7px 13px;
-    font-size: 12px;
+    margin-bottom: 20px;
 }
 
 /* =========================================================
