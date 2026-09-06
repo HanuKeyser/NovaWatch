@@ -4671,16 +4671,7 @@ const DISCOVER_CATEGORIES = [
     { id: 'tv',       label: 'Popular TV',    path: 'tv/popular',              type: 'tv' },
     { id: 'movies',   label: 'Popular Movies',path: 'movie/popular',           type: 'movie' },
     { id: 'toptv',    label: 'Top Rated TV',  path: 'tv/top_rated',            type: 'tv' },
-    { id: 'topmovies',label: 'Top Rated Films',path: 'movie/top_rated',        type: 'movie' },
-    // Coming Soon spans BOTH types, and TMDB has no single endpoint for
-    // that - `movie/upcoming` and `tv/on_the_air` are separate lists. The
-    // `pair` flag tells fetchDiscoverCategory to fetch both and interleave
-    // them rather than hitting one `path`.
-    { id: 'soon',     label: 'Coming Soon',
-      pair: [
-        { path: 'movie/upcoming',  type: 'movie' },
-        { path: 'tv/on_the_air',   type: 'tv' }
-      ] }
+    { id: 'topmovies',label: 'Top Rated Films',path: 'movie/top_rated',        type: 'movie' }
 ];
 
 let currentDiscoverCategory = 'foryou';
@@ -4724,35 +4715,6 @@ async function fetchDiscoverCategory(cat) {
 
     if (heading) heading.textContent = cat.label;
     listContainer.innerHTML = skeletonRows();
-
-    // Two-endpoint categories (Coming Soon) fetch in parallel and
-    // interleave, so the list alternates types instead of showing every
-    // movie before any show. Promise.all rather than sequential awaits -
-    // these don't depend on each other and doubling the wait is pointless.
-    if (cat.pair) {
-        try {
-            const responses = await Promise.all(cat.pair.map(part =>
-                fetch(`https://api.themoviedb.org/3/${part.path}?api_key=${TMDB_API_KEY}`)
-                    .then(r => r.ok ? r.json() : { results: [] })
-                    .then(d => (d.results || []).map(x => ({ ...x, media_type: part.type })))
-            ));
-            const [first, second] = responses;
-            const merged = [];
-            for (let i = 0; i < Math.max(first.length, second.length); i++) {
-                if (first[i]) merged.push(first[i]);
-                if (second[i]) merged.push(second[i]);
-            }
-            if (merged.length === 0) {
-                listContainer.innerHTML = emptyState("Nothing Coming Soon", "TMDB has no upcoming titles to show right now.", null, 'search');
-                return;
-            }
-            renderSearchResults(merged);
-        } catch (error) {
-            console.error("Error fetching category:", error);
-            listContainer.innerHTML = emptyState("Couldn't Load " + cat.label, "Please check your network connection.", null, 'search');
-        }
-        return;
-    }
 
     try {
         const response = await fetch(`https://api.themoviedb.org/3/${cat.path}?api_key=${TMDB_API_KEY}`);
@@ -7311,67 +7273,6 @@ function closeModalOutside(event) {
     }
 }
 
-/* =========================================================
-   MOVIE CAST
-   Row-per-person: portrait on the left, name and role beside it. TMDB
-   returns cast already in billing order, so no sorting - the order it
-   gives IS the meaningful one.
-========================================================= */
-let castRequestToken = 0;
-
-async function loadMovieCast(tmdbId) {
-    const castEl = document.getElementById("modalCast");
-    if (!castEl) return;
-
-    // Guards against a slow response for a PREVIOUS movie landing after
-    // the person has already opened a different one - without this, cast
-    // for the wrong film can appear in the open modal.
-    const myToken = ++castRequestToken;
-
-    castEl.style.display = 'none';
-    castEl.innerHTML = '';
-
-    try {
-        const res = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${TMDB_API_KEY}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (myToken !== castRequestToken) return;
-
-        // Top billed only. A full cast list runs to dozens of names and
-        // would dwarf the rest of the modal.
-        const cast = (data.cast || []).slice(0, 10);
-        if (cast.length === 0) return;
-
-        castEl.innerHTML = `
-            <div class="section-header"><div class="section-title" style="font-size: 16px; color: var(--text-secondary);">Cast</div></div>
-            <div class="cast-list">
-                ${cast.map(person => {
-                    const photo = person.profile_path
-                        ? `<img src="https://image.tmdb.org/t/p/w185${person.profile_path}" class="cast-photo" alt="${escapeHTML(person.name)}" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">`
-                        // Initials stand-in rather than a broken frame, for
-                        // the many older or minor credits with no photo.
-                        : `<div class="cast-photo cast-photo-empty">${escapeHTML((person.name || '?').charAt(0))}</div>`;
-                    return `
-                        <div class="cast-row">
-                            ${photo}
-                            <div class="cast-info">
-                                <div class="cast-name">${escapeHTML(person.name || 'Unknown')}</div>
-                                ${person.character ? `<div class="cast-role">${escapeHTML(person.character)}</div>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
-        castEl.style.display = 'block';
-    } catch (error) {
-        // Silent. Cast is supplementary - a failed fetch should leave the
-        // modal exactly as it was, not show an error for something the
-        // person didn't ask for.
-        console.error("Error loading cast:", error);
-    }
-}
-
 function updateModalContent() {
     if (!currentItem) return;
 
@@ -7464,20 +7365,6 @@ function updateModalContent() {
 
     renderWatchOnSection(currentItem);
     document.getElementById("modalDescription").textContent = currentItem.description;
-
-    // Cast is movie-only and fetched on demand rather than stored on the
-    // library item - it's presentational, changes rarely, and caching it
-    // per title would bloat every Firestore document for something the
-    // person only sees when a modal is actually open.
-    const castEl = document.getElementById("modalCast");
-    if (castEl) {
-        if (currentItem.type === 'movie' && currentItem.tmdbId) {
-            loadMovieCast(currentItem.tmdbId);
-        } else {
-            castEl.style.display = 'none';
-            castEl.innerHTML = '';
-        }
-    }
 
     let actionsHTML = '';
     const isAdded = state.library.some(s => s.tmdbId === currentItem.tmdbId);
