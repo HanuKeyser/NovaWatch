@@ -6080,8 +6080,9 @@ function continuePlaceholderIcon(type) {
 }
 
 // Builds one swipeable "up next" card. TV cards use the episode's own still
-// (its preview image) as the banner with the show's poster badged over the
-// bottom-left corner; movie cards fall back to the movie's backdrop/poster.
+// Uses the show/movie POSTER as the card's thumbnail. An episode-still
+// banner treatment was tried here and reverted - this comment used to
+// describe that version and no longer matched the code below it.
 function createContinueCard(type, item, episode) {
     const hasPoster = item.poster && item.poster.trim() !== "";
     const posterHTML = hasPoster
@@ -6091,8 +6092,19 @@ function createContinueCard(type, item, episode) {
     // The meta line and description surface the *episode's* own info for TV
     // (season/episode + its synopsis) rather than the show's general blurb,
     // so this row tells you exactly what you're about to watch next.
+    // How far into the show you actually are. Library poster tiles already
+    // carry a progress bar, but this list - the one screen whose entire
+    // purpose is "carry on from where you left off" - showed only which
+    // episode was next, with no sense of whether that was episode 2 of 8
+    // or 7 of 8. Released episodes only (getTVProgress excludes unaired),
+    // so the denominator is what you could actually watch today.
+    const prog = type === 'tv' ? getTVProgress(item) : null;
+    const progressHTML = (prog && prog.total > 0)
+        ? `<span>•</span><span>${prog.watched}/${prog.total}</span>`
+        : '';
+
     const metaHTML = type === 'tv'
-        ? `<span>S${episode.season}</span><span>•</span><span>E${episode.number}</span>`
+        ? `<span>S${episode.season}</span><span>•</span><span>E${episode.number}</span>${progressHTML}`
         : `<span>${escapeHTML(item.year || 'N/A')}</span><span>•</span><span>Movie</span>`;
 
     const episodeNameHTML = type === 'tv'
@@ -6127,6 +6139,7 @@ function createContinueCard(type, item, episode) {
                     <div class="continue-meta-line">${metaHTML}</div>
                     ${episodeNameHTML}
                     <div class="continue-overview">${escapeHTML(overviewText)}</div>
+                    ${(prog && prog.total > 0) ? `<div class="continue-progress"><div class="continue-progress-fill" style="width: ${prog.percentage}%"></div></div>` : ''}
                 </div>
                 <button class="continue-check-btn" onclick="event.stopPropagation(); markContinueItemWatched('${type}', '${item.id}', '${epId}')" aria-label="Mark watched" title="Mark watched">
                     <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>
