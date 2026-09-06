@@ -284,46 +284,26 @@
      2. LIBRARY TAB (TV Shows + Movies)
 ================================================     -->
 <main id="libraryPage" class="page">
-    <div class="segmented-toggle">
-        <button id="libraryTabTV" class="segmented-btn active" onclick="setLibraryView('tv')">TV Shows</button>
-        <button id="libraryTabMovies" class="segmented-btn" onclick="setLibraryView('movies')">Movies</button>
-    </div>
-
-    <!-- TV Shows sub-view -->
-    <div id="libraryViewTV" class="library-subview">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="tvLibrarySearchInput" type="text" inputmode="search" placeholder="Search TV shows library..." autocomplete="off" enterkeyhint="search" aria-label="Search your TV shows library">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('tvLibrarySearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
+    <!-- One combined library. The TV/Movies toggle is gone: the category
+         buckets already carried the meaning people actually sort by
+         (In Progress, Unwatched, Finished...), and splitting by media type
+         on top of that meant checking two places to answer "what have I
+         not finished". Categories merge by meaning - TV "Finished" and
+         movie "Watched" are the same idea and are now one block. -->
+    <div class="library-toolbar">
+        <div class="search-box">
+            <svg class="icon search-icon" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="M20 20l-4-4"/>
+            </svg>
+            <input id="librarySearchInput" type="text" inputmode="search" placeholder="Search your library..." autocomplete="off" enterkeyhint="search" aria-label="Search your library">
+            <button class="search-clear-btn" type="button" onclick="clearSearch('librarySearchInput')" aria-label="Clear search">
+                <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+            </button>
         </div>
-
-        <div id="tvLibraryCategories"></div>
     </div>
 
-    <!-- Movies sub-view -->
-    <div id="libraryViewMovies" class="library-subview" style="display: none;">
-        <div class="library-toolbar">
-            <div class="search-box">
-                <svg class="icon search-icon" viewBox="0 0 24 24">
-                    <circle cx="11" cy="11" r="7"/>
-                    <path d="M20 20l-4-4"/>
-                </svg>
-                <input id="movieLibrarySearchInput" type="text" inputmode="search" placeholder="Search movies library..." autocomplete="off" enterkeyhint="search" aria-label="Search your movies library">
-                <button class="search-clear-btn" type="button" onclick="clearSearch('movieLibrarySearchInput')" aria-label="Clear search">
-                    <svg class="icon icon-small" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
-                </button>
-            </div>
-        </div>
-
-        <div id="movieLibraryCategories"></div>
-    </div>
+    <div id="libraryCategories"></div>
 </main>
 
 <!-- =====================================================
@@ -371,10 +351,6 @@
                     <div>
                         <div class="stat-label" style="text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Total Watch Time</div>
                         <div id="totalWatchTime" class="stat-value highlight">0 Days, 0 Hours, 0 Minutes</div>
-                        <div id="currentStreakBadge" class="streak-badge inactive">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-                            <span id="currentStreak">No Active Streak</span>
-                        </div>
                     </div>
                 </div>
                 <div id="dashboardStats" class="stats"></div>
