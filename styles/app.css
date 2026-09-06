@@ -162,7 +162,14 @@ img {
    shape rather than a mistake. */
 .page {
     display: none;
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    /* Horizontal insets matter in LANDSCAPE on a notched phone, where the
+       notch and home indicator sit on the left/right edges rather than
+       top/bottom. A flat 18px there let content slide under the notch.
+       In portrait both resolve to 0, so this is identical to before. */
+    padding: calc(36px + env(safe-area-inset-top, 0px))
+             calc(18px + env(safe-area-inset-right, 0px))
+             calc(20px + env(safe-area-inset-bottom, 0px))
+             calc(18px + env(safe-area-inset-left, 0px));
 }
 
 .page.active {
@@ -180,7 +187,14 @@ img {
    5th top-level tab (its own full-height sheet), so it gets the exact
    same logic rather than a separate hardcoded copy. */
 .settings-page-content {
-    padding: calc(36px + env(safe-area-inset-top, 0px)) 18px calc(20px + env(safe-area-inset-bottom, 0px));
+    /* Horizontal insets matter in LANDSCAPE on a notched phone, where the
+       notch and home indicator sit on the left/right edges rather than
+       top/bottom. A flat 18px there let content slide under the notch.
+       In portrait both resolve to 0, so this is identical to before. */
+    padding: calc(36px + env(safe-area-inset-top, 0px))
+             calc(18px + env(safe-area-inset-right, 0px))
+             calc(20px + env(safe-area-inset-bottom, 0px))
+             calc(18px + env(safe-area-inset-left, 0px));
 }
 
 .tab-content-wrapper {
@@ -546,7 +560,8 @@ html[data-theme="dark"] .wrapped-preview-stat {
        padding each segment now carries as its tap target - so the visible
        bar sits exactly where it did before the segments became buttons. */
     top: calc(7px + env(safe-area-inset-top, 0px));
-    left: 16px;
+    /* Landscape notch guard - see .page's horizontal padding. */
+    left: calc(16px + env(safe-area-inset-left, 0px));
     /* Was right: 16px, the same right edge the modal's own close button
        sits at (.modal-header-nav, top: 14px + safe-area; right: 16px)
        - with this row's own higher z-index (20 vs the close button's
@@ -556,7 +571,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
        occupying out to right: 54px) clear with a small gap to spare -
        the same layout Instagram/Snapchat stories use, a progress bar
        and a close control sharing the same row without overlapping. */
-    right: 62px;
+    right: calc(62px + env(safe-area-inset-right, 0px));
     z-index: 20;
     display: flex;
     gap: 5px;
@@ -1819,6 +1834,28 @@ html[data-theme="dark"] .search-box:focus-within {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Thin progress bar at the foot of a Continue Watching card. Deliberately
+   understated - it's context, not the point of the card, so it reads as a
+   hairline rather than competing with the title and episode name above it.
+   Matches the green used on Library poster tiles for the same meaning. */
+.continue-progress {
+    margin-top: 8px;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.continue-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--green-gradient);
+}
+
+html[data-theme="dark"] .continue-progress {
+    background: rgba(255, 255, 255, 0.10);
 }
 
 .continue-overview {
