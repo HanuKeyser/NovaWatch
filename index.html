@@ -303,6 +303,18 @@
         </div>
     </div>
 
+    <!-- Filter + sort. Combining the TV/Movies tabs made the categories
+         easier to reason about but made a small number of movies harder to
+         FIND among a large number of shows - this restores "show me only
+         movies" as a filter rather than as a separate mode. Sort matters
+         because the default order (latest-aired for shows, last-watched for
+         films) is useless for locating a title you already know the name
+         of, which is most of what a big library gets used for. -->
+    <div class="library-controls">
+        <div class="category-row" id="libraryFilterRow"></div>
+        <div class="category-row" id="librarySortRow"></div>
+    </div>
+
     <div id="libraryCategories"></div>
 </main>
 
