@@ -28,7 +28,14 @@
         radial-gradient(at 92% 80%, rgba(170, 140, 255, 0.15) 0px, transparent 55%),
         radial-gradient(at 8% 90%, rgba(130, 220, 195, 0.13) 0px, transparent 55%),
         radial-gradient(at 50% 45%, rgba(255, 255, 255, 0.5) 0px, transparent 65%),
-        #e8edf4;
+        var(--bg-base);
+
+    /* The flat colour underneath --bg-mesh's tinted radials. Exposed as its
+       own token because .modal-backdrop-overlay has to fade INTO exactly
+       this colour - it sits directly above content that's painted on the
+       mesh, so any mismatch shows as a hard horizontal line where the hero
+       image ends. Keeping it as one value means the two can't drift apart. */
+    --bg-base: #e8edf4;
     --surface: rgba(255, 255, 255, 0.45);
     --surface-2: rgba(255, 255, 255, 0.28);
 
@@ -188,7 +195,9 @@ html[data-theme="dark"] {
         radial-gradient(at 90% 75%, rgba(42, 48, 66, 0.4) 0px, transparent 50%),
         radial-gradient(at 10% 88%, rgba(30, 34, 48, 0.5) 0px, transparent 50%),
         radial-gradient(at 50% 45%, rgba(20, 22, 30, 0.5) 0px, transparent 65%),
-        #0a0d14;
+        var(--bg-base);
+
+    --bg-base: #0a0d14;
     --surface: rgba(255, 255, 255, 0.06);
     --surface-2: rgba(255, 255, 255, 0.04);
 
