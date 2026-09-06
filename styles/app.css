@@ -1761,6 +1761,15 @@ html[data-theme="dark"] .search-box:focus-within {
     gap: 14px;
     padding: 14px;
     align-items: flex-start;
+    /* A floor, so every card in the list is the same height. The body's
+       own height varies by type - a TV card carries an episode name and a
+       progress bar that a movie card doesn't - and without a floor that
+       difference showed up as cards of two different sizes stacked on top
+       of each other. 144px is the poster (116px) plus this card's own
+       vertical padding (14px top + bottom), i.e. exactly the height the
+       poster already forces, so this changes nothing for the tallest
+       cards and simply stops the shorter ones collapsing below them. */
+    min-height: 144px;
     /* Liquid-Glass-style treatment: a diagonal sheen layered over a
        translucent fill (lower opacity so the blurred backdrop reads
        through clearly), heavy blur+saturation, and a bright top-edge
@@ -1854,6 +1863,13 @@ html[data-theme="dark"] .search-box:focus-within {
 .continue-body {
     flex: 1;
     min-width: 0;
+    /* Reserve the check button's lane. That button is position:absolute
+       (top 14px, right 6px, 34px wide), so it's out of flow and this
+       column otherwise runs the full width of the card straight
+       underneath it - which is why a long title still passed behind the
+       button even after min-width:0 stopped it overflowing the card.
+       34px button + 6px right offset + 6px breathing room. */
+    padding-right: 46px;
 }
 
 /* Thin progress bar at the foot of a Continue Watching card. Deliberately
@@ -1884,9 +1900,21 @@ html[data-theme="dark"] .continue-progress {
     line-height: 1.45;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    /* Unprefixed alongside the -webkit- one. The prefixed property is what
+       actually works today, but the standard name is what keeps this
+       working as engines move off the -webkit- box model. */
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     margin-top: 2px;
+    /* RESERVE two lines rather than merely capping at two. Clamping alone
+       means a one-line synopsis produces a shorter block than a two-line
+       one, so neighbouring cards ended up different heights purely
+       because of how wordy TMDB happened to be about that episode. Fixing
+       the height to exactly 2 lines (2 x 1.45em) makes every card's text
+       block identical regardless of content, so the list reads as an even
+       column instead of a ragged one. */
+    min-height: 2.9em;
 }
 
 .continue-check-btn {
