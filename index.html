@@ -107,9 +107,9 @@
         <h1 class="auth-title">Welcome to NovaWatch</h1>
         <p class="auth-subtitle">Track what you watch & get release alerts.</p>
 
-        <div class="search-type-toggle auth-mode-toggle">
-            <button id="authTabSignIn" class="search-type-btn active" onclick="setAuthMode('signin')">Sign In</button>
-            <button id="authTabSignUp" class="search-type-btn" onclick="setAuthMode('signup')">Join</button>
+        <div class="segmented-toggle auth-mode-toggle">
+            <button id="authTabSignIn" class="segmented-btn active" onclick="setAuthMode('signin')">Sign In</button>
+            <button id="authTabSignUp" class="segmented-btn" onclick="setAuthMode('signup')">Join</button>
         </div>
 
         <div class="auth-form">
@@ -272,7 +272,7 @@
          can be added without a wrapping row reflowing the page. -->
     <div class="category-row" id="discoverCategories"></div>
 
-    <div style="margin-top: 20px;">
+    <div class="tab-content-below-chips">
         <div class="section-header">
             <div id="searchResultsHeading" class="section-title" style="font-size: 16px; color: var(--text-secondary);">For You</div>
         </div>
@@ -510,7 +510,7 @@
         <div class="modal-content">
             <div id="episodeModalMeta" class="modal-meta"></div>
             <p id="episodeModalDescription" class="modal-description"></p>
-            <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px;">
+            <div class="modal-stack">
                 <button id="episodeWatchedToggleBtn" class="action-button primary" onclick="toggleCurrentEpisodeWatched()">
                     Mark as Watched
                 </button>
@@ -619,7 +619,7 @@
         </div>
         <div class="modal-content modal-content-top-clear">
             <h2 class="poster-picker-title">Achievements</h2>
-            <div id="achievementsList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+            <div id="achievementsList" class="modal-stack"></div>
         </div>
     </div>
 </div>
@@ -647,7 +647,7 @@
         <div class="modal-content modal-content-top-clear">
             <h2 class="poster-picker-title">Library Display</h2>
             <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5;">Choose which TV Library categories are visible.</p>
-            <div id="libraryDisplayList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;"></div>
+            <div id="libraryDisplayList" class="modal-stack"></div>
         </div>
     </div>
 </div>
