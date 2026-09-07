@@ -109,9 +109,29 @@
        any actual content sitting on it. */
     --glass-sheen: linear-gradient(118deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.05) 26%, rgba(255, 255, 255, 0) 58%, rgba(255, 255, 255, 0) 80%, rgba(255, 255, 255, 0.16) 100%);
 
-    --blue: #006aff;
-    --blue-light: #00faff;
-    --blue-dark: #006aff;
+    --blue: #91DEFC;
+    /* Same colour as an R,G,B triple. CSS custom properties can't be used
+       inside rgba(), which is why ~30 blue shadows and tints across the
+       app were hardcoding their own literal - and why four DIFFERENT
+       blues (#006aff, #00faff, rgb 0,136,255 and rgb 10,132,255) had
+       drifted into the stylesheet. Everything now derives from this one
+       triple via rgba(var(--blue-rgb), a). */
+    --blue-rgb: 145, 222, 252;
+    /* Ink for text and icons sitting ON a blue fill. #91DEFC is light
+       enough that white text scores 1.49:1 against it - far under the
+       4.5:1 minimum, i.e. genuinely hard to read. This dark teal scores
+       11.25:1 on the same fill. Every place that used to hardcode
+       `color: white` over blue now points here instead. */
+    --on-blue: #0b2027;
+    /* Blue used as TEXT or an icon stroke on a LIGHT surface. --blue
+       itself is a fill colour: at #91DEFC it scores 1.32:1 as text on the
+       page background, i.e. effectively invisible. This darkened version
+       of the same hue scores 5.36:1 while still reading as the same
+       accent. In dark mode the override below points this straight back
+       at --blue, which scores 12.23:1 there and needs no adjustment. */
+    --blue-ink: #166a8a;
+    --blue-light: var(--blue);
+    --blue-dark: var(--blue);
     /* Canonical "primary" fill for every blue action button in the app
        (Add to Library, Mark Watched, empty-state CTAs, active segmented
        pills, etc) - solid fill now, not the two-tone gradient this used
@@ -129,7 +149,7 @@
        Now visually identical to --blue-gradient since both are solid
        --blue - kept as a separate token anyway, since the two button
        groups are conceptually distinct and may diverge again later. */
-    --flat-blue: #006aff;
+    --flat-blue: var(--blue);
     /* Same "filled glass" recipe as blue, just in the other accent colors -
        used anywhere a warning/danger/success action needs the same solid,
        sheen-lit glass feel as a primary blue button. */
@@ -159,6 +179,15 @@
     --success: #22c55e;
     --danger: #ef4444;
 
+    /* The app's motion curve. It was already in use on the nav, cards,
+       segmented buttons and close button - but 30 other interactive
+       elements fell back to the browser's plain `ease`, so peer
+       components animated differently from each other (a Library .card
+       sprang, while the .search-card and .continue-card beside it did
+       not). Naming it makes the signature reusable instead of something
+       you have to remember to paste. */
+    --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+
     --radius: 20px;
 
     /* =====================================================
@@ -177,7 +206,7 @@
 }
 
 html {
-    background: #e8edf4;
+    background: var(--bg-base);
     color-scheme: light;
 }
 
@@ -187,7 +216,7 @@ html[data-theme="dark"] {
        black makes translucent glass surfaces look muddy/flat instead of
        luminous, since there's no depth in the base for the blur to
        read against. */
-    background: #0a0d14;
+    background: var(--bg-base);
 
     --bg-mesh:
         radial-gradient(at 15% 12%, rgba(50, 58, 78, 0.55) 0px, transparent 48%),
@@ -231,10 +260,13 @@ html[data-theme="dark"] {
        enough contrast against the dark background to stay legible, so
        there's no longer a reason for the accent itself to shift between
        themes the way it used to. */
-    --blue: #006aff;
-    --blue-light: #00faff;
-    --blue-dark: #006aff;
-    --flat-blue: #006aff;
+    --blue: #91DEFC;
+    --blue-rgb: 145, 222, 252;
+    --on-blue: #0b2027;
+    --blue-ink: var(--blue);
+    --blue-light: var(--blue);
+    --blue-dark: var(--blue);
+    --flat-blue: var(--blue);
 
     --orange-gradient: linear-gradient(135deg, #fdba74, #fb923c);
     --red-gradient: linear-gradient(135deg, #fca5a5, #f87171);
