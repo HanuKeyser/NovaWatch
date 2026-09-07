@@ -349,7 +349,7 @@ img {
 .stat-icon {
     width: 18px;
     height: 18px;
-    color: var(--blue);
+    color: var(--blue-ink);
     margin-bottom: 2px;
 }
 
@@ -362,7 +362,7 @@ img {
 .stat-value.highlight {
     font-size: 18px;
     font-weight: 800;
-    color: var(--blue);
+    color: var(--blue-ink);
     margin-top: 2px;
     letter-spacing: -0.3px;
 }
@@ -434,7 +434,7 @@ img {
     color: var(--text);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    transition: transform 0.15s var(--ease-out), opacity 0.15s ease;
 }
 
 .year-nav-btn:disabled {
@@ -848,15 +848,15 @@ html[data-theme="dark"] .wrapped-preview-stat {
     align-items: center;
     gap: 14px;
     padding-bottom: 14px;
-    /* rgba(0, 106, 255, ...) here and everywhere else it appears in this
-       file is --blue (#006aff) as a raw RGB triplet, not a separate
+    /* rgba(var(--blue-rgb), ...) here and everywhere else it appears in this
+       file is --blue as a raw RGB triplet (see --blue-rgb), not a separate
        color of its own - CSS custom properties can't be used inside an
        rgba() alpha channel, so every blue-tinted shadow/glow in the app
        has always had to hardcode the actual RGB values rather than
        referencing var(--blue) directly. Kept in sync by hand with
        tokens.css's own --blue whenever that changes, this update
        included. */
-    border-bottom: 1px solid rgba(0, 106, 255, 0.12);
+    border-bottom: 1px solid rgba(var(--blue-rgb), 0.12);
 }
 
 .analytics-icon-badge {
@@ -864,18 +864,18 @@ html[data-theme="dark"] .wrapped-preview-stat {
     height: 44px;
     border-radius: var(--radius-sm);
     background: var(--blue);
-    color: white;
+    color: var(--on-blue);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255,255,255,0.4);
     flex-shrink: 0;
 }
 
 .analytics-card .stat-value.highlight {
     font-size: 15px;
     font-weight: 800;
-    color: var(--blue);
+    color: var(--blue-ink);
     margin-top: 2px;
     letter-spacing: -0.2px;
     white-space: nowrap;
@@ -904,7 +904,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
     background: var(--surface-2);
     border: none;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
-    transition: box-shadow 0.25s ease;
+    transition: box-shadow 0.25s var(--ease-out);
 }
 
 .card:active .poster {
@@ -1030,7 +1030,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
     background: var(--surface-2);
     border: 2px solid transparent;
     box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-    transition: transform 0.15s ease, border-color 0.2s ease;
+    transition: transform 0.15s var(--ease-out), border-color 0.2s ease;
 }
 
 .poster-picker-item:active {
@@ -1038,7 +1038,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
 }
 
 .poster-picker-item.selected {
-    border-color: var(--flat-blue);
+    border-color: var(--blue-ink);
 }
 
 .poster-picker-item::after {
@@ -1051,7 +1051,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
     content: '';
     position: absolute;
     inset: 0;
-    background: rgba(0, 136, 255, 0.15);
+    background: rgba(var(--blue-rgb), 0.15);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -1122,11 +1122,11 @@ html[data-theme="dark"] .wrapped-preview-stat {
     padding: 0 22px;
     border-radius: 999px;
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
+    color: var(--on-blue);
     font-size: 13px;
     font-weight: 700;
-    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
-    transition: transform 0.15s ease;
+    box-shadow: 0 8px 20px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.15s var(--ease-out);
 }
 
 .empty-state-cta:active {
@@ -1140,7 +1140,11 @@ html[data-theme="dark"] .wrapped-preview-stat {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    margin-bottom: 18px;
+    /* No bottom margin. The chip row directly below owns the gap via
+       .category-row's own margin-top, exactly as it does on Explore -
+       when BOTH set a value the two collapse to the larger and the
+       spacing silently stops matching the other tab. */
+    margin-bottom: 0;
 }
 
 .search-box {
@@ -1193,7 +1197,7 @@ html[data-theme="dark"] .wrapped-preview-stat {
        alone are enough to read as "focused" without touching the layer
        backdrop-filter operates on at all. */
     border-color: var(--blue);
-    box-shadow: 0 0 0 4px rgba(0, 106, 255, 0.15), var(--glass-shadow-sm);
+    box-shadow: 0 0 0 4px rgba(var(--blue-rgb), 0.15), var(--glass-shadow-sm);
 }
 
 /* Dark mode needs a softer focus treatment than light. A 1px border at
@@ -1205,8 +1209,8 @@ html[data-theme="dark"] .wrapped-preview-stat {
    underneath, and widening/strengthening the outer glow slightly keeps
    the focus state just as obvious without the hard edge doing the work. */
 html[data-theme="dark"] .search-box:focus-within {
-    border-color: rgba(0, 106, 255, 0.55);
-    box-shadow: 0 0 0 5px rgba(0, 106, 255, 0.18), var(--glass-shadow-sm);
+    border-color: rgba(var(--blue-rgb), 0.55);
+    box-shadow: 0 0 0 5px rgba(var(--blue-rgb), 0.18), var(--glass-shadow-sm);
 }
 
 .search-box input {
@@ -1283,7 +1287,7 @@ html[data-theme="dark"] .search-box:focus-within {
     height: 26px;
     border-radius: 50%;
     z-index: 1;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition: color 0.15s var(--ease-out), background 0.15s ease;
 }
 
 .search-clear-btn:hover {
@@ -1298,63 +1302,22 @@ html[data-theme="dark"] .search-box:focus-within {
 /* =========================================================
    SEARCH & DISCOVER VIEW
 ========================================================= */
-.search-type-toggle {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    background: var(--surface);
-    backdrop-filter: blur(30px);
-    padding: 5px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
-    margin-bottom: 16px;
-    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-    align-content: start;
-}
-
-.search-type-btn {
-    height: 40px;
-    /* Same 10px it always was - just via the token now, since --radius-xs
-       is exactly that value and this was the one control still hardcoding
-       it rather than referencing the scale. */
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 700;
-    /* box-shadow added - same missing-property gap as .segmented-btn/
-       .season-button had: .active changes it without it being animated. */
-    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease, box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.search-type-btn:active {
-    transform: scale(0.96);
-}
-
-.search-type-btn.active {
-    background: var(--glass-sheen), var(--glass-chrome-fill);
-    backdrop-filter: blur(20px) saturate(200%);
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
-    color: var(--text);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
-
 /* Scoped to the auth screen only, so the Sign In / Join tabs pick up the
-   same flat-blue treatment as Sign In, Join, Sign Out, and Trailer,
-   without changing the shared .search-type-btn.active style used
-   elsewhere (Discover's TV Shows/Movies toggle). */
-#authScreen .search-type-btn.active {
+   same flat-blue treatment as Sign In, Join, Sign Out and Trailer. The
+   tabs now use the app's one segmented-control component (.segmented-btn)
+   rather than a near-duplicate of it; this keeps their distinctive blue
+   fill without reintroducing a second component to maintain. */
+#authScreen .segmented-btn.active {
     background: var(--glass-sheen), var(--flat-blue);
-    color: white;
-    box-shadow: 0 4px 12px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    color: var(--on-blue);
+    box-shadow: 0 4px 12px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
-.search-type-toggle.three-way {
-    grid-template-columns: repeat(3, 1fr);
-}
-
-/* Modern filled-pill segmented control, used on Discover/Library.
-   Deliberately separate from .search-type-toggle/.search-type-btn so the
-   Sign In / Join tabs on the auth screen stay pixel-identical. */
+/* The app's one segmented control - Settings' appearance picker and the
+   auth screen's Sign In / Join tabs. There used to be a second, near-
+   identical component (.search-type-toggle) differing only in corner
+   radius, which meant the same control looked like a rounded rect in one
+   place and a pill in another. */
 .segmented-toggle {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1380,7 +1343,7 @@ html[data-theme="dark"] .search-box:focus-within {
     /* box-shadow added - same gap as .season-button had: .active changes
        it (none -> a real shadow) but it wasn't in this list, so it used
        to snap in instantly while background/color faded smoothly. */
-    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s ease, box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    transition: background 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s cubic-bezier(0.25, 1, 0.5, 1), transform 0.15s var(--ease-out), box-shadow 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .segmented-btn:active {
@@ -1391,12 +1354,17 @@ html[data-theme="dark"] .search-box:focus-within {
     /* Sheen layered over the color fill so the active pill reads as
        tinted glass rather than a flat colored chip. */
     background: var(--glass-sheen), var(--blue);
-    color: white;
-    box-shadow: 0 8px 18px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+    color: var(--on-blue);
+    box-shadow: 0 8px 18px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
-.library-subview {
-    margin-top: 4px;
+/* The gap between a chip row and the content beneath it. Explore carried
+   this as an inline style="margin-top: 20px" while Library set the same
+   20px as a margin-bottom on its own row - the same intent expressed two
+   different ways in two places, which is how the two tabs would have
+   drifted apart the first time either was touched. */
+.tab-content-below-chips {
+    margin-top: 20px;
 }
 
 /* The library's type filter row. Uses the same .category-row scroller as
@@ -1405,17 +1373,13 @@ html[data-theme="dark"] .search-box:focus-within {
    heading rather than a results list and needs room to read as a new
    section rather than as part of the control. */
 #libraryFilterRow {
-    /* No top margin of its own - .library-toolbar above already carries
-       margin-bottom: 18px, and adjacent margins collapse to the larger of
-       the two, so adding 14px here just did nothing while looking like it
-       set the gap. Zero makes the single source of that spacing obvious.
-
-       20px below, NOT the 4px this started at: .category-block has no top
-       margin at all, so whatever is set here is the entire separation
-       between the chips and the first category heading - and at 4px the
-       heading sat almost against the chips with nothing marking the shift
-       from control to content. */
-    margin-top: 0;
+    /* Top gap comes from .category-row's shared margin-top (14px), the
+       same as Explore's chip row - not overridden here, so the two tabs
+       can't drift apart. Only the bottom gap is tab-specific: .category-
+       block has no top margin of its own, so this value is the entire
+       separation between the chips and the first category heading.
+       20px matches the gap Explore puts between its chips and its
+       results heading. */
     margin-bottom: 20px;
 }
 
@@ -1451,14 +1415,14 @@ html[data-theme="dark"] .search-box:focus-within {
     background: var(--glass-sheen), var(--surface);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-    transition: transform 0.15s ease, color 0.15s ease;
+    transition: transform 0.15s var(--ease-out), color 0.15s ease;
 }
 
 .category-chip:active { transform: scale(0.95); }
 
 .category-chip.active {
     background: var(--glass-sheen), var(--blue-gradient);
-    color: #fff;
+    color: var(--on-blue);
     border-color: transparent;
     /* No coloured outer glow - just the inner top highlight. A blue halo
        around a small chip reads as a focus ring or an error state rather
@@ -1481,7 +1445,7 @@ html[data-theme="dark"] .search-box:focus-within {
     border-radius: var(--radius-md);
     border: none;
     box-shadow: none;
-    transition: background 0.2s ease, transform 0.15s ease;
+    transition: background 0.2s var(--ease-out), transform 0.15s var(--ease-out);
     cursor: pointer;
     position: relative;
 }
@@ -1558,13 +1522,13 @@ html[data-theme="dark"] .search-box:focus-within {
     height: 34px;
     border-radius: 50%;
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
+    color: var(--on-blue);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     flex-shrink: 0;
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .search-add-btn:active {
@@ -1583,7 +1547,7 @@ html[data-theme="dark"] .search-box:focus-within {
     width: 34px;
     height: 34px;
     border: 3px solid rgba(0, 0, 0, 0.08);
-    border-top-color: var(--blue);
+    border-top-color: var(--blue-ink);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -1830,7 +1794,7 @@ html[data-theme="dark"] .search-box:focus-within {
     -webkit-touch-callout: none;
     user-select: none;
     -webkit-user-select: none;
-    transition: box-shadow 0.2s ease;
+    transition: box-shadow 0.2s var(--ease-out);
 }
 
 .continue-card.dragging {
@@ -1975,7 +1939,7 @@ html[data-theme="dark"] .continue-progress {
     -webkit-backdrop-filter: var(--glass-blur);
     box-shadow: var(--glass-shadow-sm), var(--glass-edge);
     flex-shrink: 0;
-    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.15s var(--ease-out), background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 .continue-check-btn:active {
@@ -2009,7 +1973,7 @@ html[data-theme="dark"] .continue-progress {
     margin-top: 2px;
     font-size: 11px;
     font-weight: 700;
-    color: var(--blue);
+    color: var(--blue-ink);
     letter-spacing: -0.1px;
     white-space: nowrap;
     overflow: hidden;
@@ -2021,7 +1985,7 @@ html[data-theme="dark"] .continue-progress {
    (#93c5fd) meant to lift against a dark background. --blue-light is now
    #00faff - a cyan - so this rule was rendering the countdown in a
    colour nothing else in the app uses, visibly different from the blue
-   in the nav, toggles and links right next to it. var(--blue) (#006aff)
+   in the nav, toggles and links right next to it. var(--blue)
    is identical in both themes now and already has enough contrast on
    dark, so the base rule above is correct for both. */
 /* =========================================================
@@ -2193,7 +2157,7 @@ html[data-theme="dark"] .continue-progress {
 }
 
 .nav-button.active {
-    color: var(--blue);
+    color: var(--blue-ink);
 }
 
 .nav-button.active .icon {
@@ -2202,7 +2166,7 @@ html[data-theme="dark"] .continue-progress {
     /* Soft colored glow behind the active icon rather than just a color
        swap - the same "lit from within" quality the rest of the app's
        primary blue buttons already use. */
-    filter: drop-shadow(0 3px 8px rgba(0, 106, 255, 0.45));
+    filter: drop-shadow(0 3px 8px rgba(var(--blue-rgb), 0.45));
 }
 
 /* =========================================================
@@ -2467,11 +2431,11 @@ html[data-theme="dark"] .modal-sheet-compact {
     padding: 0 18px;
     border-radius: 999px;
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
+    color: var(--on-blue);
     font-size: 13.5px;
     font-weight: 700;
-    box-shadow: 0 8px 18px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
-    transition: transform 0.15s ease;
+    box-shadow: 0 8px 18px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: transform 0.15s var(--ease-out);
 }
 
 .header-done-btn:active {
@@ -2481,6 +2445,18 @@ html[data-theme="dark"] .modal-sheet-compact {
 .modal-hero-title-container {
     position: relative;
     z-index: 2;
+}
+
+/* Vertical list inside a modal - achievements, library-display toggles,
+   an episode's action rows. All three were repeating the same
+   `display:flex; flex-direction:column; gap:10px` inline, two at
+   margin-top 16px and one at 24px, so the same construct appeared three
+   times with one of them silently spaced differently. */
+.modal-stack {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .modal-content {
@@ -2581,12 +2557,12 @@ html[data-theme="dark"] .modal-sheet-compact {
    something irreversible - uses the app's primary blue instead. */
 .confirm-icon-badge.neutral {
     background: var(--glass-sheen), var(--blue-gradient);
-    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 20px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .rewatch-icon-badge {
     background: var(--glass-sheen), var(--blue-gradient);
-    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 20px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .appearance-icon-tile {
@@ -2618,7 +2594,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     border-radius: var(--radius-sm);
     font-size: 14px;
     font-weight: 700;
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .confirm-btn.cancel {
@@ -2650,8 +2626,8 @@ html[data-theme="dark"] .modal-sheet-compact {
    confirm-btn variant that wasn't a real class. */
 .confirm-btn.primary {
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
-    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    color: var(--on-blue);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .confirm-btn.primary:active {
@@ -2695,7 +2671,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    color: var(--blue);
+    color: var(--blue-ink);
 }
 
 /* The content-rating badge (PG-13, TV-MA, etc.) inside .modal-meta -
@@ -2797,16 +2773,16 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .cinema-chip .watch-provider-logo.cinema-icon {
     background: var(--blue);
-    color: white;
+    color: var(--on-blue);
     display: flex;
     align-items: center;
     justify-content: center;
     border: none;
-    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.3);
 }
 
 .cinema-chip .watch-provider-name {
-    color: var(--blue);
+    color: var(--blue-ink);
     font-weight: 750;
     white-space: normal;
 }
@@ -2870,7 +2846,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     justify-content: center;
     text-align: center;
     box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .action-button:active {
@@ -2879,9 +2855,9 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .action-button.primary {
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
+    color: var(--on-blue);
     border: none;
-    box-shadow: 0 6px 16px rgba(0, 106, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 /* Same filled-glass treatment as the other action buttons (sheen +
@@ -2889,9 +2865,9 @@ html[data-theme="dark"] .modal-sheet-compact {
    all share this exact same look - see --flat-blue. */
 .action-button.trailer {
     background: var(--glass-sheen), var(--flat-blue);
-    color: white;
+    color: var(--on-blue);
     border: none;
-    box-shadow: 0 6px 16px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.warning {
@@ -2990,7 +2966,7 @@ html[data-theme="dark"] .modal-sheet-compact {
        highlight snapped in instantly, which is exactly what an
        inconsistent, "not smooth" transition looks like: some of the
        change animates, some of it doesn't, at the same moment. */
-    transition: transform 0.15s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.15s var(--ease-out), background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .season-button:active {
@@ -3013,7 +2989,7 @@ html[data-theme="dark"] .modal-sheet-compact {
        glass dimension, nothing that reads as a glow or a ring. */
     background: var(--glass-sheen), var(--blue);
     border-color: var(--blue);
-    color: white;
+    color: var(--on-blue);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
@@ -3035,7 +3011,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 .episode-up-next {
-    background: rgba(0, 106, 255, 0.06);
+    background: rgba(var(--blue-rgb), 0.06);
 }
 
 /* A not-yet-released episode - dimmed so it visually reads as "not here
@@ -3106,10 +3082,10 @@ html[data-theme="dark"] .modal-sheet-compact {
        change, so this was rendering cyan text over a blue underline.
        The underline colour is a raw rgba because CSS variables can't be
        used inside rgba()'s channels - kept in sync with --blue by hand. */
-    color: var(--blue);
+    color: var(--blue-ink);
     font-weight: 700;
     text-decoration: underline;
-    text-decoration-color: rgba(0, 106, 255, 0.4);
+    text-decoration-color: rgba(var(--blue-rgb), 0.4);
     text-underline-offset: 2px;
     transition: opacity 0.15s ease;
 }
@@ -3133,9 +3109,9 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: linear-gradient(150deg, rgba(255,255,255,0.55) 0%, rgba(224,238,255,0.42) 100%);
     backdrop-filter: blur(64px) saturate(260%);
     -webkit-backdrop-filter: blur(64px) saturate(260%);
-    border: 1px solid rgba(0, 106, 255, 0.14);
+    border: 1px solid rgba(var(--blue-rgb), 0.14);
     border-radius: var(--radius-2xl);
-    box-shadow: 0 20px 48px rgba(0, 106, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    box-shadow: 0 20px 48px rgba(var(--blue-rgb), 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .hero-top {
@@ -3170,12 +3146,12 @@ html[data-theme="dark"] .modal-sheet-compact {
     height: 15px;
     border-radius: 50%;
     background: var(--green-gradient);
-    /* Same page-background "cutout" ring as .avatar-edit-badge right
-       above (was a fixed near-white #fdfdfe before - didn't match that
-       sibling badge's own ring color, and stayed that same near-white in
-       dark mode too instead of switching to match the dark page
-       background the way the edit badge's ring correctly does). */
-    border: 2.5px solid #e8edf4;
+    /* Page-background "cutout" ring, same as .avatar-edit-badge. Uses
+       --bg-base so it follows the theme on its own - it previously
+       hardcoded the light value and relied on a separate dark-mode rule
+       to restate it, which meant the page colour existed in three places
+       and only two of them would get updated if it ever changed. */
+    border: 2.5px solid var(--bg-base);
     box-shadow: 0 2px 6px rgba(52, 199, 89, 0.55);
     display: none;
 }
@@ -3198,8 +3174,8 @@ html[data-theme="dark"] .modal-sheet-compact {
     justify-content: center;
     border-radius: 50%;
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
-    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    color: var(--on-blue);
+    box-shadow: 0 8px 20px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -3292,7 +3268,7 @@ html[data-theme="dark"] .modal-sheet-compact {
        exists purely so the fine-pointer hover lift a few hundred lines
        down (.settings-row:hover .settings-row-icon) animates smoothly
        instead of snapping straight to its new transform. */
-    transition: transform 0.2s ease;
+    transition: transform 0.2s var(--ease-out);
 }
 
 .settings-row-icon .icon {
@@ -3391,16 +3367,16 @@ html[data-theme="dark"] .modal-sheet-compact {
     padding: 0 18px;
     border-radius: 999px;
     background: var(--glass-sheen), var(--blue-gradient);
-    color: white;
+    color: var(--on-blue);
     font-size: 13px;
     font-weight: 700;
     text-align: center;
-    box-shadow: 0 8px 20px rgba(0, 106, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: 0 8px 20px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255,255,255,0.5);
     /* Was missing entirely - :active below changes transform with
        nothing to animate it, so the press feedback snapped instead of
        the same smooth scale-down every other pressable pill in the app
        already has. */
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .hero-pill-btn:active {
@@ -3477,7 +3453,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 .region-option-check {
     width: 20px;
     height: 20px;
-    color: var(--flat-blue);
+    color: var(--blue-ink);
     flex-shrink: 0;
     visibility: hidden;
 }
@@ -3539,17 +3515,9 @@ html[data-theme="dark"] .modal-sheet-compact {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    border: 2px solid #e8edf4;
-    box-shadow: 0 3px 8px rgba(0, 106, 255, 0.3);
-}
-
-html[data-theme="dark"] .avatar-edit-badge {
-    border-color: #0a0d14;
-}
-
-html[data-theme="dark"] .avatar-status-dot {
-    border-color: #0a0d14;
+    color: var(--on-blue);
+    border: 2px solid var(--bg-base);
+    box-shadow: 0 3px 8px rgba(var(--blue-rgb), 0.3);
 }
 
 /* Dark-mode counterpart for .large-avatar's fill - was previously a
@@ -3586,7 +3554,7 @@ html[data-theme="dark"] .large-avatar {
     overflow: hidden;
     background: var(--surface-2);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .avatar-picker-option:active {
@@ -3622,7 +3590,7 @@ html[data-theme="dark"] .large-avatar {
        the initials fallback, since real avatar images cover it entirely
        (overflow: hidden clips to the rounded corners either way). */
     background: var(--blue);
-    color: white;
+    color: var(--on-blue);
     font-size: 23px;
     font-weight: 800;
     letter-spacing: -0.5px;
@@ -3632,7 +3600,7 @@ html[data-theme="dark"] .large-avatar {
        common case now. */
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255,255,255,0.4);
     flex-shrink: 0;
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .home-greeting {
@@ -3640,7 +3608,7 @@ html[data-theme="dark"] .large-avatar {
     font-weight: 750;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--blue);
+    color: var(--blue-ink);
 }
 
 .home-name {
@@ -3656,9 +3624,12 @@ html[data-theme="dark"] .large-avatar {
     margin-top: 4px;
 }
 
+/* 40px to match .auth-btn, which it sits directly beneath in the same
+   card - they were 42px and 40px, which reads as a mistake rather than a
+   distinction when two full-width buttons are stacked two rows apart. */
 .google-auth-btn {
     width: 100%;
-    height: 42px;
+    height: 40px;
     border-radius: var(--radius-sm);
     background: #ffffff;
     color: #1f1f1f;
@@ -3670,7 +3641,7 @@ html[data-theme="dark"] .large-avatar {
     gap: 10px;
     border: 1px solid rgba(0,0,0,0.1);
     box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-    transition: transform 0.15s ease;
+    transition: transform 0.15s var(--ease-out);
 }
 
 .google-auth-btn:active {
@@ -3703,7 +3674,7 @@ html[data-theme="dark"] .large-avatar {
     width: 17px;
     height: 17px;
     margin-top: 1px;
-    accent-color: var(--blue);
+    accent-color: var(--blue-ink);
 }
 
 .auth-terms-row label {
@@ -3713,7 +3684,7 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-terms-row a {
-    color: var(--blue);
+    color: var(--blue-ink);
     font-weight: 700;
     text-decoration: none;
 }
@@ -3771,7 +3742,7 @@ html[data-theme="dark"] .large-avatar {
 .auth-input:focus {
     border-color: var(--blue);
     background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(0, 106, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(var(--blue-rgb), 0.15);
 }
 
 .auth-actions {
@@ -3787,9 +3758,9 @@ html[data-theme="dark"] .large-avatar {
     font-size: 13px;
     font-weight: 700;
     background: var(--glass-sheen), var(--flat-blue);
-    color: white;
-    box-shadow: 0 6px 16px rgba(0, 136, 255, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
-    transition: transform 0.15s ease;
+    color: var(--on-blue);
+    box-shadow: 0 6px 16px rgba(var(--blue-rgb), 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.15s var(--ease-out);
 }
 
 .auth-btn:active {
@@ -4126,21 +4097,17 @@ html[data-theme="dark"] .confirm-card {
 }
 
 html[data-theme="dark"] .rewatch-icon-badge {
-    box-shadow: 0 8px 20px rgba(10, 132, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 20px rgba(var(--blue-rgb), 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 html[data-theme="dark"] .hero-card {
     background: linear-gradient(150deg, rgba(40, 44, 56, 0.5) 0%, rgba(20, 30, 48, 0.42) 100%);
-    border-color: rgba(10, 132, 255, 0.18);
+    border-color: rgba(var(--blue-rgb), 0.18);
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 
-html[data-theme="dark"] .search-type-btn.active {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
-html[data-theme="dark"] #authScreen .search-type-btn.active {
-    box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+html[data-theme="dark"] #authScreen .segmented-btn.active {
+    box-shadow: 0 4px 12px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 html[data-theme="dark"] .appearance-icon-tile {
@@ -4615,7 +4582,7 @@ html[data-theme="dark"] .state-card {
 
     .empty-state-cta:hover {
         transform: translateY(-2px);
-        box-shadow: 0 12px 28px rgba(0, 106, 255, 0.28);
+        box-shadow: 0 12px 28px rgba(var(--blue-rgb), 0.28);
     }
 
     .season-button:hover:not(.active) {
