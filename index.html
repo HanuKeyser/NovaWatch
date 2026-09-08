@@ -652,30 +652,7 @@
     </div>
 </div>
 
-<!-- =====================================================
-     NOVAWRAPPED
-     Migrated in from its own separate page (nova-wrapped/index.html)
-     since it always needed the same signed-in session's Firestore data
-     as everything else - see openNovaWrappedModal() for why keeping it
-     separate wasn't buying anything. Deliberately a full modal, not
-     .modal-compact, since it's meant to feel like its own destination
-     within the app rather than a quick popup.
-================================================     -->
-<div id="novaWrappedModal" class="modal" onclick="closeNovaWrappedModalOutside(event)">
-    <div class="modal-sheet">
-        <div class="modal-header-nav">
-            <button class="close-button" onclick="closeNovaWrappedModal()" aria-label="Close">
-                <svg class="icon" viewBox="0 0 24 24">
-                    <path d="M6 6l12 12"/>
-                    <path d="M18 6L6 18"/>
-                </svg>
-            </button>
-        </div>
-        <div class="modal-content modal-content-top-clear">
-            <div id="novaWrappedRoot"></div>
-        </div>
-    </div>
-</div>
+
 
 <!-- =====================================================
      CHANGE POSTER / BACKDROP PICKER
@@ -830,22 +807,6 @@
                 </div>
 
                 <div>
-                    <div class="section-header"><div class="section-title">NovaWatch</div></div>
-                    <div class="analytics-card settings-card">
-                        <div class="settings-row">
-                            <div class="settings-row-icon" style="background: #fff; padding: 6px;">
-                                <img src="https://www.novawatch.site/images/NovaWatch_Favicon_Icon.png" alt="NovaWatch" style="width: 100%; height: 100%; object-fit: contain; border-radius: inherit;">
-                            </div>
-                            <div class="settings-row-text">
-                                <div class="settings-row-title">NovaWrapped</div>
-                                <div class="settings-row-sub">Your year in review.</div>
-                            </div>
-                            <button class="hero-pill-btn" onclick="openNovaWrappedModal()">View</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
                     <div class="section-header"><div class="section-title">Account</div></div>
                     <div class="analytics-card settings-card settings-card-list">
                         <button class="settings-action-row" onclick="exportLibraryData()">
@@ -940,7 +901,7 @@
 </div>
 
 <!-- =====================================================
-     PAGE OVERLAY (NovaWrapped, etc.)
+     PAGE OVERLAY (Privacy & Terms)
      Loads a same-origin sub-page inside an iframe instead of navigating
      the whole tab away from the app - see openPageOverlay(). The address
      bar still updates via pushState so the URL, sharing, and the browser
@@ -948,7 +909,7 @@
      nothing re-runs the sign-in flow or resets state when you come back.
 ================================================     -->
 <div id="pageOverlayModal" class="modal">
-    <div class="modal-sheet" style="overflow: hidden;">
+    <div class="modal-sheet" style="overflow: hidden; position: relative;">
         <iframe id="pageOverlayFrame" class="page-overlay-frame" title="NovaWatch"></iframe>
     </div>
 </div>
