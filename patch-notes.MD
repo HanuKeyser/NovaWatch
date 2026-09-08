@@ -12,7 +12,7 @@ What's included, top to bottom.
 - Opening a show's details lands on and scrolls straight to the episode you actually need to watch next, rather than the top of Season 1.
 - Marking a later episode watched while earlier ones in the same show are still unwatched now asks if you want to catch those up too, instead of silently leaving a gap in your watch history.
 - Finishing a movie that's part of a collection nudges toward the next unwatched one from that same collection already in your library, if there is one.
-- Discover → For You, recommendations seeded from your library, filled out with trending titles whenever a large library leaves too few genuinely new suggestions on their own.
+- Explore — one search across TV shows and movies together, with category chips (Trending, Popular, Top Rated) and a For You list seeded from your library, filled out with trending titles whenever a large library leaves too few genuinely new suggestions on their own.
 - Deep links for sharing a show, movie, or a specific episode.
 - Unique usernames alongside a freely editable display name.
 ## Release Timing
@@ -35,9 +35,6 @@ What's included, top to bottom.
 - Current watch streak, shown as a badge — lit while a streak is active, muted when it isn't. Distinct from the all-time-record streak achievement, which never resets.
 - Counts of watched movies, shows, episodes, and rewatches.
 - 22 achievements, all unlockable by everyone, spanning watching milestones (movies, shows, episodes), streaks, rewatching, library size, timing, and speed. Each one has its own distinct icon so they're easy to tell apart at a glance, from a "Night Owl" moon badge for watching between midnight and 4 AM to a stopwatch for finishing a show within 48 hours of adding it. The unlocked count in Settings updates live as you watch, with no need to open the Achievements list first to see it refresh.
-## NovaWrapped
-
-A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (the same interaction as Instagram/Snapchat stories), tracking January 1 – December 31 in your own timezone, with a grace period after account creation so bulk-adding existing watch history doesn't count as binge-watching. Total watch time, movies, TV episodes and shows, your most-watched show (with its own poster), your busiest month, and rewatches, each its own vividly-colored slide - only the ones with something real to say, ending on a shareable recap card.
 ## Settings
 
 - Appearance: Light, Dark, or automatic based on your device.
@@ -64,7 +61,7 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Home's Viewing Analytics tiles lay out as one row of four on wider screens instead of staying a cramped square, and an empty state (like "You're All Caught Up") stays a comfortable size and centered instead of stretching into a very wide, mostly-empty panel.
 - The offline banner pushes the page's own content down while visible, rather than floating on top of it.
 - A one-time Add to Home Screen prompt, shown once the app is open and only for someone not already using the installed version — permanently suppressed the moment it can tell the app is actually running standalone.
-- Optimized for every screen it's actually opened on, not just a typical phone: a widened, tablet-appropriate layout at 768px and up, a further step up for laptop/desktop-width windows and landscape tablets at 1280px+, and two more steps beyond that for real external monitors and 4K/ultrawide displays so the layout keeps making good use of the space instead of stopping short, tightened spacing and a 2-column library grid on the smallest/narrowest phones, shrunk nav bar and modal imagery when a phone is rotated to landscape, and real hover feedback for anyone using a mouse or trackpad. Phones held normally see none of this - it's the same experience they've always had. On any of those wider screens, a movie/show/settings screen's own text and rows stay capped at a comfortable reading width rather than stretching edge to edge with it, and both Continue Watching and Discover's search results/For You list switch from one stretched column to two (then three on the widest monitors), showing more at once instead of just a wider version of the same row.
+- Optimized for every screen it's actually opened on, not just a typical phone: a widened, tablet-appropriate layout at 768px and up, a further step up for laptop/desktop-width windows and landscape tablets at 1280px+, and two more steps beyond that for real external monitors and 4K/ultrawide displays so the layout keeps making good use of the space instead of stopping short, tightened spacing and a 2-column library grid on the smallest/narrowest phones, shrunk nav bar and modal imagery when a phone is rotated to landscape, and real hover feedback for anyone using a mouse or trackpad. Phones held normally see none of this - it's the same experience they've always had. On any of those wider screens, a movie/show/settings screen's own text and rows stay capped at a comfortable reading width rather than stretching edge to edge with it, and both Continue Watching and Explore's search results/For You list switch from one stretched column to two (then three on the widest monitors), showing more at once instead of just a wider version of the same row.
 - Achievements and Library Display are full-screen, matching every other settings screen, rather than a centered popup card.
 - Your identity (avatar, display name, username) appears instantly on load from a local cache, rather than a placeholder that corrects itself a moment later once your account data actually arrives.
 - Faster initial load - the app's core scripts no longer block the browser from rendering the page while they download.
@@ -73,5 +70,5 @@ A Spotify-Wrapped-style yearly recap — a full-screen, tap-through slideshow (t
 - Refreshed blue accent color throughout the app.
 ## Platform
 
-- Installable as a PWA on iOS and Android, with home-screen shortcuts to Discover, Library, and Upcoming.
+- Installable as a PWA on iOS and Android, with home-screen shortcuts to Explore, Library, and Upcoming.
 - Offline app-shell caching, so a repeat visit still loads something during a brief connection drop.
