@@ -4,9 +4,7 @@
    never drift out of sync with each other again - that was the actual
    root cause of several dark-mode bugs earlier (e.g. privacy-terms
    referencing --glass-shadow-sm without ever having defined it).
-   NovaWrapped was originally its own separate page too (also sharing
-   this file) before being migrated into index.html as a modal - see
-   the NOVAWRAPPED block there for why. Component-specific dark-mode
+   Component-specific dark-mode
    overrides (the ones that reference a specific class like .hero-card
    or .continue-card) stay in each page's own stylesheet instead, since
    those components differ page to page. */
@@ -153,10 +151,17 @@
     /* Same "filled glass" recipe as blue, just in the other accent colors -
        used anywhere a warning/danger/success action needs the same solid,
        sheen-lit glass feel as a primary blue button. */
-    --orange-gradient: linear-gradient(135deg, #fb923c, #f97316);
-    --red-gradient: linear-gradient(135deg, #f87171, #ef4444);
-    --green-gradient: linear-gradient(135deg, #4ade80, #22c55e);
-    --violet-gradient: linear-gradient(135deg, #a78bfa, #8b5cf6);
+    /* The other accents, rebuilt to match --blue. They were saturated
+       two-tone gradients while blue had become a flat pastel, so the
+       icon badges sat in two visually different families on the same
+       screen. Each keeps its OWN hue - green still reads as green - but
+       takes the blue's exact lightness (0.778) and saturation (0.947),
+       so they belong to one set. Flat fills, not gradients, for the same
+       reason blue is. */
+    --orange-gradient: #FCCA91;
+    --red-gradient: #FC9891;
+    --green-gradient: #91FCBE;
+    --violet-gradient: #BE91FC;
 
     /* A soft near-black rather than pure #000, and near-white rather
        than pure #fff in dark mode below - enough contrast to stay
@@ -268,10 +273,13 @@ html[data-theme="dark"] {
     --blue-dark: var(--blue);
     --flat-blue: var(--blue);
 
-    --orange-gradient: linear-gradient(135deg, #fdba74, #fb923c);
-    --red-gradient: linear-gradient(135deg, #fca5a5, #f87171);
-    --green-gradient: linear-gradient(135deg, #86efac, #4ade80);
-    --violet-gradient: linear-gradient(135deg, #c4b5fd, #a78bfa);
+    /* Same four values as light mode. --blue doesn't change between
+       themes either; these are fills that carry dark ink on top, so
+       lightening them for dark mode would only reduce that contrast. */
+    --orange-gradient: #FCCA91;
+    --red-gradient: #FC9891;
+    --green-gradient: #91FCBE;
+    --violet-gradient: #BE91FC;
 
     /* Same near-white rule as light mode's near-black above - #e6e9ef
        here, not a true #fff, for the primary tier, with the same
