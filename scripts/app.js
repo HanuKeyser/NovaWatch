@@ -67,7 +67,7 @@ const APP_VERSION = "1.0.0";
 // a hard SecurityError if the URL you push doesn't share the document's
 // exact current origin, and that exception happens BEFORE the code that
 // actually shows the page overlay - so a wrong hardcoded domain here
-// silently broke the NovaWrapped/Privacy & Terms buttons entirely, with
+// silently broke the Privacy & Terms button entirely, with
 // no visible error unless you had the console open.
 const NOVAWATCH_APP_URL = window.location.origin + "/";
 
@@ -2798,532 +2798,8 @@ function closeSettingsOutside(event) {
     if (event.target.id === "settingsModal") closeSettingsSheet();
 }
 
-// NovaWrapped used to be its own separate page, kept apart specifically
-// so navigating to/from it never unmounted the app or re-ran the sign-in
-// flow. But it always needed the exact same signed-in session's Firestore
-// data as everything else here - being separate meant loading a whole
-// second copy of the Firebase SDK and re-initializing a second app
-// instance just to read data this page already has in state.library.
-// Migrated in as a plain modal instead: same "app never unmounts"
-// property, none of the duplicate loading, and it's no longer possible
-// for this to break the way the old iframe/pushState version did.
-//
-// Rewatches (rewatchCount on movies/episodes) are NOT counted toward
-// Wrapped's totals here - only the original watch. This is the opposite
-// of the Home tab's Viewing Analytics, which deliberately DOES count
-// rewatches (see renderHomeTab's totalMinutes calculation) - don't
-// "fix" this into consistency, the difference is intentional.
-const NOVAWRAPPED_RELEASE_MS = Date.UTC(2027, 0, 1, 0, 0, 0, 0);
-const NOVAWRAPPED_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
-const NOVAWRAPPED_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-let novaWrappedAccountCreatedAt = null;
-let currentNovaWrappedYear = null;
 
-function openNovaWrappedModal() {
-    // The "novawatch" account (the developer's own) can always preview
-    // this regardless of the release gate below - everyone else still
-    // sees it exactly on schedule.
-    if (Date.now() < NOVAWRAPPED_RELEASE_MS && state.username !== "novawatch") {
-        showErrorToast("Available 1 January 2027 @ 00:00 UTC");
-        return;
-    }
-    const modal = document.getElementById("novaWrappedModal");
-    renderNovaWrappedEntry();
-    if (modal.classList.contains("open")) return;
-    modal.classList.add("open");
-    lockBodyScroll("novaWrappedModal");
-}
-
-function closeNovaWrappedModal() {
-    document.getElementById("novaWrappedModal").classList.remove("open");
-    unlockBodyScroll("novaWrappedModal");
-}
-
-function closeNovaWrappedModalOutside(event) {
-    if (event.target.id === "novaWrappedModal") closeNovaWrappedModal();
-}
-
-// The release-date check now happens earlier, in openNovaWrappedModal()
-// itself (as an error toast instead of ever opening the modal) - by the
-// time this runs, we're already past the release date, so it goes
-// straight to the real render.
-function renderNovaWrappedEntry() {
-    novaWrappedAccountCreatedAt = (auth && auth.currentUser && auth.currentUser.metadata && auth.currentUser.metadata.creationTime)
-        ? new Date(auth.currentUser.metadata.creationTime)
-        : null;
-    renderNovaWrapped();
-}
-
-/* =========================================================
-   STATS COMPUTATION
-   Tracks Jan 1 - Dec 31 UTC for whichever year is selected. The first
-   7 days after account creation are excluded from whichever year they
-   fall in - new users tend to bulk-add a backlog of shows/movies
-   they'd already watched long before joining, and counting that as
-   real-time viewing would badly skew the recap.
-========================================================= */
-function getNovaWrappedYearBounds(year) {
-    return {
-        start: new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0)),
-        end: new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
-    };
-}
-
-function getNovaWrappedEffectiveStart(year) {
-    const { start } = getNovaWrappedYearBounds(year);
-    if (!novaWrappedAccountCreatedAt) return start;
-    const graceEnd = new Date(novaWrappedAccountCreatedAt.getTime() + NOVAWRAPPED_GRACE_PERIOD_MS);
-    return graceEnd > start ? graceEnd : start;
-}
-
-function getNovaWrappedYearMinMax() {
-    const max = new Date().getUTCFullYear();
-    const min = novaWrappedAccountCreatedAt ? novaWrappedAccountCreatedAt.getUTCFullYear() : max;
-    return { min, max };
-}
-
-function computeNovaWrappedStats(year) {
-    const { end } = getNovaWrappedYearBounds(year);
-    const effectiveStart = getNovaWrappedEffectiveStart(year);
-
-    const inRange = (isoString) => {
-        if (!isoString) return false;
-        const d = new Date(isoString);
-        return d >= effectiveStart && d <= end;
-    };
-
-    let totalMinutes = 0;
-    let moviesCount = 0;
-    let episodesCount = 0;
-    let rewatchCount = 0;
-    const showEpisodeCounts = new Map();
-    const monthMinutes = new Array(12).fill(0);
-
-    state.library.forEach(item => {
-        if (item.type === 'movie') {
-            if (item.watched && inRange(item.lastWatchedAt)) {
-                const match = (item.runtime || "").match(/(\d+)/);
-                const mins = match ? parseInt(match[1], 10) : 120;
-                totalMinutes += mins;
-                moviesCount++;
-                monthMinutes[new Date(item.lastWatchedAt).getUTCMonth()] += mins;
-            }
-            // Rewatches are counted as their own separate fun fact (see
-            // the Rewatches slide) even though - same as Total Watch
-            // Time above - they're deliberately excluded from every
-            // other total on this page, consistent with how the rest of
-            // NovaWrapped already treats them.
-            if (item.rewatchCount && inRange(item.lastWatchedAt)) rewatchCount += item.rewatchCount;
-        } else if (item.episodes) {
-            item.episodes.forEach(ep => {
-                if (!ep.watched || !inRange(ep.watchedAt)) return;
-                const match = (ep.runtime || "").match(/(\d+)/);
-                const mins = match ? parseInt(match[1], 10) : 45;
-                totalMinutes += mins;
-                episodesCount++;
-                monthMinutes[new Date(ep.watchedAt).getUTCMonth()] += mins;
-
-                const existing = showEpisodeCounts.get(item.id);
-                if (existing) {
-                    existing.count++;
-                } else {
-                    showEpisodeCounts.set(item.id, { title: item.title, count: 1, poster: item.poster });
-                }
-
-                if (ep.rewatchCount) rewatchCount += ep.rewatchCount;
-            });
-        }
-    });
-
-    let topShow = null;
-    showEpisodeCounts.forEach(show => {
-        if (!topShow || show.count > topShow.count) topShow = show;
-    });
-
-    let busiestMonth = null;
-    monthMinutes.forEach((mins, idx) => {
-        if (mins > 0 && (!busiestMonth || mins > busiestMonth.minutes)) {
-            busiestMonth = { label: NOVAWRAPPED_MONTH_NAMES[idx], minutes: mins };
-        }
-    });
-
-    return {
-        year,
-        totalMinutes,
-        days: Math.floor(totalMinutes / 1440),
-        hours: Math.floor((totalMinutes % 1440) / 60),
-        minutes: totalMinutes % 60,
-        moviesCount,
-        episodesCount,
-        showsCount: showEpisodeCounts.size,
-        topShow,
-        busiestMonth,
-        rewatchCount,
-        // Rough, deliberately playful equivalents for the "hero" total -
-        // whole numbers only, since "2.3 movie-nights" reads as a
-        // miscalculation, not a fun fact. Assumes a 2-hour movie and an
-        // 8-hour sleep/work day - approximate on purpose, this is meant
-        // to give a sense of scale, not be a precise unit conversion.
-        equivalentMovies: Math.floor(totalMinutes / 120),
-        equivalentFullDays: Math.floor(totalMinutes / 1440),
-        equivalentWorkWeeks: Math.round((totalMinutes / 60 / 40) * 10) / 10,
-        hasData: totalMinutes > 0
-    };
-}
-
-function renderNovaWrapped() {
-    const { min, max } = getNovaWrappedYearMinMax();
-    // Default to the most recently *completed* year (a proper "recap"),
-    // falling back to the current year if the account is younger than
-    // that - e.g. someone who joined partway through the current year.
-    currentNovaWrappedYear = (max - 1 >= min) ? max - 1 : max;
-
-    document.getElementById("novaWrappedRoot").innerHTML = `
-        <div class="wrapped-hero">
-            <div class="wrapped-hero-title">NovaWrapped</div>
-            <div class="wrapped-hero-sub">Your year in watching, one story at a time.</div>
-        </div>
-        <div class="wrapped-year-nav">
-            <button class="year-nav-btn" id="wrappedYearPrev" aria-label="Previous year">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <div class="wrapped-year-label" id="wrappedYearLabel"></div>
-            <button class="year-nav-btn" id="wrappedYearNext" aria-label="Next year">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-        </div>
-        <div id="wrappedBody"></div>
-    `;
-
-    document.getElementById("wrappedYearPrev").addEventListener("click", () => changeNovaWrappedYear(-1));
-    document.getElementById("wrappedYearNext").addEventListener("click", () => changeNovaWrappedYear(1));
-
-    renderNovaWrappedYear();
-}
-
-function changeNovaWrappedYear(delta) {
-    const { min, max } = getNovaWrappedYearMinMax();
-    const next = currentNovaWrappedYear + delta;
-    if (next < min || next > max) return;
-    currentNovaWrappedYear = next;
-    renderNovaWrappedYear();
-}
-
-// The year-picker landing screen - no longer the dashboard itself (see
-// startWrappedSlideshow below for that). Just enough here to confirm
-// there's something worth watching a recap of, and a way in.
-function renderNovaWrappedYear() {
-    const { min, max } = getNovaWrappedYearMinMax();
-    document.getElementById("wrappedYearLabel").textContent = currentNovaWrappedYear;
-    document.getElementById("wrappedYearPrev").disabled = currentNovaWrappedYear <= min;
-    document.getElementById("wrappedYearNext").disabled = currentNovaWrappedYear >= max;
-
-    const stats = computeNovaWrappedStats(currentNovaWrappedYear);
-    const body = document.getElementById("wrappedBody");
-
-    if (!stats.hasData) {
-        const isCurrentYear = currentNovaWrappedYear === new Date().getUTCFullYear();
-        body.innerHTML = `
-            <div class="state-card">
-                <div class="state-title">Nothing Tracked Yet</div>
-                <p class="state-sub" style="margin-bottom: 0;">No watch activity recorded for ${currentNovaWrappedYear}${isCurrentYear ? " so far" : ""}.</p>
-            </div>
-        `;
-        return;
-    }
-
-    // A small teaser of what's actually inside, above the button. This
-    // screen used to be a title, a year picker and a lone button, leaving
-    // most of the screen empty - which undersold a feature whose whole
-    // point is that it's visually rich, and gave no reason to tap. These
-    // are the same figures the slideshow opens with, so it previews the
-    // real thing rather than inventing a separate summary.
-    const hours = Math.floor(stats.totalMinutes / 60);
-    const preview = [
-        { value: hours > 0 ? `${hours}h` : `${stats.totalMinutes}m`, label: 'Watched' },
-        { value: stats.episodesCount, label: stats.episodesCount === 1 ? 'Episode' : 'Episodes' },
-        { value: stats.moviesCount, label: stats.moviesCount === 1 ? 'Movie' : 'Movies' }
-    ];
-
-    body.innerHTML = `
-        <div class="wrapped-preview">
-            ${preview.map(p => `
-                <div class="wrapped-preview-stat">
-                    <div class="wrapped-preview-value">${p.value}</div>
-                    <div class="wrapped-preview-label">${p.label}</div>
-                </div>
-            `).join('')}
-        </div>
-        <button class="wrapped-start-btn" onclick="startWrappedSlideshow()">
-            View My ${currentNovaWrappedYear} Wrapped
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
-        </button>
-    `;
-}
-
-/* =========================================================
-   WRAPPED SLIDESHOW
-   A full-screen, story-style sequence (tap/swipe through, a progress
-   bar per slide - the same interaction language as Instagram/Snapchat
-   stories) instead of the scrolling stat-dashboard this used to be.
-   Each slide is built only if there's actually something to say - a
-   year with no rewatches simply doesn't get a rewatch slide, rather
-   than showing a hollow "0 rewatches" - and the whole sequence is
-   computed once upfront (buildWrappedSlides) rather than per-navigation,
-   since the underlying stats never change mid-slideshow.
-========================================================= */
-let wrappedSlides = [];
-let wrappedSlideIndex = 0;
-
-function buildWrappedSlides(stats) {
-    const slides = [];
-
-    slides.push({
-        bg: 'wrapped-bg-intro',
-        html: `
-            <div class="wrapped-slide-content">
-                <div class="wrapped-slide-eyebrow">${stats.year} Wrapped</div>
-                <div class="wrapped-slide-headline">Let's look back<br>at your year.</div>
-                <div class="wrapped-slide-tap-hint">Tap to continue</div>
-            </div>
-        `
-    });
-
-    slides.push({
-        bg: 'wrapped-bg-time',
-        html: `
-            <div class="wrapped-slide-content">
-                <div class="wrapped-slide-eyebrow">You spent</div>
-                <div class="wrapped-slide-number">${stats.days}<span class="wrapped-slide-unit">d</span> ${stats.hours}<span class="wrapped-slide-unit">h</span></div>
-                <div class="wrapped-slide-headline">watching in ${stats.year}.</div>
-                ${stats.equivalentFullDays > 0
-                    ? `<div class="wrapped-slide-footnote">That's ${stats.equivalentFullDays} full ${stats.equivalentFullDays === 1 ? 'day' : 'days'} straight \u2014 about ${stats.equivalentWorkWeeks} working ${stats.equivalentWorkWeeks === 1 ? 'week' : 'weeks'}.</div>`
-                    : (stats.equivalentMovies > 0 ? `<div class="wrapped-slide-footnote">About ${stats.equivalentMovies} ${stats.equivalentMovies === 1 ? 'movie' : 'movies'} back to back.</div>` : '')}
-            </div>
-        `
-    });
-
-    if (stats.moviesCount > 0) {
-        slides.push({
-            bg: 'wrapped-bg-movies',
-            html: `
-                <div class="wrapped-slide-content">
-                    <div class="wrapped-slide-eyebrow">On the big screen</div>
-                    <div class="wrapped-slide-number">${stats.moviesCount}</div>
-                    <div class="wrapped-slide-headline">${stats.moviesCount === 1 ? 'movie' : 'movies'} watched.</div>
-                    ${stats.equivalentMovies > stats.moviesCount ? `<div class="wrapped-slide-footnote">Your total watch time alone was worth ${stats.equivalentMovies} movies.</div>` : ''}
-                </div>
-            `
-        });
-    }
-
-    if (stats.episodesCount > 0) {
-        slides.push({
-            bg: 'wrapped-bg-tv',
-            html: `
-                <div class="wrapped-slide-content">
-                    <div class="wrapped-slide-eyebrow">Binged and watched</div>
-                    <div class="wrapped-slide-number">${stats.episodesCount}</div>
-                    <div class="wrapped-slide-headline">episodes across ${stats.showsCount} ${stats.showsCount === 1 ? 'show' : 'shows'}.</div>
-                </div>
-            `
-        });
-    }
-
-    // rewatchCount was computed in the stats object but never surfaced on
-    // any slide - a whole dimension of someone's year (the things they
-    // liked enough to go back to) was being calculated and thrown away.
-    if (stats.rewatchCount > 0) {
-        slides.push({
-            bg: 'wrapped-bg-rewatch',
-            html: `
-                <div class="wrapped-slide-content">
-                    <div class="wrapped-slide-eyebrow">Worth a second look</div>
-                    <div class="wrapped-slide-number">${stats.rewatchCount}</div>
-                    <div class="wrapped-slide-headline">${stats.rewatchCount === 1 ? 'rewatch' : 'rewatches'} logged.</div>
-                    <div class="wrapped-slide-footnote">Some things are better the second time.</div>
-                </div>
-            `
-        });
-    }
-
-    if (stats.topShow) {
-        slides.push({
-            bg: 'wrapped-bg-spotlight',
-            poster: stats.topShow.poster,
-            html: `
-                <div class="wrapped-slide-content">
-                    <div class="wrapped-slide-eyebrow">Your most-watched show</div>
-                    <div class="wrapped-slide-headline wrapped-slide-headline-big">${escapeHTML(stats.topShow.title)}</div>
-                    <div class="wrapped-slide-footnote">${stats.topShow.count} ${stats.topShow.count === 1 ? 'episode' : 'episodes'} watched</div>
-                </div>
-            `
-        });
-    }
-
-    // floor(), not round() - the hero total slide derives its own hours
-    // with floor (see days/hours in computeNovaWrappedStats), so rounding
-    // here could show a month claiming MORE whole hours than the year
-    // total it's part of (e.g. a 460-minute month rounds to 8h inside a
-    // 480-minute year that floors to 8h). Same rounding on both keeps
-    // the two slides arithmetically coherent with each other.
-    if (stats.busiestMonth) {
-        slides.push({
-            bg: 'wrapped-bg-month',
-            html: `
-                <div class="wrapped-slide-content">
-                    <div class="wrapped-slide-eyebrow">Your biggest month was</div>
-                    <div class="wrapped-slide-headline wrapped-slide-headline-big">${stats.busiestMonth.label}</div>
-                    <div class="wrapped-slide-footnote">${Math.floor(stats.busiestMonth.minutes / 60)} hours watched that month</div>
-                </div>
-            `
-        });
-    }
-
-    if (stats.rewatchCount > 0) {
-        slides.push({
-            bg: 'wrapped-bg-rewatch',
-            html: `
-                <div class="wrapped-slide-content">
-                    <div class="wrapped-slide-eyebrow">Some favorites earned a</div>
-                    <div class="wrapped-slide-number">${stats.rewatchCount}</div>
-                    <div class="wrapped-slide-headline">${stats.rewatchCount === 1 ? 'rewatch' : 'rewatches'} this year.</div>
-                </div>
-            `
-        });
-    }
-
-    slides.push({
-        bg: 'wrapped-bg-recap',
-        isFinal: true,
-        html: `
-            <div class="wrapped-slide-content">
-                <div class="wrapped-slide-eyebrow">${stats.year} Wrapped</div>
-                <div class="wrapped-recap-grid">
-                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.days}d ${stats.hours}h</div><div class="wrapped-recap-label">Watch Time</div></div>
-                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.moviesCount}</div><div class="wrapped-recap-label">Movies</div></div>
-                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.episodesCount}</div><div class="wrapped-recap-label">Episodes</div></div>
-                    <div class="wrapped-recap-stat"><div class="wrapped-recap-value">${stats.showsCount}</div><div class="wrapped-recap-label">Shows</div></div>
-                </div>
-                ${stats.topShow ? `<div class="wrapped-recap-topshow">Most watched: <strong>${escapeHTML(stats.topShow.title)}</strong></div>` : ''}
-            </div>
-        `
-    });
-
-    return slides;
-}
-
-function startWrappedSlideshow() {
-    const stats = computeNovaWrappedStats(currentNovaWrappedYear);
-    wrappedSlides = buildWrappedSlides(stats);
-    wrappedSlideIndex = 0;
-
-    const root = document.getElementById("novaWrappedRoot");
-    root.innerHTML = `
-        <div class="wrapped-progress-row" id="wrappedProgressRow"></div>
-        <div class="wrapped-slide-stage" id="wrappedSlideStage">
-            <div class="wrapped-tap-zone wrapped-tap-zone-left" onclick="wrappedGoBack()"></div>
-            <div class="wrapped-tap-zone wrapped-tap-zone-right" onclick="wrappedGoNext()"></div>
-        </div>
-    `;
-    // Segments are tappable, not just an indicator. Previously the only
-    // way through was tapping forward one slide at a time (or back via the
-    // left half), so re-reading a slide you'd passed meant walking the
-    // whole sequence again and there was no way to see how much was left
-    // beyond counting bars. stopPropagation because the whole stage sits
-    // under the left/right advance zones - without it a segment tap would
-    // also fire the zone underneath and skip an extra slide.
-    document.getElementById("wrappedProgressRow").innerHTML =
-        wrappedSlides.map((_, i) =>
-            `<button class="wrapped-progress-seg" id="wrappedSeg${i}" aria-label="Go to slide ${i + 1}" onclick="event.stopPropagation(); wrappedGoTo(${i})"></button>`
-        ).join('');
-
-    renderWrappedSlideAt(0);
-}
-
-function renderWrappedSlideAt(index) {
-    const stage = document.getElementById("wrappedSlideStage");
-    const slide = wrappedSlides[index];
-    if (!stage || !slide) return;
-
-    wrappedSlides.forEach((_, i) => {
-        const seg = document.getElementById(`wrappedSeg${i}`);
-        if (!seg) return;
-        seg.classList.toggle('filled', i < index);
-        seg.classList.toggle('active', i === index);
-    });
-
-    const existing = stage.querySelector('.wrapped-slide-panel');
-    if (existing) existing.remove();
-
-    const panel = document.createElement('div');
-    panel.className = `wrapped-slide-panel ${slide.bg}`;
-    if (slide.poster) {
-        panel.style.setProperty('--wrapped-poster-url', `url('${slide.poster}')`);
-        panel.classList.add('has-poster');
-    }
-    panel.innerHTML = slide.html + (slide.isFinal ? `
-        <div class="wrapped-recap-actions">
-            <button class="confirm-btn primary" onclick="event.stopPropagation(); shareNovaWrapped()">Share</button>
-            <button class="confirm-btn cancel" onclick="event.stopPropagation(); closeNovaWrappedModal()">Done</button>
-        </div>
-    ` : '');
-    stage.insertBefore(panel, stage.firstChild);
-}
-
-// Jump straight to a slide from the progress bar.
-function wrappedGoTo(index) {
-    if (index < 0 || index >= wrappedSlides.length) return;
-    wrappedSlideIndex = index;
-    renderWrappedSlideAt(index);
-}
-
-function wrappedGoNext() {
-    if (wrappedSlideIndex >= wrappedSlides.length - 1) return;
-    wrappedSlideIndex++;
-    renderWrappedSlideAt(wrappedSlideIndex);
-}
-
-// At the very first slide, "back" exits to the year-picker screen
-// instead of doing nothing - there's nowhere further back within the
-// slideshow itself.
-function wrappedGoBack() {
-    if (wrappedSlideIndex <= 0) {
-        renderNovaWrapped();
-        return;
-    }
-    wrappedSlideIndex--;
-    renderWrappedSlideAt(wrappedSlideIndex);
-}
-
-async function shareNovaWrapped() {
-    const stats = computeNovaWrappedStats(currentNovaWrappedYear);
-    const shareData = {
-        title: `My ${currentNovaWrappedYear} NovaWrapped`,
-        text: `My ${currentNovaWrappedYear} NovaWrapped: ${stats.days}d ${stats.hours}h watched, ${stats.moviesCount} movies, ${stats.episodesCount} episodes across ${stats.showsCount} shows.`,
-        url: NOVAWATCH_APP_URL
-    };
-
-    if (navigator.share) {
-        try {
-            await navigator.share(shareData);
-        } catch (err) {
-            if (err.name !== 'AbortError') console.error("Share failed:", err);
-        }
-        return;
-    }
-
-    if (navigator.clipboard) {
-        try {
-            await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
-            showToast("Copied to clipboard!", "success");
-        } catch (err) {
-            console.error("Clipboard write failed:", err);
-            showErrorToast("Unable to share.");
-        }
-    }
-}
 
 
 // Loads a same-origin sub-page inside the full-screen iframe overlay and
@@ -6420,6 +5896,26 @@ function bucketUpcomingItems(entries) {
     return buckets;
 }
 
+// "In 3 days | 14 Sep 2026" - the countdown first, because on a list whose
+// whole job is "what's next" the relative distance is what you scan for,
+// with the actual date behind it so you can place it on a calendar without
+// doing the arithmetic yourself.
+//
+// Deliberately NOT formatReleaseDescription(), which exists for the detail
+// modals and puts the date first with a middot separator. Same two pieces
+// of information, different priority: in a modal you're looking at one
+// specific thing and the date leads; in this list you're scanning many and
+// the countdown leads.
+function formatUpcomingCaption(date) {
+    if (!date) return "TBA";
+    const countdown = getCountdown(date);
+    const exact = formatDateWithReleaseTime(date);
+    // Guard against "TBA | TBA" if the date fails to parse, and against
+    // repeating the same string twice.
+    if (exact === "TBA" || countdown === exact) return countdown;
+    return `${countdown}<span class="caption-sep">|</span>${exact}`;
+}
+
 // Row card, matching Explore's .search-card shape rather than the Library
 // grid's poster tile. An upcoming entry has to carry a date and (for TV) a
 // season/episode number, which a caption under a poster can't hold
@@ -6453,7 +5949,7 @@ function createUpcomingRowCard(entry) {
                 <div class="search-card-title">${escapeHTML(item.title)}</div>
                 <div class="search-card-meta">${metaHTML}</div>
                 ${subtitle}
-                <div class="upcoming-card-caption">${getCountdown(date)}</div>
+                <div class="upcoming-card-caption">${formatUpcomingCaption(date)}</div>
             </div>
         </div>
     `;
@@ -6647,6 +6143,54 @@ function initContinueCardSwipe(container) {
     });
 }
 
+/* Brief in-card celebration when the last available episode is marked
+   watched. Resolves after the animation so the caller can re-render only
+   once it's been seen - awaiting it is what stops refreshActivePage()
+   removing the card mid-animation.
+
+   Falls through immediately if the card isn't on screen (marked from
+   somewhere other than the Continue Watching list) or if the person has
+   asked for reduced motion - in which case the label still shows, just
+   without the confetti or the wait. */
+function celebrateContinueCard(itemId, label) {
+    return new Promise(resolve => {
+        const card = document.querySelector(`.continue-card[data-item-id="${itemId}"]`);
+        if (!card) return resolve();
+
+        const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        const overlay = document.createElement("div");
+        overlay.className = "card-celebrate";
+        overlay.innerHTML = `<div class="card-celebrate-label">${escapeHTML(label)}</div>`;
+
+        if (!reduced) {
+            // Spread across the card's width, each piece given its own
+            // drift, delay and rotation via custom properties so a dozen
+            // identical spans don't animate in lockstep.
+            const pieces = 14;
+            let confetti = '<div class="card-confetti">';
+            for (let i = 0; i < pieces; i++) {
+                const left = Math.round((i / (pieces - 1)) * 100);
+                const drift = Math.round((Math.random() * 60) - 30);
+                const delay = (Math.random() * 0.22).toFixed(2);
+                const spin = Math.round(Math.random() * 540) - 270;
+                const hue = [ '--green-gradient', '--blue', '--orange-gradient', '--violet-gradient' ][i % 4];
+                confetti += `<span style="left:${left}%; --drift:${drift}px; --spin:${spin}deg; animation-delay:${delay}s; background: var(${hue});"></span>`;
+            }
+            confetti += '</div>';
+            overlay.insertAdjacentHTML("beforeend", confetti);
+        }
+
+        card.appendChild(overlay);
+        // Card is position:relative already (the check button is absolute
+        // inside it), so the overlay pins to it without extra setup.
+        setTimeout(() => {
+            overlay.classList.add("is-leaving");
+            setTimeout(() => { overlay.remove(); resolve(); }, 220);
+        }, reduced ? 450 : 1250);
+    });
+}
+
 async function markContinueItemWatched(type, itemId, epId) {
     const item = getItem(itemId);
     if (!item) return;
@@ -6680,6 +6224,21 @@ async function markContinueItemWatched(type, itemId, epId) {
         showErrorToast("Couldn't save right now. Please try again.");
         return;
     }
+    // Celebrate IN the card before the list re-renders and it disappears.
+    // Deliberately in-card rather than a toast: the app has no in-app
+    // notifications (showToast is a no-op stub), and the feedback belongs
+    // on the thing you just acted on anyway.
+    if (type !== 'movie' && item.episodes) {
+        const p = getTVProgress(item);
+        if (p.total > 0 && p.watched >= p.total) {
+            // "Finished" only when the show itself has actually ended -
+            // otherwise you're merely caught up and more is coming, which
+            // is what "Up to date" means everywhere else in the app
+            // (isTVUpToDate, and the Library category of the same name).
+            await celebrateContinueCard(item.id, isTVFinished(item) ? "Finished" : "Up to date");
+        }
+    }
+
     refreshActivePage();
 
     // How many released-but-unwatched episodes remain for this show,
