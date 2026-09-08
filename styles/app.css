@@ -290,16 +290,16 @@ img {
     align-content: start;
 }
 
-/* Home's Viewing Analytics has a 4th tile (Rewatches) that NovaWrapped's
+/* Home's Viewing Analytics tiles
    3-tile version of this same .stats layout doesn't - scoped to just
    this one instance rather than changing the shared 3-column default,
-   which NovaWrapped still needs. */
+   */
 #dashboardStats.stats {
     grid-template-columns: repeat(2, 1fr);
     /* No gap on THIS grid only - its cells carry their own hairlines
        (see .stat), and a gap would break those lines into floating
        segments instead of a continuous grid. Scoped to #dashboardStats
-       rather than .stats because NovaWrapped's recap reuses the same
+       rather than .stats, scoped to the dashboard's own container
        .stats layout and does still want gutters between real tiles. */
     gap: 0;
 }
@@ -365,446 +365,6 @@ img {
     color: var(--blue-ink);
     margin-top: 2px;
     letter-spacing: -0.3px;
-}
-
-/* =========================================================
-   NOVAWRAPPED (migrated in from its own page - see the modal
-   #novaWrappedModal in index.html and its open/render functions in
-   app.js). Reuses .analytics-card/.stat/.section-title etc. above for
-   the actual stats display.
-========================================================= */
-.state-card {
-    padding: 36px 28px;
-    text-align: center;
-    background: var(--glass-sheen), var(--surface);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow), var(--glass-edge);
-    border-radius: var(--radius-2xl);
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
-}
-
-.state-title {
-    font-size: 19px;
-    font-weight: 800;
-    margin-bottom: 8px;
-}
-
-.state-sub {
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    max-width: 340px;
-    margin: 0 auto;
-}
-
-.wrapped-hero {
-    text-align: center;
-    padding: 8px 0 22px;
-}
-
-.wrapped-hero-title {
-    font-size: 25px;
-    font-weight: 800;
-    letter-spacing: -0.6px;
-}
-
-.wrapped-hero-sub {
-    font-size: 13.5px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-}
-
-.wrapped-year-nav {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-    margin-bottom: 24px;
-}
-
-.year-nav-btn {
-    width: 38px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: var(--glass-sheen), var(--surface);
-    color: var(--text);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-    transition: transform 0.15s var(--ease-out), opacity 0.15s ease;
-}
-
-.year-nav-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-.year-nav-btn:not(:disabled):active {
-    transform: scale(0.9);
-}
-
-.wrapped-year-label {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    min-width: 64px;
-    text-align: center;
-}
-
-/* Teaser stats above the "View My Wrapped" button - see
-   renderNovaWrappedYear for why this exists. Deliberately quiet: these
-   are a preview, not the payoff, so they use the same card surface as
-   the rest of Settings rather than the slideshow's vivid gradients. */
-.wrapped-preview {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 22px;
-    align-content: start;
-}
-
-.wrapped-preview-stat {
-    padding: 16px 8px;
-    text-align: center;
-    background: var(--glass-sheen), var(--surface);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--glass-shadow-sm), var(--glass-edge);
-}
-
-.wrapped-preview-value {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    color: var(--text);
-}
-
-.wrapped-preview-label {
-    margin-top: 3px;
-    font-size: 11.5px;
-    font-weight: 650;
-    color: var(--text-secondary);
-}
-
-html[data-theme="dark"] .wrapped-preview-stat {
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
-}
-
-.wrapped-start-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-    padding: 16px 20px;
-    margin-top: 8px;
-    border-radius: var(--radius-2xl);
-    background: var(--glass-sheen), linear-gradient(115deg, #8b5cf6, #ec4899, #f97316);
-    color: white;
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: -0.2px;
-    box-shadow: 0 10px 28px rgba(139, 92, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.4);
-    transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.wrapped-start-btn:active {
-    transform: scale(0.97);
-}
-
-/* =========================================================
-   WRAPPED SLIDESHOW
-   A full-screen, story-style sequence - genuinely full-bleed (covers
-   the whole modal, not just the padded/scrollable .modal-content area
-   it's technically nested inside) via position: fixed, which escapes
-   .modal-content's own padding and .modal-sheet's own scroll behavior
-   entirely rather than fighting it with negative margins across a
-   padded ancestor chain. Each slide gets its own vivid gradient -
-   deliberately more saturated than the rest of the app's subtle glass
-   language, since a "wrapped"-style recap is meant to feel like a
-   celebration, distinct from NovaWatch's everyday look.
-========================================================= */
-.wrapped-progress-row {
-    position: fixed;
-    /* 7px less than the header's own 14px, to cancel the 7px of vertical
-       padding each segment now carries as its tap target - so the visible
-       bar sits exactly where it did before the segments became buttons. */
-    top: calc(7px + env(safe-area-inset-top, 0px));
-    /* Landscape notch guard - see .page's horizontal padding. */
-    left: calc(16px + env(safe-area-inset-left, 0px));
-    /* Was right: 16px, the same right edge the modal's own close button
-       sits at (.modal-header-nav, top: 14px + safe-area; right: 16px)
-       - with this row's own higher z-index (20 vs the close button's
-       10), the progress segments would render directly over the close
-       button, making it untappable for the entire slideshow. 62px
-       leaves the button (38px wide, starting at right: 16px, so
-       occupying out to right: 54px) clear with a small gap to spare -
-       the same layout Instagram/Snapchat stories use, a progress bar
-       and a close control sharing the same row without overlapping. */
-    right: calc(62px + env(safe-area-inset-right, 0px));
-    z-index: 20;
-    display: flex;
-    gap: 5px;
-}
-
-.wrapped-progress-seg {
-    flex: 1;
-    /* The bar itself stays 3px, but it's a real tap target now (see
-       wrappedGoTo) - a 3px-tall button is unhittable, so vertical padding
-       extends the hit area to a usable ~17px while background-clip keeps
-       the visible bar exactly as thin as it was. */
-    height: 3px;
-    box-sizing: content-box;
-    padding: 7px 0;
-    background: rgba(255, 255, 255, 0.3);
-    background-clip: content-box;
-    border: 0;
-    border-radius: 999px;
-    overflow: hidden;
-    cursor: pointer;
-}
-
-.wrapped-progress-seg::after {
-    content: "";
-    display: block;
-    height: 100%;
-    width: 0%;
-    background: white;
-    border-radius: 999px;
-    transition: width 0.25s ease;
-}
-
-.wrapped-progress-seg.filled::after {
-    width: 100%;
-}
-
-.wrapped-progress-seg.active::after {
-    width: 100%;
-}
-
-.wrapped-slide-stage {
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    overflow: hidden;
-}
-
-.wrapped-tap-zone {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 35%;
-    z-index: 15;
-}
-
-.wrapped-tap-zone-left {
-    left: 0;
-}
-
-.wrapped-tap-zone-right {
-    right: 0;
-}
-
-.wrapped-slide-panel {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: calc(60px + env(safe-area-inset-top, 0px)) 32px calc(40px + env(safe-area-inset-bottom, 0px));
-    text-align: center;
-    color: white;
-    animation: wrappedSlideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-@keyframes wrappedSlideIn {
-    from { opacity: 0; transform: scale(1.04); }
-    to { opacity: 1; transform: scale(1); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .wrapped-slide-panel {
-        animation: none;
-    }
-}
-
-.wrapped-slide-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    max-width: 380px;
-}
-
-.wrapped-slide-eyebrow {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    opacity: 0.85;
-    margin-bottom: 10px;
-}
-
-.wrapped-slide-headline {
-    font-size: 28px;
-    font-weight: 800;
-    letter-spacing: -0.6px;
-    line-height: 1.25;
-}
-
-.wrapped-slide-headline-big {
-    font-size: 36px;
-}
-
-.wrapped-slide-number {
-    font-size: 72px;
-    font-weight: 800;
-    letter-spacing: -2px;
-    line-height: 1;
-    margin-bottom: 6px;
-}
-
-.wrapped-slide-unit {
-    font-size: 32px;
-    font-weight: 700;
-    opacity: 0.85;
-}
-
-.wrapped-slide-footnote {
-    margin-top: 18px;
-    font-size: 14px;
-    font-weight: 600;
-    opacity: 0.85;
-    line-height: 1.4;
-}
-
-.wrapped-slide-tap-hint {
-    margin-top: 28px;
-    font-size: 12.5px;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-    opacity: 0.6;
-    text-transform: uppercase;
-}
-
-/* One deliberately vivid, distinct gradient per slide - see the block
-   comment above for why these read as more saturated than the rest of
-   NovaWatch's usual glass palette. */
-.wrapped-bg-intro {
-    background: radial-gradient(circle at 30% 20%, #312e81, #0f0a2e 70%);
-}
-
-.wrapped-bg-time {
-    background: linear-gradient(150deg, #3b82f6, #8b5cf6 55%, #ec4899);
-}
-
-.wrapped-bg-movies {
-    background: linear-gradient(150deg, #f97316, #ea580c 60%, #b91c1c);
-}
-
-.wrapped-bg-tv {
-    background: linear-gradient(150deg, #22c55e, #16a34a 55%, #0e7490);
-}
-
-.wrapped-bg-spotlight {
-    background: linear-gradient(150deg, #ec4899, #a21caf 60%, #581c87);
-}
-
-.wrapped-bg-month {
-    background: linear-gradient(150deg, #06b6d4, #0284c7 60%, #1e3a8a);
-}
-
-.wrapped-bg-rewatch {
-    background: linear-gradient(150deg, #a855f7, #7c3aed 55%, #4c1d95);
-}
-
-.wrapped-bg-recap {
-    background: radial-gradient(circle at 70% 15%, #1e1b4b, #09070f 70%);
-}
-
-/* The top-show spotlight slide layers the actual poster in, blurred and
-   dimmed, behind the vivid gradient rather than instead of it - reads
-   as "this show, celebrated" rather than a plain photo, and still works
-   fine (just falls back to the flat gradient) for the rare case a show
-   has no poster cached. */
-.wrapped-slide-panel.has-poster {
-    background-image:
-        linear-gradient(180deg, rgba(88, 28, 135, 0.55), rgba(30, 10, 46, 0.85)),
-        var(--wrapped-poster-url);
-    background-size: cover;
-    background-position: center;
-}
-
-.wrapped-recap-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-    width: 100%;
-    margin-top: 8px;
-    align-content: start;
-}
-
-.wrapped-recap-stat {
-    padding: 16px 12px;
-    border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-}
-
-.wrapped-recap-value {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: -0.4px;
-}
-
-.wrapped-recap-label {
-    font-size: 11.5px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    opacity: 0.75;
-    text-transform: uppercase;
-    margin-top: 3px;
-}
-
-.wrapped-recap-topshow {
-    margin-top: 20px;
-    font-size: 14px;
-    font-weight: 600;
-    opacity: 0.9;
-}
-
-.wrapped-recap-actions {
-    position: absolute;
-    left: 32px;
-    right: 32px;
-    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
-    display: flex;
-    gap: 10px;
-    z-index: 16;
-}
-
-.wrapped-recap-actions .confirm-btn {
-    flex: 1;
-}
-
-/* The recap slide's background is always dark, regardless of the app's
-   own light/dark theme setting (Wrapped is deliberately dramatic, not
-   theme-adaptive) - .confirm-btn.cancel's normal styling uses theme-
-   dependent tokens (var(--surface)/var(--text)) that would render as a
-   dark button with light text in the app's OWN dark mode, nearly
-   blending into this already-dark background. Overridden here to a
-   fixed, theme-independent translucent white instead, so it stays
-   legible no matter which theme is active. */
-.wrapped-recap-actions .confirm-btn.cancel {
-    background: rgba(255, 255, 255, 0.14);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.24);
-    color: white;
-    box-shadow: none;
 }
 
 .stat-label {
@@ -1742,7 +1302,7 @@ html[data-theme="dark"] .search-box:focus-within {
     gap: 8px;
     padding: 0 26px;
     background: var(--glass-sheen), var(--green-gradient);
-    color: white;
+    color: var(--on-blue);
     font-size: 12.5px;
     font-weight: 800;
     letter-spacing: 0.2px;
@@ -1922,6 +1482,75 @@ html[data-theme="dark"] .continue-progress {
     min-height: 2.9em;
 }
 
+/* =========================================================
+   CONTINUE-CARD CELEBRATION
+   Shown for ~1.2s when the last available episode is marked watched,
+   then removed. Covers the card rather than sitting beside it, because
+   the card is about to disappear from the list anyway - there's no
+   layout to preserve, and a full cover reads as a state change rather
+   than as a badge stuck onto the old state.
+========================================================= */
+.card-celebrate {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+    overflow: hidden;
+    background: var(--glass-sheen), var(--green-gradient);
+    animation: celebrateIn 0.28s var(--ease-out);
+}
+
+.card-celebrate.is-leaving {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.card-celebrate-label {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    /* Dark ink, like every other accent fill in the app. */
+    color: var(--on-blue);
+    z-index: 1;
+}
+
+@keyframes celebrateIn {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.card-confetti {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.card-confetti span {
+    position: absolute;
+    top: -10px;
+    width: 7px;
+    height: 10px;
+    border-radius: 1px;
+    opacity: 0;
+    animation: confettiFall 1.1s ease-in forwards;
+}
+
+@keyframes confettiFall {
+    0%   { opacity: 0; transform: translate(0, -10px) rotate(0deg); }
+    12%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(var(--drift), 150px) rotate(var(--spin)); }
+}
+
+/* No motion at all for anyone who's asked for less of it - the label
+   still appears, which is the actual information. */
+@media (prefers-reduced-motion: reduce) {
+    .card-celebrate { animation: none; }
+    .card-confetti { display: none; }
+}
+
 .continue-check-btn {
     position: absolute;
     top: 14px;
@@ -1967,6 +1596,17 @@ html[data-theme="dark"] .continue-progress {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* The divider between the countdown and the exact date. Dimmed and
+   spaced rather than sitting inline at full strength - it's punctuation,
+   not content, and at the caption's own weight a solid pipe competes with
+   the two things it's separating. Margins do the separating; the glyph
+   just marks the boundary. */
+.caption-sep {
+    margin: 0 6px;
+    opacity: 0.45;
+    font-weight: 500;
 }
 
 .upcoming-card-caption {
@@ -2231,7 +1871,6 @@ html[data-theme="dark"] .modal-sheet-compact {
    this same stacking problem to begin with.) */
 #avatarPickerModal,
 #achievementsModal,
-#novaWrappedModal,
 #libraryDisplayModal {
     z-index: 250;
 }
@@ -2249,7 +1888,7 @@ html[data-theme="dark"] .modal-sheet-compact {
        scrolls natively) - the classic cause of a scrollable area that
        feels stiff, stutters, or genuinely freezes for a moment before
        "catching up". Every full-screen modal (Settings, show/episode
-       details, Achievements, NovaWrapped, the picker modals) scrolls via
+       details, Achievements, the picker modals) scrolls via
        this one shared class, so this single fix covers all of them. */
     -webkit-overflow-scrolling: touch;
     /* Soft top-lit sheen (light "entering" from the top edge) layered over
@@ -2282,13 +1921,23 @@ html[data-theme="dark"] .modal-sheet-compact {
     position: relative;
 }
 
-/* Same-origin sub-pages (currently just Privacy & Terms - NovaWrapped
+/* Same-origin sub-pages (currently just Privacy & Terms
    was migrated from its own page into a plain in-app modal, so it no
    longer uses this) loaded inside a full-screen iframe instead of a
    top-level navigation - see #pageOverlayModal. The iframe owns its own
    scrolling, so the wrapping .modal-sheet is set to overflow: hidden
    inline where this is used, to avoid a double scrollbar. */
 .page-overlay-frame {
+    /* Absolutely filling the sheet rather than height:100%. An iframe is
+       replaced content: a percentage height resolves against the parent's
+       CONTENT box, so any padding or safe-area inset on .modal-sheet
+       leaves a strip of the sheet's own mesh background visible below the
+       frame - which is what the thin line across the bottom of the
+       Privacy & Terms overlay was. inset:0 pins all four edges to the
+       sheet's padding box instead, so there is nothing left to show
+       through regardless of what padding the sheet ends up carrying. */
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     border: 0;
@@ -2319,7 +1968,7 @@ html[data-theme="dark"] .modal-sheet-compact {
     background: linear-gradient(180deg, rgba(232, 237, 244, 0) 0%, var(--bg-base) 100%);
 }
 
-/* Full-screen modals (Details, Episode, NovaWrapped, Settings' own
+/* Full-screen modals (Details, Episode, Settings' own
    entry point elsewhere) sit edge-to-edge, so this floating close/action
    button needs the real top safe-area inset folded in or it can end up
    under the Dynamic Island/notch/status bar. Compact modals (below)
@@ -2329,13 +1978,6 @@ html[data-theme="dark"] .modal-sheet-compact {
     position: absolute;
     top: calc(14px + env(safe-area-inset-top, 0px));
     right: 16px;
-    /* Higher than the Wrapped slideshow's own tap zones (z-index: 15)
-       and progress bar (z-index: 20) - without this, the invisible
-       right-half "advance to next slide" tap zone would sit above the
-       close button and intercept taps meant for it, even after fixing
-       the earlier visual overlap with the progress bar. Harmless
-       everywhere else this same class is used (every other full-screen
-       modal), since nothing else in those overlaps it to begin with. */
     z-index: 25;
     display: flex;
     gap: 10px;
@@ -2382,23 +2024,6 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .close-button:active {
     transform: scale(0.9);
-}
-
-/* NovaWrapped's slides are always dark, in BOTH themes - it's deliberately
-   dramatic rather than theme-adaptive (see the .wrapped-* rules). The
-   close button, though, was inheriting theme tokens like every other
-   modal's: in light mode that put a pale 45%-white circle with a DARK X
-   on top of a vivid dark slide, which is poor contrast and also let the
-   slide's own colour bleed through the glass so the button changed hue
-   from slide to slide - purple on the intro, green on the episodes
-   slide, blue on the month slide. Pinning it to the dark treatment in
-   both themes gives it one consistent appearance and a light X that
-   stays legible over every slide background. Raw rgba rather than
-   tokens precisely because it must NOT follow the theme here. */
-#novaWrappedModal .close-button {
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.16);
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.24);
 }
 
 .season-rewatch-button {
@@ -2546,7 +2171,11 @@ html[data-theme="dark"] .modal-sheet-compact {
        destructive dialogs are the ones where getting the colour wrong
        actually matters. */
     background: var(--glass-sheen), var(--red-gradient);
-    color: white;
+    /* Dark ink, not white. These badges are filled with the pastel
+       accents (--green-gradient etc), which white sits on at ~1.2-2.4:1
+       - unreadable. --on-blue is the shared ink for every accent fill;
+       it scores 6.9:1 or better on all four. */
+    color: var(--on-blue);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2612,7 +2241,7 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .confirm-btn.danger {
     background: var(--glass-sheen), var(--red-gradient);
-    color: white;
+    color: var(--on-blue);
     box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
@@ -2872,14 +2501,14 @@ html[data-theme="dark"] .modal-sheet-compact {
 
 .action-button.warning {
     background: var(--glass-sheen), var(--orange-gradient);
-    color: white;
+    color: var(--on-blue);
     border: none;
     box-shadow: 0 6px 16px rgba(255, 149, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .action-button.danger {
     background: var(--glass-sheen), var(--red-gradient);
-    color: white;
+    color: var(--on-blue);
     border: none;
     box-shadow: 0 6px 16px rgba(255, 59, 48, 0.3), inset 0 1px 0 rgba(255,255,255,0.5);
 }
@@ -3259,7 +2888,11 @@ html[data-theme="dark"] .modal-sheet-compact {
     width: 36px;
     height: 36px;
     border-radius: var(--radius-xs);
-    color: white;
+    /* Dark ink, not white. These badges are filled with the pastel
+       accents (--green-gradient etc), which white sits on at ~1.2-2.4:1
+       - unreadable. --on-blue is the shared ink for every accent fill;
+       it scores 6.9:1 or better on all four. */
+    color: var(--on-blue);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3663,24 +3296,42 @@ html[data-theme="dark"] .large-avatar {
    re-shown every time. */
 .auth-terms-row {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin-top: 10px;
+    /* Centre on the first LINE of the label rather than the top of the
+       whole block. With flex-start the box sat level with the top of a
+       two-line label, which reads as floating slightly high; baseline
+       would drop it below the text. Centring the row as a unit and
+       letting the label handle its own wrapping is what actually lines
+       the two up. */
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+    /* Narrower than the card so the sentence breaks at a predictable
+       point instead of leaving one orphaned word on the second line, and
+       centred as a block so the pair still sits under the button above. */
+    max-width: 290px;
+    margin-left: auto;
+    margin-right: auto;
     padding: 0 2px;
 }
 
 .auth-terms-checkbox {
     flex-shrink: 0;
-    width: 17px;
-    height: 17px;
-    margin-top: 1px;
+    width: 18px;
+    height: 18px;
     accent-color: var(--blue-ink);
+    cursor: pointer;
 }
 
 .auth-terms-row label {
     font-size: 12px;
-    line-height: 1.4;
+    line-height: 1.45;
     color: var(--text-secondary);
+    /* The auth card centres its own text, which this inherited - so a
+       wrapped second line ("Notice") sat centred under the first instead
+       of starting beneath it, which is what made the row look off. */
+    text-align: left;
+    cursor: pointer;
 }
 
 .auth-terms-row a {
@@ -3910,7 +3561,7 @@ html[data-theme="dark"] .large-avatar {
        switched to the correct darker orange in dark mode the way every
        other orange-gradient surface in the app does. */
     background: var(--orange-gradient);
-    color: white;
+    color: var(--on-blue);
     font-size: 12.5px;
     font-weight: 700;
     letter-spacing: -0.1px;
@@ -3977,7 +3628,7 @@ html[data-theme="dark"] .large-avatar {
     align-items: center;
     justify-content: center;
     background: var(--red-gradient);
-    color: white;
+    color: var(--on-blue);
     box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
 }
 
@@ -4176,11 +3827,7 @@ html[data-theme="dark"] .skeleton {
     background: linear-gradient(90deg, var(--surface-2) 25%, rgba(255, 255, 255, 0.1) 50%, var(--surface-2) 75%);
 }
 
-html[data-theme="dark"] .state-card {
-    background: var(--glass-sheen), rgba(255, 255, 255, 0.07);
-}
-
-/* =========================================================
+html[data-theme="dark"] /* =========================================================
    TABLET / LARGER SCREENS
    Everything above this line is untouched below 768px - phones get
    byte-for-byte the same CSS they always have. This block only ever
@@ -4237,17 +3884,6 @@ html[data-theme="dark"] .state-card {
     .poster-picker-grid,
     .skeleton-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
-    /* Home's Viewing Analytics tiles (#dashboardStats) stay a cramped
-       2x2 square forever otherwise - four tiles genuinely fit as one
-       comfortable row once there's room for it, and each tile still
-       ends up at least as wide here as the mobile 2-column version
-       ever was, so this isn't a squeeze. NovaWrapped's own 3-tile
-       recap grid is a separate class (.wrapped-recap-grid), not
-       affected by this. */
-    #dashboardStats.stats {
-        grid-template-columns: repeat(4, 1fr);
     }
 
     /* Continue Watching's cards are swipeable list ROWS (a fixed 80px
