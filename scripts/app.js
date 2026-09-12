@@ -4214,6 +4214,40 @@ async function proceedToApp(user, authScreen, mainApp) {
                         });
 
                         state.library = updatedLibrary;
+
+                        // Re-point currentItem/currentEpisode at the FRESH
+                        // objects. Both hold direct references into
+                        // state.library, and the loop above replaces
+                        // changed entries with brand-new objects from
+                        // Firestore - so after a sync triggered anywhere
+                        // else (another device, the release-notification
+                        // job) an open details or episode modal was still
+                        // reading the old object. It showed stale values,
+                        // and worse, a save from that modal would have
+                        // written the stale copy straight back over the
+                        // newer data.
+                        if (currentItem) {
+                            const fresh = state.library.find(i => i.id === currentItem.id);
+                            if (fresh) {
+                                currentItem = fresh;
+                                if (currentEpisode) {
+                                    // Same problem one level down - the
+                                    // episode is a member of the item's
+                                    // own (also replaced) episodes array.
+                                    const freshEp = (fresh.episodes || []).find(e => e.id === currentEpisode.id);
+                                    if (freshEp) currentEpisode = freshEp;
+                                }
+                                // Repaint whichever modal is actually open,
+                                // so what's on screen matches what was just
+                                // synced rather than waiting for a close and
+                                // reopen.
+                                const detailsOpen = document.getElementById("detailsModal").classList.contains("open");
+                                const episodeOpen = document.getElementById("episodeDetailsModal").classList.contains("open");
+                                if (detailsOpen) updateModalContent();
+                                if (episodeOpen) refreshEpisodeModalMeta();
+                            }
+                        }
+
                         refreshActivePage();
                     });
             } catch (err) {
@@ -7742,6 +7776,17 @@ async function toggleCurrentEpisodeWatched() {
 // too, in addition to the one currently open - only ever true when marking
 // watched (see the modal's own confirm handler), never when un-watching.
 async function commitCurrentEpisodeWatchedToggle(alsoMarkEarlier) {
+    // Guard, because this is reachable with currentEpisode already null.
+    // Both callers below are buttons on the mark-previous-episodes
+    // confirm dialog, and that dialog's markup lives in the DOM
+    // permanently - so if the episode modal gets closed (which sets
+    // currentEpisode = null) between the dialog opening and a button on
+    // it being tapped, this ran on null and threw an uncaught promise
+    // rejection. Every other function touching currentEpisode already
+    // guards; this one, which is the one that actually mutates and saves
+    // data, did not.
+    if (!currentItem || !currentEpisode) return;
+
     const markingWatched = !currentEpisode.watched;
     const targets = [currentEpisode];
     if (alsoMarkEarlier) targets.push(...getEarlierUnwatchedEpisodes(currentItem, currentEpisode));
