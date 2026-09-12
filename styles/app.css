@@ -2224,7 +2224,13 @@ html[data-theme="dark"] .modal-sheet-compact {
 }
 
 .appearance-icon-tile {
-    background: linear-gradient(135deg, #48484a, #1c1c1e);
+    /* Violet, matching the other settings badges. This was a two-tone
+       dark gradient that inverted between themes - a leftover from when
+       every accent was a saturated gradient. Once the palette moved to
+       flat pastels it became the only dark tile and the only gradient in
+       the list, which read as an error rather than as the theme metaphor
+       it was going for. The moon glyph carries that meaning on its own. */
+    background: var(--violet-gradient);
 }
 
 .confirm-title {
@@ -3292,7 +3298,7 @@ html[data-theme="dark"] .large-avatar {
 .google-auth-btn {
     width: 100%;
     height: 48px;
-    border-radius: var(--radius-sm);
+    border-radius: 999px;
     background: #ffffff;
     color: #1f1f1f;
     font-size: 14px;
@@ -3421,22 +3427,36 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-input {
     width: 100%;
-    height: 40px;
-    padding: 0 16px;
+    /* Matched to the app's own text field (.search-box) rather than being
+       its own thing: same glass-chrome fill, border and shadow, and the
+       same 999px pill instead of a rounded rectangle. These were the
+       first inputs anyone sees, and they looked like they belonged to a
+       different app than the search box on the other side of sign-in.
+       48px to sit with the buttons beside them - they were 40px, which
+       also left the form looking cramped now it has a full screen.
+
+       NOTE: deliberately no backdrop-filter, unlike the old rule's
+       blur(20px). Applying one directly to a text input is the exact
+       WebKit caret bug documented at length on .search-box above - the
+       caret can render at stale layer coordinates. The fill here is
+       opaque enough not to need it. */
+    height: 48px;
+    padding: 0 18px;
     outline: none;
-    background: var(--surface-2);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-sm);
+    background: var(--glass-sheen), var(--glass-chrome-fill);
+    border: 1px solid var(--glass-chrome-border);
+    border-radius: 999px;
+    box-shadow: var(--glass-chrome-shadow);
     color: var(--text);
-    font-size: 13px;
-    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    font-size: 15px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .auth-input:focus {
-    border-color: var(--blue);
-    background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(var(--blue-rgb), 0.15);
+    /* Same focus ring as .search-box:focus-within, so focusing a field
+       behaves identically on both sides of sign-in. */
+    border-color: rgba(var(--blue-rgb), 0.55);
+    box-shadow: var(--glass-chrome-shadow), 0 0 0 5px rgba(var(--blue-rgb), 0.18);
 }
 
 .auth-actions {
@@ -3448,7 +3468,7 @@ html[data-theme="dark"] .large-avatar {
 .auth-btn {
     flex: 1;
     height: 48px;
-    border-radius: var(--radius-sm);
+    border-radius: 999px;
     font-size: 15px;
     font-weight: 700;
     background: var(--glass-sheen), var(--flat-blue);
@@ -3835,13 +3855,10 @@ html[data-theme="dark"] #authScreen .segmented-btn.active {
     box-shadow: 0 4px 12px rgba(var(--blue-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
-html[data-theme="dark"] .appearance-icon-tile {
-    background: linear-gradient(135deg, #d1d1d6, #8e8e93);
-}
-
-html[data-theme="dark"] .appearance-icon-tile .appearance-icon {
-    color: #1c1c1e;
-}
+/* No dark-mode override for .appearance-icon-tile. The two that used to
+   be here re-inverted the old dark gradient and re-coloured its icon;
+   --violet-gradient is identical in both themes, like every other accent
+   fill, and .settings-row-icon already sets --on-blue for the glyph. */
 
 /* No dark-mode override for .auth-overlay-card. It used to restate the
    card's fill and shadow for dark, so removing the card treatment in the
