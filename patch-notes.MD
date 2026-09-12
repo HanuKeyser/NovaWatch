@@ -2,6 +2,10 @@
 
 Launched October 1, 2026.
 What's included, top to bottom.
+## Account
+
+- Deleting your account now gives you 30 days to change your mind. Everything stays exactly as it was, and signing back in during that window offers to restore it. After 30 days it's permanently deleted.
+
 ## Tracking & Library
 
 - Search and add TV shows and movies, mark them watched with a single tap.
