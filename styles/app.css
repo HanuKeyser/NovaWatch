@@ -3294,6 +3294,18 @@ html[data-theme="dark"] .large-avatar {
 /* Consent checkbox for account creation - shown only in Join mode (see
    setAuthMode) since a routine returning-user sign-in doesn't need it
    re-shown every time. */
+/* Sign In mode: the terms row still occupies its height but is invisible
+   and inert. visibility:hidden alone would keep the checkbox in the tab
+   order and still reachable by screen readers, so pointer-events and
+   aria-hidden (set alongside in JS is unnecessary here - the inputs are
+   disabled from interaction by pointer-events plus the parent being
+   invisible, and visibility:hidden already removes it from the
+   accessibility tree). */
+.auth-terms-row.is-reserved {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .auth-terms-row {
     display: flex;
     /* Centre on the first LINE of the label rather than the top of the
@@ -3429,6 +3441,17 @@ html[data-theme="dark"] .large-avatar {
     box-shadow: var(--glass-shadow-sm), var(--glass-edge);
 }
 
+/* The days-remaining figure on the recovery screen. Given real size
+   because it's the one number that decides whether someone acts now or
+   assumes there's no hurry. */
+.recovery-countdown {
+    margin: 16px 0 4px;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--blue-ink);
+    letter-spacing: -0.2px;
+}
+
 .auth-forgot-link {
     background: transparent;
     /* --blue-ink, not --blue. --blue is a light pastel meant to be a FILL
@@ -3465,7 +3488,8 @@ html[data-theme="dark"] .large-avatar {
    apart over time. */
 #authScreen,
 #verifyScreen,
-#chooseUsernameScreen {
+#chooseUsernameScreen,
+#recoveryScreen {
     position: fixed;
     inset: 0;
     z-index: 1000;
