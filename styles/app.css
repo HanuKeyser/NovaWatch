@@ -3262,7 +3262,7 @@ html[data-theme="dark"] .large-avatar {
    distinction when two full-width buttons are stacked two rows apart. */
 .google-auth-btn {
     width: 100%;
-    height: 40px;
+    height: 48px;
     border-radius: var(--radius-sm);
     background: #ffffff;
     color: #1f1f1f;
@@ -3309,7 +3309,7 @@ html[data-theme="dark"] .large-avatar {
     /* Narrower than the card so the sentence breaks at a predictable
        point instead of leaving one orphaned word on the second line, and
        centred as a block so the pair still sits under the button above. */
-    max-width: 290px;
+    max-width: 340px;
     margin-left: auto;
     margin-right: auto;
     padding: 0 2px;
@@ -3359,7 +3359,7 @@ html[data-theme="dark"] .large-avatar {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 12px;
+    margin-top: 18px;
 }
 
 .auth-row {
@@ -3368,12 +3368,14 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-row .auth-input {
+    /* 48px tall, 15px text - matching the app's own search field rather
+       than the shrunken 40px/13px the card layout needed. */
     flex: 1;
     min-width: 0;
 }
 
 .auth-mode-toggle {
-    margin: 14px 0 0;
+    margin: 22px 0 0;
 }
 
 .auth-input {
@@ -3404,9 +3406,9 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-btn {
     flex: 1;
-    height: 40px;
+    height: 48px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
     background: var(--glass-sheen), var(--flat-blue);
     color: var(--on-blue);
@@ -3429,9 +3431,15 @@ html[data-theme="dark"] .large-avatar {
 
 .auth-forgot-link {
     background: transparent;
-    color: var(--blue);
-    font-size: 12px;
-    font-weight: 600;
+    /* --blue-ink, not --blue. --blue is a light pastel meant to be a FILL
+       with dark ink on top; used as text on the page background it scores
+       about 1.3:1 and is effectively invisible. --blue-ink is the variant
+       that exists for exactly this - blue as text on a light surface -
+       at 5.36:1. Every other blue link in the app already uses it; this
+       one was missed. */
+    color: var(--blue-ink);
+    font-size: 13px;
+    font-weight: 700;
     text-decoration: none;
 }
 
@@ -3463,46 +3471,55 @@ html[data-theme="dark"] .large-avatar {
     z-index: 1000;
     background: var(--bg-mesh);
     display: none; /* Hidden by default, controlled via JS */
-    align-items: center;
+    /* Top-anchored and scrollable, not vertically centred. These are now
+       full-screen layouts rather than a card floating in the middle, so
+       the content flows from the top like every tab does - and with a
+       keyboard up on a small phone, a centred block gets pushed
+       off-screen with nowhere to scroll to. */
+    align-items: flex-start;
     justify-content: center;
-    /* Content is centered, not top/bottom-anchored, so this is mostly
-       defensive (a very short viewport could still push the card close
-       to an edge) - the background itself (inset: 0 above) is already
-       correctly full-bleed regardless of this padding. */
-    padding: calc(20px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* The SAME padding rhythm as .page - 36px top, 18px sides - so the
+       first screen someone sees is built on the same grid as the app
+       behind it, instead of announcing itself as a separate design. */
+    padding: calc(36px + env(safe-area-inset-top, 0px))
+             calc(18px + env(safe-area-inset-right, 0px))
+             calc(28px + env(safe-area-inset-bottom, 0px))
+             calc(18px + env(safe-area-inset-left, 0px));
 }
 
-/* Blur backdrop overlay */
-#authScreen::before,
-#verifyScreen::before,
-#chooseUsernameScreen::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    z-index: -1;
-}
+/* No backdrop blur layer any more - it existed to push the page back
+   behind a floating card. With the content sitting directly on the
+   background there is nothing to separate it from, and blurring the
+   mesh only muddied it. */
 
 .auth-overlay-card {
+    /* No longer a card. It was a glass panel with its own blur, border,
+       radius and drop shadow floating over a blurred version of the same
+       background - a second surface treatment that exists nowhere else in
+       the app, on the one screen that sets expectations for everything
+       after it. Now just a centred content column on the page background,
+       so signing in looks like the app rather than like a door in front
+       of it. The individual controls keep their own glass; the container
+       doesn't need any.
+
+       460px rather than the old 400px: with no card padding either side,
+       a slightly wider measure keeps the form from looking pinched on a
+       phone while still holding a comfortable line length on desktop. */
     width: 100%;
-    max-width: 400px;
-    max-height: 100%;
-    overflow-y: auto;
-    /* Same reasoning as .modal-sheet above. */
-    -webkit-overflow-scrolling: touch;
-    background: var(--surface);
-    backdrop-filter: blur(66px) saturate(270%);
-    -webkit-backdrop-filter: blur(66px) saturate(270%);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-2xl);
-    padding: 18px 22px;
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    max-width: 460px;
+    margin: 0 auto;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 0;
     text-align: center;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    animation: authFadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 @keyframes authFadeIn {
@@ -3511,24 +3528,28 @@ html[data-theme="dark"] .large-avatar {
 }
 
 .auth-logo {
-    width: 38px;
-    height: 38px;
-    margin: 0 auto 2px;
+    /* Bigger now there's a whole screen for it rather than the top of a
+       compact card. */
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 10px;
     object-fit: contain;
 }
 
 .auth-title {
-    font-size: 18px;
+    /* 28px: a screen title, sized above .section-title's 21px rather
+       than below it as the old card-sized 18px was. */
+    font-size: 28px;
     font-weight: 800;
     color: var(--text);
-    letter-spacing: -0.5px;
+    letter-spacing: -0.8px;
 }
 
 .auth-subtitle {
-    font-size: 12.5px;
+    font-size: 14px;
     color: var(--text-secondary);
-    margin-bottom: 2px;
-    line-height: 1.3;
+    margin-bottom: 6px;
+    line-height: 1.45;
 }
   
 /* Offline banner - a slim, non-dismissible bar pinned to the very top of
@@ -3769,10 +3790,11 @@ html[data-theme="dark"] .appearance-icon-tile .appearance-icon {
     color: #1c1c1e;
 }
 
-html[data-theme="dark"] .auth-overlay-card {
-    background: rgba(28, 28, 30, 0.5);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
+/* No dark-mode override for .auth-overlay-card. It used to restate the
+   card's fill and shadow for dark, so removing the card treatment in the
+   base rule alone would have left dark mode still showing a floating
+   panel while light mode didn't. Deleted rather than zeroed out - there
+   is no card in either theme now. */
 
 html[data-theme="dark"] .continue-card {
     background: var(--glass-sheen), rgba(255, 255, 255, 0.06);
