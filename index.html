@@ -192,6 +192,23 @@
      required won't have one either. Blocks entry until a username is
      successfully reserved - see showChooseUsernameScreen()/
      submitChosenUsername()/claimUsername() in app.js. -->
+<!-- =====================================================
+     ACCOUNT RECOVERY
+     Shown instead of the app when someone signs in to an account that is
+     pending deletion. Shares .auth-overlay-card with the other gate
+     screens, so it inherits the same full-screen layout automatically.
+     ===================================================== -->
+<div id="recoveryScreen">
+    <div class="auth-overlay-card">
+        <h1 class="auth-title">Restore your account?</h1>
+        <p class="auth-subtitle" id="recoveryBody"></p>
+        <div class="recovery-countdown" id="recoveryDays"></div>
+        <div id="recoveryError" class="auth-error"></div>
+        <button id="restoreAccountBtn" class="auth-btn" onclick="restoreAccount()">Restore My Account</button>
+        <button class="auth-forgot-link" onclick="signOutFromRecovery()" style="margin-top: 14px;">Not now, sign out</button>
+    </div>
+</div>
+
 <div id="chooseUsernameScreen">
     <div class="auth-overlay-card">
         <img src="https://www.novawatch.site/images/NovaWatch_App_Icon.png" alt="NovaWatch Logo" class="auth-logo">
