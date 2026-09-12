@@ -2109,7 +2109,14 @@ function setAuthMode(mode) {
     // creating an account, not on a routine returning-user sign-in.
     const termsRow = document.getElementById("authTermsRow");
     if (termsRow) {
-        termsRow.style.display = mode === 'signup' ? '' : 'none';
+        // Hidden with a class rather than display:none, so the row keeps
+        // occupying its space in Sign In mode. display:none removed it
+        // from flow and made the whole screen 32px shorter than Join,
+        // which meant everything above it - logo, title, the toggle -
+        // shifted vertically every time you switched tabs. Reserving the
+        // space keeps the two modes identical in size and stops the jump.
+        termsRow.classList.toggle("is-reserved", mode !== 'signup');
+        termsRow.style.display = '';
     }
 
     const actionBtn = document.getElementById("authSignInBtn");
@@ -2662,71 +2669,6 @@ async function reauthenticateCurrentUser(user) {
     }
 }
 
-// Firestore doesn't cascade-delete a subcollection when its parent
-// document is deleted, so the library subcollection has to be cleared out
-// document-by-document (batched, since a batch write tops out at 500 ops).
-// Deletes every trace of the user's library data - both the live library
-// and any archived watch history left behind by removeLibraryItem (see
-// there) for shows that were removed but not permanently deleted. The
-// Privacy Notice promises "all associated library data" goes with the
-// account, so both collections have to go, not just the visible one.
-async function deleteAllUserData(uid) {
-    const BATCH_LIMIT = 400;
-
-    async function deleteCollection(collectionName) {
-        const snap = await db.collection("users").doc(uid).collection(collectionName).get();
-        const docs = snap.docs;
-        for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
-            const batch = db.batch();
-            docs.slice(i, i + BATCH_LIMIT).forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-        }
-    }
-
-    await deleteCollection("library");
-    await deleteCollection("archivedShows");
-    // Notification-dedup state written server-side only by
-    // send-release-notifications.js (lastStreakReminder,
-    // lastContinueWatchingReminder, notifiedReleases) - invisible from
-    // the client's own read paths, so it's easy to forget this exists
-    // when auditing account deletion from app.js alone. Left orphaned
-    // in Firestore forever (tied to a uid with no account left to
-    // recognize it) if not cleaned up here too.
-    //
-    // Wrapped in its own try/catch, unlike library/archivedShows above -
-    // this collection needs its own Firestore rule to even be readable
-    // from the client (see firestore-rules.md), and a rules deployment
-    // can lag behind a code deploy. If that rule isn't live yet, this
-    // would otherwise throw and abort attemptDelete() before it ever
-    // reaches the username release or the actual account deletion below
-    // - failing the ENTIRE account deletion over a minor cleanup
-    // collection the person has never directly interacted with. Better
-    // to log and move on, same as the username-release guard just below.
-    try {
-        await deleteCollection("_internal");
-    } catch (err) {
-        console.warn("Couldn't clean up notification-dedup state on account deletion:", err);
-    }
-
-    // Free up the reserved username so someone else can claim it -
-    // otherwise a deleted account would permanently squat on the name.
-    // Guarded to only delete a reservation that's actually this uid's
-    // own, in case state.username is ever stale.
-    if (state.username) {
-        const usernameRef = db.collection("usernames").doc(state.username.toLowerCase());
-        try {
-            const usernameDoc = await usernameRef.get();
-            if (usernameDoc.exists && usernameDoc.data().uid === uid) {
-                await usernameRef.delete();
-            }
-        } catch (err) {
-            console.warn("Couldn't release reserved username on account deletion:", err);
-        }
-    }
-
-    await db.collection("users").doc(uid).delete().catch(() => {});
-}
-
 /* =========================================================
    BODY SCROLL LOCK (while any modal/sheet is open)
    A counter rather than a plain boolean, because modals can nest -
@@ -2858,8 +2800,122 @@ window.addEventListener("popstate", (event) => {
 // Opens the themed confirmation dialog instead of a native browser
 // confirm() - the actual deletion only runs from confirmDeleteAccount()
 // below, once the person taps "Delete" inside it.
+// The one account that must not be deletable. Checked in BOTH entry
+// points below rather than just the confirm step: opening a "this cannot
+// be undone" dialog you're not allowed to complete is a worse experience
+// than never opening it.
+//
+// This is a UX guard, not a security boundary - anything enforced only in
+// the browser can be bypassed by calling the SDK directly from a console.
+// The real protection is the matching Firestore rule (see
+// firestore-rules.md), which refuses to delete this account's documents
+// server-side no matter where the request comes from.
+// How long a deleted account can still be recovered. After this, the
+// scheduled purge job removes the Firestore data, releases the username
+// and deletes the Auth account for real.
+const ACCOUNT_GRACE_DAYS = 30;
+
+/* =========================================================
+   ACCOUNT RECOVERY
+   Deleting an account is a soft delete (see confirmDeleteAccount): the
+   data stays put and the profile is stamped with deletedAt/purgeAfter.
+   Signing back in during the grace period lands here instead of the app,
+   with the choice to restore or to go ahead and delete now.
+========================================================= */
+
+// Returns { deletedAt, purgeAfter, daysLeft } if this account is pending
+// deletion, otherwise null. Reads the profile doc directly rather than
+// going through loadUserProfile(), because that populates app state for a
+// session this account shouldn't be starting yet.
+async function getPendingDeletion(uid) {
+    try {
+        const snap = await db.collection("users").doc(uid).get();
+        if (!snap.exists) return null;
+        const data = snap.data() || {};
+        if (!data.deletedAt) return null;
+
+        const purgeAfter = data.purgeAfter
+            ? new Date(data.purgeAfter)
+            : new Date(new Date(data.deletedAt).getTime() + ACCOUNT_GRACE_DAYS * 86400000);
+        const msLeft = purgeAfter.getTime() - Date.now();
+        return {
+            deletedAt: data.deletedAt,
+            purgeAfter: purgeAfter.toISOString(),
+            // Ceil, so the last partial day still reads as "1 day left"
+            // rather than "0 days left" while recovery is genuinely still
+            // possible.
+            daysLeft: Math.max(0, Math.ceil(msLeft / 86400000))
+        };
+    } catch (err) {
+        // A read failure here must NOT silently let the account through to
+        // the app as if nothing were pending - but it also shouldn't lock
+        // someone out of their own account over a transient network error.
+        // Returning null favours access; the purge job is the backstop.
+        console.warn("Couldn't check deletion status:", err);
+        return null;
+    }
+}
+
+function showRecoveryScreen(user, pending) {
+    const screen = document.getElementById("recoveryScreen");
+    if (!screen) return;
+    document.getElementById("authScreen").style.display = "none";
+    document.querySelector(".app").style.display = "none";
+
+    const days = pending.daysLeft;
+    document.getElementById("recoveryDays").textContent =
+        days === 1 ? "1 day left" : `${days} days left`;
+    document.getElementById("recoveryBody").textContent =
+        `This account is scheduled for deletion. Everything is still here - your library, watch history and achievements - and restoring it puts it all back exactly as it was. After that it's permanently deleted and can't be recovered.`;
+    clearInlineMessage("recoveryError");
+    screen.style.display = "flex";
+}
+
+async function restoreAccount() {
+    const btn = document.getElementById("restoreAccountBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Restoring..."; }
+    clearInlineMessage("recoveryError");
+    try {
+        const user = auth.currentUser;
+        if (!user) throw new Error("no user");
+        // Deleting the fields rather than setting them to null, so a
+        // restored account is indistinguishable from one that was never
+        // deleted - the purge job looks for the presence of deletedAt.
+        await db.collection("users").doc(user.uid).update({
+            deletedAt: firebase.firestore.FieldValue.delete(),
+            purgeAfter: firebase.firestore.FieldValue.delete()
+        });
+        document.getElementById("recoveryScreen").style.display = "none";
+        // Full reload rather than calling proceedToApp directly: the
+        // session was never initialised (no listeners, no library), and a
+        // reload is the one path already known to set all of that up
+        // correctly rather than a second partial copy of it.
+        window.location.reload();
+    } catch (err) {
+        console.error("Restore failed:", err);
+        showInlineMessage("recoveryError", "Couldn't restore your account. Please try again.", "error");
+        if (btn) { btn.disabled = false; btn.textContent = "Restore My Account"; }
+    }
+}
+
+function signOutFromRecovery() {
+    document.getElementById("recoveryScreen").style.display = "none";
+    auth.signOut();
+}
+
+
+const PROTECTED_USERNAME = "novawatch";
+
+function isProtectedAccount() {
+    return (state.username || "").toLowerCase() === PROTECTED_USERNAME;
+}
+
 function handleDeleteAccount() {
     if (!auth || !auth.currentUser) return;
+    if (isProtectedAccount()) {
+        showErrorToast("This account is protected and can't be deleted.");
+        return;
+    }
     const modal = document.getElementById("deleteAccountModal");
     if (modal.classList.contains("open")) return;
     clearInlineMessage("deleteAccountError");
@@ -2878,6 +2934,13 @@ function closeDeleteAccountModalOutside(event) {
 
 async function confirmDeleteAccount() {
     if (!auth || !auth.currentUser) return;
+    // Re-checked here too. handleDeleteAccount() already blocks opening
+    // the dialog, but this is the function that actually destroys data -
+    // it shouldn't rely on a caller elsewhere having checked first.
+    if (isProtectedAccount()) {
+        showInlineMessage("deleteAccountError", "This account is protected and can't be deleted.", "error");
+        return;
+    }
 
     const user = auth.currentUser;
     const btn = document.getElementById("confirmDeleteBtn");
@@ -2887,15 +2950,36 @@ async function confirmDeleteAccount() {
     }
     clearInlineMessage("deleteAccountError");
 
+    // SOFT delete. Nothing is destroyed here - the profile doc is stamped
+    // with deletedAt and the person is signed out. A scheduled job
+    // (purge-deleted-accounts.js) does the real deletion once the grace
+    // period has passed.
+    //
+    // Three things must deliberately NOT happen yet:
+    //   1. The Firebase Auth account stays alive. Deleting it is what makes
+    //      the old flow irreversible - with no account there is nothing to
+    //      sign in to, so there is no way to ask for a restore.
+    //   2. The username stays reserved. Releasing it immediately would let
+    //      someone else claim it during the grace period, and recovery
+    //      would then land on an account whose name is gone.
+    //   3. Library and archivedShows are untouched, which is the entire
+    //      point - that is the data being recovered.
     async function attemptDelete() {
-        await deleteAllUserData(user.uid);
-        await user.delete();
+        await db.collection("users").doc(user.uid).set({
+            deletedAt: new Date().toISOString(),
+            // Stored so the purge job and the recovery screen agree on the
+            // deadline even if ACCOUNT_GRACE_DAYS is changed later - an
+            // account already in the grace period keeps the window it was
+            // given, rather than silently gaining or losing days.
+            purgeAfter: new Date(Date.now() + ACCOUNT_GRACE_DAYS * 86400000).toISOString()
+        }, { merge: true });
+        await auth.signOut();
     }
 
     try {
         await attemptDelete();
         closeDeleteAccountModal();
-        showToast("Your account has been deleted.", "success");
+        showToast("Your account has been scheduled for deletion.", "success");
     } catch (err) {
         if (err.code === "auth/requires-recent-login") {
             const reauthed = await reauthenticateCurrentUser(user);
@@ -2909,7 +2993,7 @@ async function confirmDeleteAccount() {
                 try {
                     await attemptDelete();
                     closeDeleteAccountModal();
-                    showToast("Your account has been deleted.", "success");
+                    showToast("Your account has been scheduled for deletion.", "success");
                 } catch (err2) {
                     console.error("Account deletion failed after reauthentication:", err2);
                     showInlineMessage("deleteAccountError", "Couldn't delete your account. Please try again.");
@@ -3864,6 +3948,17 @@ if (auth) {
             }
 
             hideVerifyScreen();
+
+            // Checked BEFORE proceedToApp, so a pending-deletion account
+            // never reaches the app. If it did, the person would be using
+            // a library that a scheduled job is about to erase, with no
+            // indication anything was wrong.
+            const pending = await getPendingDeletion(user.uid);
+            if (pending) {
+                showRecoveryScreen(user, pending);
+                return;
+            }
+
             oneSignalLogin(user.uid);
             await proceedToApp(user, authScreen, mainApp);
             // Backfill for accounts that subscribed before this flag
