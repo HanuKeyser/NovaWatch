@@ -1875,6 +1875,35 @@ html[data-theme="dark"] .modal-sheet-compact {
     z-index: 250;
 }
 
+/* Settings is a PAGE, not an overlay.
+   Structurally it's a modal (its own fixed layer, opened and closed
+   rather than navigated to), but it is functionally NovaWatch's fifth
+   top-level tab - it has the same padding, the same section rhythm, the
+   same hero card as Home. The generic .modal chrome worked against that:
+   a dark scrim plus a 26px backdrop blur dimmed the app behind it, and
+   .modal-sheet painted a second glass layer on top of the mesh. Both say
+   "something is covering the app", which is right for the details and
+   episode modals - you're looking at one thing, on top of what you were
+   doing - and wrong here, where you have simply moved to another part of
+   the app.
+
+   Scoped to #settingsModal rather than changed on .modal, because every
+   other modal genuinely IS an overlay and still wants the scrim. */
+#settingsModal {
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+#settingsModal .modal-sheet {
+    /* No second glass layer. The sheet already paints --bg-mesh, which is
+       what every page sits on; blurring and saturating on top of it just
+       made the same background read slightly differently here than on
+       Home, which is exactly the seam this is meant to remove. */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
 .modal-sheet {
     width: 100%;
     height: 100%;
