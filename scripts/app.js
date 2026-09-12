@@ -2736,6 +2736,11 @@ function closeSettingsSheet() {
     unlockBodyScroll("settingsModal");
 }
 
+// Kept, but it can no longer fire in practice: .modal-sheet fills
+// #settingsModal edge to edge, so there is no backdrop left to tap. It
+// stays as a harmless guard rather than being removed, because the
+// onclick is still on the element and dropping one without the other
+// leaves an unresolved handler.
 function closeSettingsOutside(event) {
     if (event.target.id === "settingsModal") closeSettingsSheet();
 }
