@@ -1644,6 +1644,10 @@ html[data-theme="dark"] .continue-progress {
     bottom: env(safe-area-inset-bottom, 0px);
     transform: translateX(-50%);
     z-index: 100;
+    /* Fades rather than snapping when a modal opens over it - see the
+       :has() rule above. An instant disappearance reads as a glitch at
+       the moment a modal animates in. */
+    transition: opacity 0.2s ease;
     width: calc(100% - 36px);
     max-width: 480px;
     height: 70px;
@@ -1873,6 +1877,30 @@ html[data-theme="dark"] .modal-sheet-compact {
 #achievementsModal,
 #libraryDisplayModal {
     z-index: 250;
+}
+
+/* Hide the bottom nav whenever any modal is open.
+   The nav sits at z-index 100 and every modal at 200+, so the nav was
+   never reachable while one was open - but it stayed VISIBLE through the
+   backdrop's 26% black and 26px blur. Its own rounded top edge then read
+   as a stray horizontal line across the lower third of the screen, with
+   the tab labels faintly legible below it. That's the "random line at the
+   bottom of some modals": not a border anywhere in the modal's own
+   styling, but the chrome behind it showing through.
+
+   Only visible on modals that DON'T fill the screen (compact cards,
+   confirm dialogs) - a full-screen sheet covers the nav completely, which
+   is why it appeared on some modals and not others.
+
+   Driven by :has() on the modal state that already exists, so nothing
+   needs to remember to add or remove a class. #settingsModal is excluded:
+   it has no scrim at all now (it behaves as a page), so there is nothing
+   for the nav to show through - and hiding the nav there would make
+   moving between Settings and the tabs feel like a different kind of
+   transition than it is. */
+body:has(.modal.open:not(#settingsModal)) .bottom-nav {
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Settings is a PAGE, not an overlay.
