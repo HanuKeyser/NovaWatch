@@ -4213,6 +4213,26 @@ async function proceedToApp(user, authScreen, mainApp) {
                             }
                         });
 
+                        // Dedupe by type+tmdbId, the same key
+                        // dedupeAndCleanLibrary uses on load. The matching
+                        // above is by document ID alone, which is not
+                        // enough: two docs can hold the SAME show under
+                        // different ids - a TV slug is derived from the
+                        // show's name, so a TMDB rename produces a new
+                        // slug, and two devices adding at once can each
+                        // pass their own local "already added?" check
+                        // before either write lands. Without this the
+                        // listener pushed both and the show appeared twice
+                        // until the next full reload.
+                        const seenKeys = new Set();
+                        updatedLibrary = updatedLibrary.filter(it => {
+                            if (!it || !it.tmdbId) return true;
+                            const key = `${it.type}-${it.tmdbId}`;
+                            if (seenKeys.has(key)) return false;
+                            seenKeys.add(key);
+                            return true;
+                        });
+
                         state.library = updatedLibrary;
 
                         // Re-point currentItem/currentEpisode at the FRESH
@@ -4767,6 +4787,13 @@ async function openSearchResultDetails(tmdbId, type) {
     }
 }
 
+// TMDB ids currently mid-add. The duplicate checks inside importMediaData
+// read state.library, which isn't updated until the network round-trip
+// finishes - so two quick taps on the same Add button (or the same show
+// reached from two different cards) could BOTH pass the check before
+// either one pushed, and add it twice. This closes that window.
+const pendingAdds = new Set();
+
 async function importMediaData(id, type, buttonElement) {
     if (!auth || !auth.currentUser) {
         showErrorToast("Please sign in to add items to your library.");
@@ -4791,6 +4818,8 @@ async function importMediaData(id, type, buttonElement) {
             if (state.library.some(s => s.id === slug || s.tmdbId === movieData.id)) {
                 return;
             }
+            if (pendingAdds.has(`movie-${movieData.id}`)) return;
+            pendingAdds.add(`movie-${movieData.id}`);
 
             const availability = await availabilityPromise;
 
@@ -4853,6 +4882,8 @@ async function importMediaData(id, type, buttonElement) {
             if (state.library.some(s => s.id === slug || s.tmdbId === showData.id)) {
                 return;
             }
+            if (pendingAdds.has(`tv-${showData.id}`)) return;
+            pendingAdds.add(`tv-${showData.id}`);
 
             // A previous removal may have archived this exact show's watch
             // history (see removeLibraryItem) under this same slug - check
@@ -4986,6 +5017,16 @@ async function importMediaData(id, type, buttonElement) {
             buttonElement.disabled = false;
             buttonElement.textContent = "Add to Library";
         }
+    } finally {
+        // MUST run on every exit, including the early returns and the
+        // error path above. Without this the key stays in pendingAdds
+        // forever, and removing a show then adding it back would silently
+        // do nothing - the in-flight guard would reject it as already
+        // being added. Both key shapes are cleared because only one of
+        // them was ever set, and deleting a key that isn't there is a
+        // no-op.
+        pendingAdds.delete(`movie-${id}`);
+        pendingAdds.delete(`tv-${id}`);
     }
 }
 
